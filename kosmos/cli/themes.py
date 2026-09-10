@@ -108,7 +108,7 @@ BOX_STYLES = {
 
 def get_domain_color(domain: str) -> str:
     """Get color for a domain."""
-    domain_lower = domain.lower()
+    domain_lower = (domain or "").lower()
     return COLORS.get(domain_lower, COLORS["general"])
 
 

@@ -114,9 +114,13 @@ class ResearchWorkflow:
         self.plan_creator = PlanCreatorAgent(anthropic_client)
         self.plan_reviewer = PlanReviewerAgent(anthropic_client)
 
-        # Wire real agents into DelegationManager when a client is available
+        # Wire real agents into DelegationManager when a client is available.
+        # The specialized agents build their own client via get_client(), which
+        # reads ANTHROPIC_API_KEY from the environment, so wire them whenever an
+        # explicit client is passed OR the API key is present in the env.
+        import os
         agents = {}
-        if anthropic_client:
+        if anthropic_client or os.environ.get("ANTHROPIC_API_KEY"):
             from kosmos.agents import (
                 DataAnalystAgent,
                 HypothesisGeneratorAgent,

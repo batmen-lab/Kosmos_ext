@@ -162,3 +162,117 @@ class TestPaperIndexing:
         # Should not raise despite indexing failure
         papers = checker._search_similar_literature(hypothesis)
         assert len(papers) == 1
+
+
+class TestUntestedHypothesesAreNotPriorArt:
+    """Novelty asks "has this been answered", not "have we said this before".
+
+    The checker queried every hypothesis ever stored in the domain -- and the
+    domain is "biology" for all of this work, so each new hypothesis competed
+    against every sibling from every past run. Measured on the live database:
+    344 stored hypotheses, all still GENERATED, none ever tested.
+
+    The cost was concrete. In one run, hypothesis #4 -- "the causal effect of
+    plasma protein levels on myocardial T1, estimated via two-sample Mendelian
+    randomization" -- is the paper's own method and the only one of nineteen
+    that reproduces its result. It scored novelty 0.00 for reading like the
+    untested correlation hypotheses beside it, and since priority is 30%
+    novelty it was never executed.
+    """
+
+    def test_only_answered_statuses_count_as_prior_art(self):
+        from kosmos.db.models import HypothesisStatus
+        from kosmos.hypothesis.novelty_checker import _TESTED_STATUSES
+
+        assert set(_TESTED_STATUSES) == {
+            HypothesisStatus.SUPPORTED,
+            HypothesisStatus.REJECTED,
+            HypothesisStatus.INCONCLUSIVE,
+        }
+        # A proposal is not prior art, and one in flight has no answer yet.
+        assert HypothesisStatus.GENERATED not in _TESTED_STATUSES
+        assert HypothesisStatus.TESTING not in _TESTED_STATUSES
+        # Every status the DB enum has is accounted for, so a new one cannot be
+        # silently treated as untested.
+        assert set(HypothesisStatus) - set(_TESTED_STATUSES) == {
+            HypothesisStatus.GENERATED, HypothesisStatus.TESTING,
+        }
+
+    @patch('kosmos.hypothesis.novelty_checker.get_session')
+    def test_the_query_filters_on_status(self, mock_session, novelty_checker, sample_hypothesis):
+        """Two filter terms: the domain, and having actually been tested."""
+        from kosmos.hypothesis.novelty_checker import _TESTED_STATUSES
+
+        captured = []
+
+        class _Query:
+            def filter(self, *criteria):
+                captured.extend(criteria)
+                return self
+
+            def all(self):
+                return []
+
+        sess = Mock()
+        sess.query.return_value = _Query()
+        mock_session.return_value.__enter__ = Mock(return_value=sess)
+        mock_session.return_value.__exit__ = Mock(return_value=False)
+
+        novelty_checker._check_existing_hypotheses(sample_hypothesis)
+
+        assert len(captured) == 2, "expected a domain filter AND a status filter"
+        rendered = " ".join(str(c) for c in captured)
+        assert "domain" in rendered
+        assert "status" in rendered
+        assert _TESTED_STATUSES  # the constant the filter is built from
+
+    @patch('kosmos.hypothesis.novelty_checker.get_session')
+    def test_an_mr_restatement_is_not_penalised_by_untested_siblings(
+        self, mock_session, novelty_checker, sample_hypothesis
+    ):
+        """With no TESTED prior art, a method restatement keeps its novelty.
+
+        The literature search is replaced on the INSTANCE, not on the module
+        class: `NoveltyChecker.__init__` constructs `UnifiedLiteratureSearch()`,
+        so a class-level @patch applied after the fixture is built never reaches
+        it and the checker calls OpenAlex for real.
+        """
+        novelty_checker.literature_search = Mock(**{"search.return_value": []})
+
+        sess = Mock()
+        sess.query.return_value.filter.return_value.all.return_value = []
+        mock_session.return_value.__enter__ = Mock(return_value=sess)
+        mock_session.return_value.__exit__ = Mock(return_value=False)
+
+        report = novelty_checker.check_novelty(sample_hypothesis)
+
+        assert report.novelty_score > 0.5
+        assert not report.prior_art_detected
+
+    @patch('kosmos.hypothesis.novelty_checker.get_session')
+    def test_published_work_still_counts_as_prior_art(
+        self, mock_session, novelty_checker, sample_hypothesis
+    ):
+        """The fix narrows hypothesis prior art only; literature is untouched."""
+        # The real dataclass, not a stand-in: the scorer reads `.title`,
+        # `.abstract`, `.arxiv_id` and more, and a hand-rolled double just
+        # trades one AttributeError for the next.
+        from kosmos.literature.base_client import PaperMetadata, PaperSource
+
+        paper = PaperMetadata(
+            id="test:1",
+            source=PaperSource.OPENALEX,
+            title=sample_hypothesis.statement,
+            abstract=sample_hypothesis.rationale,
+        )
+        novelty_checker.literature_search = Mock(**{"search.return_value": [paper]})
+
+        sess = Mock()
+        sess.query.return_value.filter.return_value.all.return_value = []
+        mock_session.return_value.__enter__ = Mock(return_value=sess)
+        mock_session.return_value.__exit__ = Mock(return_value=False)
+
+        report = novelty_checker.check_novelty(sample_hypothesis)
+
+        assert len(report.similar_papers) == 1
+        assert report.similar_hypotheses == [], "no TESTED hypotheses exist to compare against"

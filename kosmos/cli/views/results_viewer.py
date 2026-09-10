@@ -55,7 +55,10 @@ class ResultsViewer:
         """
         run_id = research_data.get("id", "Unknown")
         question = research_data.get("question", "Unknown")
-        domain = research_data.get("domain", "general")
+        # `or` (not a get-default): the key is often PRESENT with value None
+        # (no --domain, auto-detect not recorded), and None crashed .title() /
+        # get_domain_color() and killed the whole results display + export.
+        domain = research_data.get("domain") or "general"
         state = research_data.get("state", "Unknown")
         iteration = research_data.get("current_iteration", 0)
         max_iterations = research_data.get("max_iterations", 10)
@@ -318,6 +321,10 @@ class ResultsViewer:
             output_path: Output file path
         """
         try:
+            # Ensure the target directory exists so a completed run never loses
+            # its report to a missing parent dir (the path may be relative to a
+            # cwd that has no such folder).
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             with open(output_path, "w") as f:
                 json.dump(data, f, indent=2, default=str)
 
@@ -360,21 +367,211 @@ class ResultsViewer:
                 "",
             ])
 
-            for i, exp in enumerate(data.get("experiments", []), 1):
+            experiments = data.get("experiments", []) or []
+            pending = data.get("pending_experiments", []) or []
+            if not experiments:
+                # An empty section reads as "the run designed nothing", which
+                # is a different failure from "the run ran out of iterations
+                # with experiments still queued" -- and the second one hides
+                # real work. Name which one happened.
+                if pending:
+                    lines.extend([
+                        f"**None executed.** {len(pending)} experiment(s) were "
+                        f"designed and still queued when the run ended at "
+                        f"iteration {data.get('current_iteration', '?')} of "
+                        f"{data.get('max_iterations', '?')}. The run was cut "
+                        f"short, not empty.",
+                        "",
+                    ])
+                else:
+                    lines.extend([
+                        "**None.** No experiment was designed or executed, so "
+                        "no hypothesis above was tested.",
+                        "",
+                    ])
+
+            for i, exp in enumerate(experiments, 1):
                 lines.extend([
                     f"### {i}. {exp.get('type', 'Unknown')}",
                     f"",
                     f"- **Status:** {exp.get('status', 'Unknown')}",
                     f"- **Duration:** {format_duration(exp.get('duration_seconds', 0))}",
-                    "",
                 ])
+                if exp.get("description"):
+                    lines.append(f"- **Design:** {exp['description']}")
+                if exp.get("error_message"):
+                    lines.append(f"- **Error:** {exp['error_message']}")
+                lines.append("")
 
+                # The findings themselves. Without this the report says an
+                # experiment ran and how long it took, but not what it found --
+                # making a completed run indistinguishable from a no-op, and
+                # silently hiding null results (a non-significant p-value is a
+                # finding, not the absence of one).
+                for result in exp.get("results") or []:
+                    if not isinstance(result, dict):
+                        continue
+                    lines.extend(["**Findings**", ""])
+
+                    payload = result.get("data")
+
+                    # First, before any number: if code generation fell back,
+                    # the Design text above describes an experiment that did
+                    # not run, and every figure below it belongs to a narrower
+                    # analysis. Reading the numbers under that design without
+                    # this line is how a template's output gets taken for the
+                    # multi-dataset result it replaced.
+                    note = payload.get("analysis_note") if isinstance(payload, dict) else None
+                    if note:
+                        lines.extend([f"> {note}", ""])
+
+                    n = payload.get("n_samples") if isinstance(payload, dict) else None
+                    if n is not None:
+                        lines.append(f"- Sample size: {n:,}")
+
+                    p = result.get("p_value")
+                    if p is not None:
+                        verdict = "significant" if p < 0.05 else "NOT significant"
+                        lines.append(f"- p-value: {p:.4g} ({verdict} at alpha=0.05)")
+                    effect = result.get("effect_size")
+                    if effect is not None:
+                        lines.append(f"- Effect size: {effect:.4g}")
+                    ci = result.get("confidence_interval")
+                    if ci:
+                        lines.append(f"- 95% CI: {ci}")
+                    supports = result.get("supports_hypothesis")
+                    if supports is not None:
+                        lines.append(f"- Supports hypothesis: {supports}")
+
+                    tests = result.get("statistical_tests")
+                    if isinstance(tests, dict):
+                        for test_name, stats in tests.items():
+                            if isinstance(stats, dict):
+                                inner = ", ".join(
+                                    f"{k}={v:.4g}" if isinstance(v, (int, float)) else f"{k}={v}"
+                                    for k, v in stats.items()
+                                )
+                                lines.append(f"- {test_name}: {inner}")
+
+                    # These arrive from a JSON column, so an absent value can
+                    # reach here as the literal string "null"/"None" rather than
+                    # Python None. Rendering that verbatim would print
+                    # "Key findings: null", which reads as a finding rather than
+                    # as the absence of one.
+                    def _present(value):
+                        if value is None:
+                            return None
+                        text = str(value).strip()
+                        return text if text and text.lower() not in {"null", "none", "{}", "[]"} else None
+
+                    # Everything else the experiment returned.
+                    #
+                    # The renderer knew four keys -- n_samples, p_value,
+                    # effect_size, statistical_tests -- and silently dropped the
+                    # rest. A run that returned `causal_proteins`, `all_ranked`
+                    # (14 proteins with IVW/weighted-median/Egger estimates),
+                    # `coloc_summary` and `notes` therefore exported an EMPTY
+                    # Findings section while its whole result sat in the
+                    # database. An experiment's payload is the experiment's
+                    # answer; the report cannot pick which parts of it count.
+                    if isinstance(payload, dict):
+                        lines.extend(_render_payload(payload))
+
+                    findings = _present(result.get("key_findings"))
+                    if findings:
+                        lines.append(f"- Key findings: {findings}")
+                    interpretation = _present(result.get("interpretation"))
+                    if interpretation:
+                        lines.extend(["", interpretation])
+                    lines.append("")
+
+            if pending:
+                lines.extend(["## Designed but not run", ""])
+                for i, exp in enumerate(pending, 1):
+                    lines.append(
+                        f"### {i}. {exp.get('experiment_type', 'experiment')} "
+                        f"({exp.get('status', 'queued')})"
+                    )
+                    if exp.get("description"):
+                        lines.extend(["", f"- **Design:** {exp['description']}"])
+                    lines.append("")
+
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             with open(output_path, "w") as f:
                 f.write("\n".join(lines))
 
             self.console.print(f"[success]Exported to {output_path}[/success]")
         except Exception as e:
             self.console.print(f"[error]Export failed: {str(e)}[/error]")
+
+
+_RENDERED_ELSEWHERE = frozenset({
+    # Already rendered above by name; repeating them would double-report.
+    "n_samples", "p_value", "effect_size", "statistical_tests",
+    # Our own annotation, rendered as a caveat before the numbers.
+    "analysis_note",
+})
+
+_MAX_ROWS = 12
+_MAX_COLS = 8
+
+
+def _fmt(value):
+    """A scalar, formatted for a report. Small floats keep their exponent."""
+    if isinstance(value, bool) or value is None:
+        return str(value)
+    if isinstance(value, float):
+        if value != value:  # NaN
+            return "NaN"
+        return f"{value:.4g}"
+    return str(value)
+
+
+def _render_payload(payload: dict) -> list:
+    """Render an experiment's result dict as markdown, whatever shape it has.
+
+    Bounded, and it SAYS when it bounds: a table cut at `_MAX_ROWS` prints how
+    many rows it dropped, because a silently truncated table reads as the whole
+    result.
+    """
+    lines: list = []
+    for key, value in payload.items():
+        if key in _RENDERED_ELSEWHERE:
+            continue
+
+        # A list of uniform dicts is a table -- the shape a ranked result takes.
+        if (
+            isinstance(value, list)
+            and value
+            and all(isinstance(v, dict) for v in value)
+        ):
+            columns = list(value[0].keys())[:_MAX_COLS]
+            lines.extend([f"", f"**{key}** ({len(value)} rows)", ""])
+            lines.append("| " + " | ".join(columns) + " |")
+            lines.append("|" + "|".join(["---"] * len(columns)) + "|")
+            for row in value[:_MAX_ROWS]:
+                lines.append(
+                    "| " + " | ".join(_fmt(row.get(c)) for c in columns) + " |"
+                )
+            if len(value) > _MAX_ROWS:
+                lines.append("")
+                lines.append(f"_{len(value) - _MAX_ROWS} further rows not shown._")
+            lines.append("")
+        elif isinstance(value, list) and not value:
+            lines.append(f"- {key}: none")
+        elif isinstance(value, list):
+            shown = [_fmt(v) for v in value[:_MAX_ROWS]]
+            suffix = "" if len(value) <= _MAX_ROWS else f" (+{len(value) - _MAX_ROWS} more)"
+            lines.append(f"- {key}: {'; '.join(shown)}{suffix}")
+        elif isinstance(value, dict):
+            inner = ", ".join(
+                f"{k}={_fmt(v)}" for k, v in list(value.items())[:_MAX_COLS]
+                if not isinstance(v, (dict, list))
+            )
+            lines.append(f"- {key}: {inner}" if inner else f"- {key}: {len(value)} entries")
+        else:
+            lines.append(f"- {key}: {_fmt(value)}")
+    return lines
 
 
 # Convenience functions

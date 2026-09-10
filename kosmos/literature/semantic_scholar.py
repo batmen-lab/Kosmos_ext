@@ -47,7 +47,18 @@ class SemanticScholarClient(BaseLiteratureClient):
 
         # Initialize API client
         self.api_key = api_key or config.literature.semantic_scholar_api_key
-        self.client = SemanticScholar(api_key=self.api_key, timeout=30)
+        # Fail-fast fallback: without an API key, Semantic Scholar hits the shared
+        # anonymous pool and returns HTTP 429. The library's retry/backoff then keeps
+        # its worker thread alive for minutes, which blocks the literature ThreadPoolExecutor
+        # and stalls the whole run. Disabling retry (and shortening the timeout) makes a
+        # throttled call error in seconds instead. When an API key IS present, retries are
+        # re-enabled automatically (normal behavior) — so adding the key to .env reverts this.
+        _has_key = bool(self.api_key)
+        self.client = SemanticScholar(
+            api_key=self.api_key,
+            timeout=30 if _has_key else 10,
+            retry=_has_key,
+        )
 
         # Initialize cache if enabled
         self.cache = get_cache() if cache_enabled else None

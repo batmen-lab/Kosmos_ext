@@ -7,7 +7,7 @@ for all Kosmos components.
 
 from typing import List, Optional, Literal, Union, Annotated
 from pydantic import Field, field_validator, model_validator, BeforeValidator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict, NoDecode
 from pathlib import Path
 import os
 
@@ -23,6 +23,20 @@ def parse_comma_separated(v):
         return None  # Let field default handle it
     if isinstance(v, str):
         return [x.strip() for x in v.split(',') if x.strip()]
+    return v
+
+
+def parse_int(v):
+    """Coerce string env values into ints for integer Literal fields.
+
+    Env vars always arrive as strings, and Pydantic will not coerce a string
+    like '0' to match an int Literal (e.g. Literal[0, 1, 2, 3]). Convert digit
+    strings here; leave anything else for the field's own validation to reject.
+    """
+    if isinstance(v, str):
+        s = v.strip()
+        if s.lstrip('-').isdigit():
+            return int(s)
     return v
 
 
@@ -124,6 +138,18 @@ class OpenAIConfig(BaseSettings):
         description="Custom base URL for OpenAI-compatible APIs (e.g., http://localhost:11434/v1 for Ollama)",
         alias="OPENAI_BASE_URL"
     )
+    reasoning_effort: Optional[Literal["low", "medium", "high", "xhigh"]] = Field(
+        default=None,
+        description=(
+            "Reasoning effort for a reasoning-capable model (e.g. "
+            "deepseek/deepseek-v4-pro-0813 on OpenRouter). Sent as OpenRouter's "
+            "unified `reasoning: {effort: ...}` request field via extra_body. "
+            "None means the request carries no reasoning field at all, which is "
+            "correct for a non-reasoning model and is this field's default so "
+            "existing configs are unaffected."
+        ),
+        alias="OPENAI_REASONING_EFFORT"
+    )
     organization: Optional[str] = Field(
         default=None,
         description="OpenAI organization ID (optional)",
@@ -207,12 +233,12 @@ class ResearchConfig(BaseSettings):
         description="Maximum research iterations",
         alias="MAX_RESEARCH_ITERATIONS"
     )
-    enabled_domains: Annotated[List[str], BeforeValidator(parse_comma_separated)] = Field(
+    enabled_domains: Annotated[List[str], NoDecode, BeforeValidator(parse_comma_separated)] = Field(
         default=["biology", "physics", "chemistry", "neuroscience"],
         description="Enabled scientific domains",
         alias="ENABLED_DOMAINS"
     )
-    enabled_experiment_types: Annotated[List[str], BeforeValidator(parse_comma_separated)] = Field(
+    enabled_experiment_types: Annotated[List[str], NoDecode, BeforeValidator(parse_comma_separated)] = Field(
         default=["computational", "data_analysis", "literature_synthesis"],
         description="Enabled experiment types",
         alias="ENABLED_EXPERIMENT_TYPES"
@@ -387,13 +413,13 @@ class LoggingConfig(BaseSettings):
     )
 
     # Enhanced debug configuration
-    debug_level: Literal[0, 1, 2, 3] = Field(
+    debug_level: Annotated[Literal[0, 1, 2, 3], BeforeValidator(parse_int)] = Field(
         default=0,
         description="Debug verbosity: 0=off, 1=critical path, 2=full trace, 3=data dumps",
         alias="DEBUG_LEVEL"
     )
 
-    debug_modules: Annotated[Optional[List[str]], BeforeValidator(parse_comma_separated)] = Field(
+    debug_modules: Annotated[Optional[List[str]], NoDecode, BeforeValidator(parse_comma_separated)] = Field(
         default=None,
         description="Modules to debug (None=all when debug_mode=True)",
         alias="DEBUG_MODULES"

@@ -2,15 +2,44 @@
 Integration tests for parallel experiment execution.
 
 Tests ParallelExperimentExecutor and concurrent experiment workflows.
+
+**Rewritten against the module's actual API.** The previous version was written
+for a different design and could not pass any of its main cases: it called a
+`shutdown()` and read an `executor.executor` on a class that owns no pool between
+calls, patched a `_execute_experiment_task` method that does not exist,
+constructed `ParallelExecutionResult(protocol_id=...)` when the field is
+`experiment_id`, and passed bare id strings to `execute_batch`, which requires
+`ExperimentTask` objects and sorts them on `.priority`.
+
+The real shape, which these tests now cover:
+
+  * `ExperimentTask(experiment_id, code, data_path=None, config=None, priority=0)`
+  * `ParallelExecutionResult(experiment_id, success, result, execution_time,
+    error=None, started_at=None, completed_at=None)`
+  * `execute_batch(tasks, use_sandbox=False, timeout_per_task=None)` opens a
+    ProcessPoolExecutor inside a `with` block, so the pool is per call and there
+    is nothing to shut down -- which is why no `shutdown()` exists.
+
+Tasks run in real worker processes, so their code must be self-contained and
+picklable. These tests therefore submit small real snippets rather than mocking
+the executor's internals, which also makes them a stronger test of the module.
+
+NOTE, deliberately not papered over: `ResearchDirectorAgent.execute_experiments_batch`
+(research_director.py) calls `execute_batch(protocol_ids)` with a list of STRINGS
+and then reads each result with `result.get("success")` as though it were a dict.
+Both are wrong against this API, so that production path raises on its first task.
+It is reachable only when `enable_concurrent` is set, which is off by default.
+Fixing it means deciding how a stored protocol becomes an ExperimentTask (it needs
+generated code), which is a design change rather than a test repair -- so it is
+reported rather than silently rewritten here.
 """
 
 import pytest
-import time
-from unittest.mock import MagicMock, patch
 
 from kosmos.execution.parallel import (
+    ExperimentTask,
+    ParallelExecutionResult,
     ParallelExperimentExecutor,
-    ParallelExecutionResult
 )
 
 
@@ -19,366 +48,179 @@ class TestParallelExperimentExecutor:
 
     @pytest.fixture
     def executor(self):
-        """Create executor with 4 workers."""
-        executor = ParallelExperimentExecutor(max_workers=4)
-        yield executor
-        executor.shutdown()
+        """Create executor with 2 workers.
+
+        No teardown: `execute_batch` context-manages its own pool, so the
+        executor object holds no resource between calls.
+        """
+        return ParallelExperimentExecutor(max_workers=2, enable_progress_logging=False)
 
     def test_initialization(self, executor):
-        """Test executor initialization."""
-        assert executor.max_workers == 4
-        assert executor.executor is not None
+        """Worker counts are configuration; the pool itself is per call."""
+        assert executor.max_workers == 2
+        assert executor.max_workers_io == 4
 
-    def test_execute_single_experiment(self, executor):
-        """Test executing single experiment."""
-        protocol_id = "test_protocol_1"
-
-        # Mock experiment execution
-        with patch.object(executor, '_execute_experiment_task') as mock_exec:
-            mock_exec.return_value = ParallelExecutionResult(
-                protocol_id=protocol_id,
-                success=True,
-                result_id="result_1",
-                duration_seconds=1.0
-            )
-
-            result = executor.execute(protocol_id)
-
-            assert result.success is True
-            assert result.protocol_id == protocol_id
-
-    def test_execute_batch(self, executor):
-        """Test executing batch of experiments."""
-        protocol_ids = [f"protocol_{i}" for i in range(10)]
-
-        # Mock experiment execution
-        def mock_execute_task(protocol_id):
-            time.sleep(0.1)  # Simulate work
-            return ParallelExecutionResult(
-                protocol_id=protocol_id,
-                success=True,
-                result_id=f"result_{protocol_id}",
-                duration_seconds=0.1
-            )
-
-        with patch.object(executor, '_execute_experiment_task', side_effect=mock_execute_task):
-            results = executor.execute_batch(protocol_ids)
-
-            assert len(results) == 10
-            assert all(r.success for r in results)
-
-    def test_parallel_speedup(self, executor):
-        """Test that parallel execution is faster than sequential."""
-        protocol_ids = [f"protocol_{i}" for i in range(8)]
-
-        def mock_execute_task(protocol_id):
-            time.sleep(0.2)  # Each takes 200ms
-            return ParallelExecutionResult(
-                protocol_id=protocol_id,
-                success=True,
-                result_id=f"result_{protocol_id}",
-                duration_seconds=0.2
-            )
-
-        with patch.object(executor, '_execute_experiment_task', side_effect=mock_execute_task):
-            start = time.time()
-            results = executor.execute_batch(protocol_ids)
-            parallel_time = time.time() - start
-
-            # With 4 workers, 8 experiments should take ~400ms (2 batches)
-            # Sequential would take ~1600ms (8 * 200ms)
-            assert parallel_time < 1.0  # Should be significantly faster
-            assert len(results) == 8
-
-    def test_error_handling(self, executor):
-        """Test handling of experiment failures."""
-        protocol_ids = ["success_1", "failure_1", "success_2"]
-
-        def mock_execute_task(protocol_id):
-            if "failure" in protocol_id:
-                raise Exception("Experiment failed")
-            return ParallelExecutionResult(
-                protocol_id=protocol_id,
-                success=True,
-                result_id=f"result_{protocol_id}",
-                duration_seconds=0.1
-            )
-
-        with patch.object(executor, '_execute_experiment_task', side_effect=mock_execute_task):
-            results = executor.execute_batch(protocol_ids)
-
-            assert len(results) == 3
-            assert results[0].success is True
-            assert results[1].success is False
-            assert "failed" in results[1].error.lower()
-            assert results[2].success is True
-
-    def test_shutdown(self):
-        """Test executor shutdown."""
+    def test_the_pool_is_per_call_not_per_executor(self):
+        """The executor holds no pool between calls, so none can leak."""
         executor = ParallelExperimentExecutor(max_workers=2)
+        assert not hasattr(executor, "executor")
+        assert not hasattr(executor, "shutdown")
 
-        executor.shutdown()
+    def test_an_empty_batch_short_circuits(self, executor):
+        """No tasks means no pool is opened at all."""
+        assert executor.execute_batch([]) == []
 
-        # Executor should be shutdown
-        assert executor.executor._shutdown is True
+    @pytest.mark.integration
+    def test_execute_single_experiment(self, executor):
+        """One task in, one result out, carrying its experiment_id."""
+        task = ExperimentTask(experiment_id="exp1", code="result = 6 * 7")
+        results = executor.execute_batch([task])
+
+        assert len(results) == 1
+        assert isinstance(results[0], ParallelExecutionResult)
+        assert results[0].experiment_id == "exp1"
+
+    @pytest.mark.integration
+    def test_execute_batch(self, executor):
+        """Every submitted task produces exactly one result, addressable by id."""
+        tasks = [
+            ExperimentTask(experiment_id=f"exp{i}", code=f"result = {i} * 2")
+            for i in range(3)
+        ]
+        results = executor.execute_batch(tasks)
+
+        assert len(results) == 3
+        assert {r.experiment_id for r in results} == {"exp0", "exp1", "exp2"}
+
+    @pytest.mark.integration
+    def test_a_failing_task_does_not_take_the_batch_down(self, executor):
+        """One task's failure is contained: the batch still returns every result.
+
+        This is the property that actually matters for a batch, and it holds.
+        Whether the failure is *reported* as a failure is a separate question --
+        see the xfail below.
+        """
+        tasks = [
+            ExperimentTask(experiment_id="ok", code="result = 1"),
+            ExperimentTask(experiment_id="bad", code="raise ValueError('boom')"),
+        ]
+        results = {r.experiment_id: r for r in executor.execute_batch(tasks)}
+
+        assert set(results) == {"ok", "bad"}
+        assert all(isinstance(r, ParallelExecutionResult) for r in results.values())
+
+    @pytest.mark.integration
+    @pytest.mark.xfail(
+        strict=False,
+        reason=(
+            "PRE-EXISTING BUG, not in this module: code that RAISES is reported "
+            "success=True with the traceback buried in result['return_value']. "
+            "_execute_single_experiment faithfully copies result.get('success') "
+            "from execute_protocol_code -> CodeExecutor.execute -> "
+            "ExecutionResult.to_dict(), and the miscall is upstream of all three. "
+            "Left xfail rather than fixed because changing what `success` means "
+            "in CodeExecutor changes the contract every experiment path reads. "
+            "An experiment that crashed is currently recorded as a successful "
+            "result, which matters for the science, so this is kept visible: if "
+            "someone fixes the executor this XPASSes and should be un-xfailed."
+        ),
+    )
+    def test_raising_code_should_be_reported_as_a_failure(self, executor):
+        task = ExperimentTask(experiment_id="bad", code="raise ValueError('boom')")
+        result = executor.execute_batch([task])[0]
+
+        assert result.success is False
+        assert result.error
+
+    @pytest.mark.integration
+    def test_every_result_carries_a_timing(self, executor):
+        tasks = [
+            ExperimentTask(experiment_id="a", code="result = sum(range(10000))"),
+            ExperimentTask(experiment_id="b", code="result = 1"),
+        ]
+        results = executor.execute_batch(tasks)
+        assert {r.experiment_id for r in results} == {"a", "b"}
+        assert all(r.execution_time >= 0 for r in results)
+
+    @pytest.mark.integration
+    def test_a_batch_larger_than_the_worker_pool_still_completes(self, executor):
+        """More tasks than workers queue rather than being dropped."""
+        tasks = [
+            ExperimentTask(experiment_id=f"e{i}", code=f"result = {i}")
+            for i in range(6)
+        ]
+        results = executor.execute_batch(tasks)
+        assert {r.experiment_id for r in results} == {f"e{i}" for i in range(6)}
 
     def test_max_workers_configuration(self):
-        """Test configuring max workers."""
+        """Worker counts are honoured, and I/O workers default to twice them."""
         executor1 = ParallelExperimentExecutor(max_workers=2)
         assert executor1.max_workers == 2
-        executor1.shutdown()
+        assert executor1.max_workers_io == 4
 
         executor2 = ParallelExperimentExecutor(max_workers=8)
         assert executor2.max_workers == 8
-        executor2.shutdown()
+        assert executor2.max_workers_io == 16
 
-    def test_result_ordering(self, executor):
-        """Test that results maintain order of input."""
-        protocol_ids = [f"protocol_{i}" for i in range(5)]
-
-        def mock_execute_task(protocol_id):
-            # Variable delay to test ordering
-            delay = 0.1 if "0" in protocol_id or "2" in protocol_id else 0.05
-            time.sleep(delay)
-            return ParallelExecutionResult(
-                protocol_id=protocol_id,
-                success=True,
-                result_id=f"result_{protocol_id}",
-                duration_seconds=delay
-            )
-
-        with patch.object(executor, '_execute_experiment_task', side_effect=mock_execute_task):
-            results = executor.execute_batch(protocol_ids)
-
-            # Results should be in same order as input
-            for i, result in enumerate(results):
-                assert result.protocol_id == protocol_ids[i]
+    def test_explicit_io_workers_override_the_default(self):
+        executor = ParallelExperimentExecutor(max_workers=4, max_workers_io=3)
+        assert executor.max_workers_io == 3
 
 
 class TestParallelExecutionResult:
-    """Test ParallelExecutionResult data class."""
+    """The result record's real field names."""
 
     def test_success_result(self):
-        """Test creating success result."""
         result = ParallelExecutionResult(
-            protocol_id="test_protocol",
+            experiment_id="exp1",
             success=True,
-            result_id="result_123",
-            duration_seconds=5.5,
-            data={"metric": 0.95}
+            result={"value": 42},
+            execution_time=1.5,
         )
-
+        assert result.experiment_id == "exp1"
         assert result.success is True
+        assert result.result == {"value": 42}
+        assert result.execution_time == 1.5
         assert result.error is None
-        assert result.data["metric"] == 0.95
 
     def test_failure_result(self):
-        """Test creating failure result."""
         result = ParallelExecutionResult(
-            protocol_id="test_protocol",
+            experiment_id="exp2",
             success=False,
-            error="Experiment execution failed"
+            result=None,
+            execution_time=0.2,
+            error="Execution failed",
         )
-
+        assert result.experiment_id == "exp2"
         assert result.success is False
-        assert result.result_id is None
-        assert "failed" in result.error.lower()
+        assert result.error == "Execution failed"
 
 
-class TestParallelExecutionWithRealExperiments:
-    """Integration tests with real experiment execution (mocked APIs)."""
+class TestExperimentTask:
+    """The task record's defaults, which decide scheduling and data access."""
 
-    @pytest.fixture
-    def mock_llm_client(self):
-        """Mock LLM client for experiment execution."""
-        with patch('kosmos.core.llm.ClaudeClient') as mock:
-            client = MagicMock()
-            client.generate.return_value = "Experiment analysis: The results show..."
-            mock.return_value = client
-            yield client
+    def test_defaults(self):
+        task = ExperimentTask(experiment_id="e", code="result = 1")
+        assert task.data_path is None
+        assert task.config is None
+        # Priority defaults to 0, so an unprioritised batch keeps a stable order.
+        assert task.priority == 0
 
-    @pytest.mark.integration
-    def test_parallel_experiment_workflow(self, mock_llm_client):
-        """Test complete parallel experiment workflow."""
-        executor = ParallelExperimentExecutor(max_workers=4)
+    def test_a_task_may_name_a_data_file_and_a_priority(self, tmp_path):
+        csv = tmp_path / "d.csv"
+        csv.write_text("a,b\n1,2\n")
+        task = ExperimentTask(
+            experiment_id="e", code="result = 1", data_path=str(csv), priority=5
+        )
+        assert task.data_path == str(csv)
+        assert task.priority == 5
 
-        # Create mock experiment protocols
-        protocols = [
-            {"id": f"exp_{i}", "type": "computational", "params": {"iterations": 100}}
-            for i in range(6)
+    def test_tasks_sort_by_priority_highest_first(self):
+        """The ordering `execute_batch` applies before submitting."""
+        tasks = [
+            ExperimentTask(experiment_id="low", code="", priority=1),
+            ExperimentTask(experiment_id="high", code="", priority=10),
+            ExperimentTask(experiment_id="mid", code="", priority=5),
         ]
-
-        protocol_ids = [p["id"] for p in protocols]
-
-        # Execute in parallel
-        results = executor.execute_batch(protocol_ids)
-
-        assert len(results) == 6
-        # Allow for some failures in real execution
-        success_rate = sum(1 for r in results if r.success) / len(results)
-        assert success_rate >= 0.5  # At least 50% should succeed
-
-        executor.shutdown()
-
-    @pytest.mark.integration
-    def test_memory_usage_under_load(self):
-        """Test memory usage doesn't grow excessively."""
-        import psutil
-        import os
-
-        process = psutil.Process(os.getpid())
-        initial_memory = process.memory_info().rss / 1024 / 1024  # MB
-
-        executor = ParallelExperimentExecutor(max_workers=4)
-
-        # Execute many experiments
-        def mock_execute_task(protocol_id):
-            # Allocate and release memory
-            data = [0] * 100000
-            time.sleep(0.01)
-            return ParallelExecutionResult(
-                protocol_id=protocol_id,
-                success=True,
-                result_id=f"result_{protocol_id}",
-                duration_seconds=0.01
-            )
-
-        protocol_ids = [f"protocol_{i}" for i in range(50)]
-
-        with patch.object(executor, '_execute_experiment_task', side_effect=mock_execute_task):
-            results = executor.execute_batch(protocol_ids)
-
-        final_memory = process.memory_info().rss / 1024 / 1024  # MB
-        memory_increase = final_memory - initial_memory
-
-        # Memory shouldn't grow excessively (< 500MB increase)
-        assert memory_increase < 500
-
-        executor.shutdown()
-
-
-class TestConcurrentExperimentScheduling:
-    """Test experiment scheduling and queuing."""
-
-    def test_queue_management(self):
-        """Test experiment queue management."""
-        executor = ParallelExperimentExecutor(max_workers=2)
-
-        # Submit more experiments than workers
-        protocol_ids = [f"protocol_{i}" for i in range(10)]
-
-        def mock_execute_task(protocol_id):
-            time.sleep(0.1)
-            return ParallelExecutionResult(
-                protocol_id=protocol_id,
-                success=True,
-                result_id=f"result_{protocol_id}",
-                duration_seconds=0.1
-            )
-
-        with patch.object(executor, '_execute_experiment_task', side_effect=mock_execute_task):
-            results = executor.execute_batch(protocol_ids)
-
-            # All should complete eventually
-            assert len(results) == 10
-            assert all(r.success for r in results)
-
-        executor.shutdown()
-
-    def test_graceful_shutdown_with_pending_work(self):
-        """Test shutting down with pending experiments."""
-        executor = ParallelExperimentExecutor(max_workers=2)
-
-        def slow_task(protocol_id):
-            time.sleep(1.0)
-            return ParallelExecutionResult(
-                protocol_id=protocol_id,
-                success=True,
-                result_id=f"result_{protocol_id}",
-                duration_seconds=1.0
-            )
-
-        protocol_ids = [f"protocol_{i}" for i in range(4)]
-
-        with patch.object(executor, '_execute_experiment_task', side_effect=slow_task):
-            # Start batch but don't wait
-            import threading
-            thread = threading.Thread(target=executor.execute_batch, args=(protocol_ids,))
-            thread.start()
-
-            # Give it a moment to start
-            time.sleep(0.2)
-
-            # Shutdown should wait for running tasks
-            executor.shutdown(wait=True)
-
-            # Thread should complete
-            thread.join(timeout=3.0)
-
-
-class TestResourceLimits:
-    """Test resource limit enforcement."""
-
-    def test_cpu_limit_enforcement(self):
-        """Test CPU usage stays within limits."""
-        executor = ParallelExperimentExecutor(max_workers=4)
-
-        # CPU-intensive task
-        def cpu_intensive_task(protocol_id):
-            # Simulate CPU work
-            result = sum(i**2 for i in range(1000000))
-            return ParallelExecutionResult(
-                protocol_id=protocol_id,
-                success=True,
-                result_id=f"result_{protocol_id}",
-                duration_seconds=0.5,
-                data={"result": result}
-            )
-
-        protocol_ids = [f"protocol_{i}" for i in range(8)]
-
-        with patch.object(executor, '_execute_experiment_task', side_effect=cpu_intensive_task):
-            start = time.time()
-            results = executor.execute_batch(protocol_ids)
-            duration = time.time() - start
-
-            assert len(results) == 8
-            assert all(r.success for r in results)
-            # Should complete in reasonable time with parallelism
-            assert duration < 10.0
-
-        executor.shutdown()
-
-    @pytest.mark.integration
-    def test_memory_limit_handling(self):
-        """Test handling of memory limit exceeded."""
-        executor = ParallelExperimentExecutor(max_workers=2)
-
-        def memory_intensive_task(protocol_id):
-            try:
-                # Try to allocate large amount of memory
-                data = [0] * 100000000  # ~400MB
-                return ParallelExecutionResult(
-                    protocol_id=protocol_id,
-                    success=True,
-                    result_id=f"result_{protocol_id}",
-                    duration_seconds=0.1
-                )
-            except MemoryError:
-                return ParallelExecutionResult(
-                    protocol_id=protocol_id,
-                    success=False,
-                    error="Memory limit exceeded"
-                )
-
-        protocol_ids = ["protocol_1"]
-
-        with patch.object(executor, '_execute_experiment_task', side_effect=memory_intensive_task):
-            results = executor.execute_batch(protocol_ids)
-
-            # Should handle gracefully (either succeed or fail with error)
-            assert len(results) == 1
-            if not results[0].success:
-                assert "memory" in results[0].error.lower()
-
-        executor.shutdown()
+        ordered = sorted(tasks, key=lambda t: t.priority, reverse=True)
+        assert [t.experiment_id for t in ordered] == ["high", "mid", "low"]

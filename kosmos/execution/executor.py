@@ -6,6 +6,7 @@ Supports both direct execution and Docker-based sandboxed execution.
 """
 
 import sys
+import os
 from kosmos.utils.compat import model_to_dict
 import io
 import traceback
@@ -159,6 +160,136 @@ class ExecutionResult:
         return result
 
 
+# Static part of the sandbox shim: a universal never-crash stub + a fallback
+# finder that resolves any kosmos.* import the container can't satisfy. The
+# `kosmos` package is NOT installed in the isolated sandbox, so without this the
+# generator's `from kosmos... import ...` lines die with ModuleNotFoundError.
+_SANDBOX_SHIM_STATIC = '''# --- injected kosmos sandbox shim ---
+import sys as _sys, types as _types
+import importlib.util as _ilu
+class _Stub:
+    # Universal never-crash mock for un-bundled kosmos.* helpers: constructable,
+    # callable/chainable, subscriptable, formattable, iterable, arithmetic-safe.
+    def __init__(self, *a, **k): pass
+    def __call__(self, *a, **k): return _Stub()
+    def __getattr__(self, _n): return _Stub()
+    def __getitem__(self, _k): return _Stub()
+    def __iter__(self): return iter(())
+    def __len__(self): return 0
+    def __contains__(self, _x): return False
+    def __bool__(self): return False
+    def __int__(self): return 0
+    def __float__(self): return 0.0
+    def __str__(self): return "0"
+    def __repr__(self): return "stub"
+    def __format__(self, _spec): return "0"
+    def __add__(self, o): return _Stub()
+    __radd__ = __sub__ = __rsub__ = __mul__ = __rmul__ = __truediv__ = __rtruediv__ = __add__
+def _mkstub(name):
+    m = _types.ModuleType(name); m.__path__ = []
+    m.__getattr__ = lambda n: _Stub()
+    _sys.modules[name] = m
+    return m
+for _pn in ("kosmos", "kosmos.execution", "kosmos.analysis"):
+    if _pn not in _sys.modules: _mkstub(_pn)
+class _KosmosStubFinder:
+    def find_spec(self, name, path=None, target=None):
+        if (name == "kosmos" or name.startswith("kosmos.")) and name not in _sys.modules:
+            return _ilu.spec_from_loader(name, self)
+        return None
+    def create_module(self, spec): return _mkstub(spec.name)
+    def exec_module(self, module): pass
+_sys.meta_path.insert(0, _KosmosStubFinder())
+'''
+
+
+def _build_sandbox_shim() -> str:
+    """Build the shim prepended to sandboxed experiment code.
+
+    Injects the REAL, self-contained kosmos analysis helpers by embedding their
+    source (kosmos/execution/data_analysis.py -> DataAnalyzer/DataCleaner,
+    kosmos/execution/ml_experiments.py -> MLAnalyzer) so experiments produce
+    genuine results. Any other kosmos.* import (e.g. PublicationVisualizer, which
+    has kosmos deps we don't bundle) falls back to the never-crash stub. The
+    kosmos package isn't installed in the isolated sandbox, hence the injection.
+    """
+    _dir = os.path.dirname(os.path.abspath(__file__))
+    real = {}
+    for modname, fname in (
+        ("kosmos.execution.data_analysis", "data_analysis.py"),
+        ("kosmos.execution.ml_experiments", "ml_experiments.py"),
+    ):
+        try:
+            with open(os.path.join(_dir, fname), "r") as fh:
+                real[modname] = fh.read()
+        except Exception as e:  # pragma: no cover - best effort
+            logger.warning("Could not read sandbox helper %s: %s", fname, e)
+
+    parts = [_SANDBOX_SHIM_STATIC, "_REAL_KOSMOS_SRC = {"]
+    for modname, src in real.items():
+        parts.append("    %r: %r," % (modname, src))
+    parts.append("}")
+    parts.append(
+        "for _rn, _rsrc in _REAL_KOSMOS_SRC.items():\n"
+        "    try:\n"
+        "        _rm = _types.ModuleType(_rn); _rm.__name__ = _rn\n"
+        "        _sys.modules[_rn] = _rm\n"
+        "        exec(compile(_rsrc, _rn.replace('.', '/') + '.py', 'exec'), _rm.__dict__)\n"
+        "        _pp, _, _leaf = _rn.rpartition('.')\n"
+        "        if _pp in _sys.modules: setattr(_sys.modules[_pp], _leaf, _rm)\n"
+        "    except Exception:\n"
+        "        _mkstub(_rn)\n"
+        "# --- end shim ---"
+    )
+    return "\n".join(parts)
+
+
+# Appended to sandboxed experiment code. The generated code computes a `results`/
+# `result` dict but only prints human-readable lines; the sandbox's return-value
+# extractor looks for a stdout line starting with "RESULT:" + JSON. Without this
+# the captured return_value was always empty (-> empty Result rows, 0 "successful"
+# experiments). This trailer serializes the result dict to that marker.
+# The variables the capture below will look for, in order. Named here so the
+# code generator can gate on the same contract instead of guessing at it: a
+# script that binds none of these at module scope produces nothing, however
+# correct its analysis. `test_the_gate_uses_the_executor's_own_capture_names`
+# fails if this drifts from the literal inside the string.
+RESULT_CAPTURE_NAMES = ("results", "result", "output", "summary", "analysis")
+
+_SANDBOX_RESULT_CAPTURE = '''
+# --- injected result-capture: emit RESULT: <json> for the sandbox extractor ---
+try:
+    import json as _rc_json
+    _rc_payload = None
+    _rc_g = globals()
+    for _rc_vn in ("results", "result", "output", "summary", "analysis"):
+        _rc_cand = _rc_g.get(_rc_vn)
+        if isinstance(_rc_cand, dict) and _rc_cand:
+            _rc_payload = _rc_cand
+            break
+    if _rc_payload is not None:
+        def _rc_safe(o):
+            if o is None or isinstance(o, (str, int, float, bool)):
+                return o
+            if isinstance(o, dict):
+                return {str(k): _rc_safe(v) for k, v in o.items()}
+            if isinstance(o, (list, tuple)):
+                return [_rc_safe(v) for v in o]
+            try:
+                import numpy as _rc_np
+                if isinstance(o, _rc_np.integer): return int(o)
+                if isinstance(o, _rc_np.floating): return float(o)
+                if isinstance(o, _rc_np.ndarray): return o.tolist()
+            except Exception:
+                pass
+            return str(o)
+        print("RESULT: " + _rc_json.dumps(_rc_safe(_rc_payload)))
+except Exception as _rc_e:
+    print("RESULT_CAPTURE_ERROR:", _rc_e)
+# --- end result-capture ---
+'''
+
+
 class CodeExecutor:
     """
     Executes Python code with safety measures and output capture.
@@ -220,8 +351,39 @@ class CodeExecutor:
                 )
                 self.use_sandbox = False
             else:
-                self.sandbox = DockerSandbox(**self.sandbox_config)
-                logger.info("Docker sandbox initialized for code execution")
+                # Filter to what DockerSandbox actually accepts rather than
+                # splatting blindly. `sandbox_config` reaches here from callers
+                # that build it themselves (parallel.py passes an arbitrary
+                # task-supplied dict), so an unexpected key would otherwise
+                # raise TypeError during executor construction and take down the
+                # whole run -- which is exactly how the memory_limit_mb key name
+                # mismatch stayed invisible. Unknown keys are dropped with a
+                # warning: losing one setting is recoverable, losing the
+                # executor is not.
+                import inspect
+
+                accepted = set(
+                    inspect.signature(DockerSandbox.__init__).parameters
+                ) - {"self"}
+                unknown = set(self.sandbox_config) - accepted
+                if unknown:
+                    logger.warning(
+                        "Ignoring sandbox_config key(s) %s that DockerSandbox "
+                        "does not accept; valid keys are %s. The corresponding "
+                        "limits are NOT being applied.",
+                        sorted(unknown),
+                        sorted(accepted),
+                    )
+                safe_config = {
+                    k: v for k, v in self.sandbox_config.items() if k in accepted
+                }
+                self.sandbox = DockerSandbox(**safe_config)
+                logger.info(
+                    "Docker sandbox initialized for code execution "
+                    "(memory_limit=%s, timeout=%s)",
+                    self.sandbox.memory_limit,
+                    self.sandbox.timeout,
+                )
 
         # Initialize R executor for R language support (Issue #69)
         self.r_executor = None
@@ -312,6 +474,39 @@ class CodeExecutor:
                     last_error = result.error
                     error_type = result.error_type or "Unknown"
 
+                    # Surface the actual sandbox failure (previously swallowed),
+                    # so experiment-execution errors are debuggable from the log.
+                    logger.error(
+                        "[SANDBOX-EXEC-FAIL] attempt=%s type=%s error=%s\n"
+                        "--- stderr (first 2000) ---\n%s\n"
+                        "--- code (first 1500) ---\n%s",
+                        attempt, error_type, (result.error or "")[:1000],
+                        (result.stderr or "")[:2000], (current_code or "")[:1500],
+                    )
+
+                    # Terminal: the code refused to invent a missing dataset.
+                    # Both fields are checked because the refusal surfaces as
+                    # the error on some sandbox backends and only inside the
+                    # traceback on others.
+                    #
+                    # Only this one condition is consulted here, rather than
+                    # `should_retry` in full. Wiring the whole predicate in
+                    # would also make SyntaxError and FileNotFoundError terminal
+                    # in this loop for the first time -- a larger behaviour
+                    # change, on paths that today do sometimes repair, and not
+                    # the one this change is for. `should_retry` remains correct
+                    # for callers that ask it.
+                    if is_fabrication_refusal(result.error) or \
+                            is_fabrication_refusal(result.stderr):
+                        logger.error(
+                            "[NO-DATA] experiment refused to fabricate data; not "
+                            "retrying. There is no code fix for an absent "
+                            "dataset -- give the run a data source "
+                            "(--data-path / --evidence-config), or find one "
+                            "with `kosmos find-data`."
+                        )
+                        return result
+
                     if retry_on_error and attempt < self.max_retries:
                         # Try to fix the code using RetryStrategy (Issue #54)
                         fixed_code = self.retry_strategy.modify_code_for_retry(
@@ -343,6 +538,18 @@ class CodeExecutor:
                 logger.error(f"Unexpected error during execution: {e}")
                 last_error = str(e)
                 error_type = type(e).__name__
+
+                # Same terminal case as above, reached when the refusal
+                # propagates as an exception rather than as a failed result.
+                if is_fabrication_refusal(str(e)):
+                    logger.error(
+                        "[NO-DATA] experiment refused to fabricate data; not "
+                        "retrying. Give the run a data source, or find one with "
+                        "`kosmos find-data`."
+                    )
+                    return ExecutionResult(
+                        success=False, error=str(e), error_type=error_type
+                    )
 
                 if retry_on_error and attempt < self.max_retries:
                     # Try to fix the code
@@ -561,16 +768,62 @@ class CodeExecutor:
         logger.info("Executing code in Docker sandbox")
 
         # Prepare data files if data_path provided
-        data_files = {}
-        if local_vars and 'data_path' in local_vars:
-            data_path = local_vars['data_path']
-            # Extract filename from path
-            import os
-            filename = os.path.basename(data_path)
-            data_files[filename] = data_path
+        import os
 
-            # Update code to use mounted data file
-            code = f"data_path = '/workspace/data/{filename}'\n{code}"
+        data_files = {}
+        # Every host path this execution may reference, primary first. A
+        # multi-dataset run supplies the rest under `__data_files__`; a
+        # single-dataset run leaves that absent, so this list holds exactly one
+        # entry and the behaviour below is the pre-existing one line for line.
+        host_paths: list[str] = []
+        if local_vars and local_vars.get('data_path'):
+            host_paths.append(local_vars['data_path'])
+        for extra in (local_vars or {}).get('__data_files__', {}).values():
+            if extra not in host_paths:
+                host_paths.append(extra)
+
+        for host_path in host_paths:
+            filename = os.path.basename(host_path)
+            clash = data_files.get(filename)
+            if clash is not None and clash != host_path:
+                # Two datasets whose files share a basename would land on one
+                # container path and silently overwrite each other (sandbox.py
+                # copies into /workspace/data/<basename>). An experiment reading
+                # the wrong dataset and reporting a confident result is the worst
+                # outcome available here, so refuse rather than pick.
+                raise ValueError(
+                    f"two datasets share the filename {filename!r} "
+                    f"({clash} and {host_path}); they would collide at "
+                    f"/workspace/data/{filename}. Stage them under distinct names."
+                )
+            data_files[filename] = host_path
+
+        if host_paths:
+            # The host path is meaningless inside the container — each file is
+            # mounted at /workspace/data/<filename>. Rewrite every reference to
+            # a host path (the assignments injected by execute_with_data, or a
+            # path the LLM hardcoded into the code) to the mounted container
+            # path, then guarantee data_path is defined up-front. Rewriting (not
+            # just prepending) is essential: a prepended assignment would be
+            # shadowed by execute_with_data's later `data_path = '<host>'` line.
+            #
+            # LONGEST PATH FIRST. With several datasets one host path can be a
+            # prefix of another (…/run/a.csv and …/run/a.csv.bak, or a directory
+            # and a file beneath it). Replacing the shorter one first corrupts
+            # the longer into a half-rewritten hybrid naming no real file.
+            for host_path in sorted(host_paths, key=len, reverse=True):
+                container_path = f"/workspace/data/{os.path.basename(host_path)}"
+                code = code.replace(host_path, container_path)
+            primary = f"/workspace/data/{os.path.basename(host_paths[0])}"
+            code = f"data_path = {primary!r}\n{code}"
+
+        # Prepend the kosmos-stub shim so generated `from kosmos.* import ...`
+        # lines resolve inside the sandbox (kosmos pkg isn't installed there).
+        code = _build_sandbox_shim() + "\n" + code
+
+        # Append the result-capture trailer so the code's results dict is emitted
+        # as a "RESULT: <json>" stdout line the sandbox extractor can parse.
+        code = code + "\n" + _SANDBOX_RESULT_CAPTURE
 
         # Execute in sandbox
         sandbox_result = self.sandbox.execute(code, data_files=data_files if data_files else None)
@@ -633,15 +886,20 @@ class CodeExecutor:
         self,
         code: str,
         data_path: str,
-        retry_on_error: bool = False
+        retry_on_error: bool = False,
+        *,
+        data_files: Optional[Dict[str, str]] = None
     ) -> ExecutionResult:
         """
-        Execute code with data file path provided.
+        Execute code with data file path(s) provided.
 
         Args:
             code: Python code to execute (expects `data_path` variable)
-            data_path: Path to data file (made available as variable)
+            data_path: Path to the PRIMARY data file (made available as variable)
             retry_on_error: If True, retry on errors
+            data_files: Optional {dataset_name: host_path} for a multi-dataset
+                experiment. Exposed to the code as a `datasets` dict. Omit it and
+                nothing about this call changes.
 
         Returns:
             ExecutionResult
@@ -649,19 +907,71 @@ class CodeExecutor:
         Note:
             The data_path variable is prepended to code and also provided
             in local_vars for templates that use `pd.read_csv(data_path)`.
+
+            `datasets` is injected as a LITERAL in the code string rather than
+            through local_vars, and that is not a style choice. The sandbox path
+            rewrites host paths to container paths by string-replacing them in
+            the code; a mapping passed through local_vars never passes through
+            that rewrite, so inside the container every one of its values would
+            still name a host path that does not exist there. The literal is
+            rewritten with everything else. It also has to work on the
+            non-sandbox path, where the same literal simply holds host paths --
+            which is what that path wants.
         """
         # Prepend data_path assignment so templates can use it (Issue #51)
         # This ensures data_path is defined even if templates use it directly
-        augmented_code = f"# Data path injected by executor\ndata_path = {repr(data_path)}\n\n{code}"
+        preamble = f"# Data path injected by executor\ndata_path = {repr(data_path)}\n"
+        if data_files:
+            preamble += (
+                "# Datasets available to this experiment, injected by executor.\n"
+                f"datasets = {repr(dict(data_files))}\n"
+            )
+        augmented_code = f"{preamble}\n{code}"
 
-        # Also inject as local variable for safety
-        local_vars = {'data_path': data_path}
+        # Also inject as local variables for safety. `__data_files__` is read by
+        # `_execute_in_sandbox` to decide what to mount; it is dunder-named
+        # because it is plumbing for the executor, not a name generated code
+        # should ever reference (`datasets`, above, is the public one).
+        local_vars: Dict[str, Any] = {'data_path': data_path}
+        if data_files:
+            local_vars['__data_files__'] = dict(data_files)
 
         return self.execute(augmented_code, local_vars, retry_on_error)
 
 
 # Re-export CodeValidator from canonical safety module (F-22: removed duplicate)
 from kosmos.safety.code_validator import CodeValidator  # noqa: F811,F401
+
+
+# The sentences `execution/code_generator.py` writes into every generated
+# experiment's data-loading preamble when there is no dataset to load. They are
+# a REFUSAL, not a defect: the generated code decided, correctly, that it would
+# rather fail than invent numbers.
+#
+# Matched on the message rather than on the exception type because the type is
+# a bare RuntimeError, which covers far too much to make terminal. Kept as a
+# substring match on the exact phrases the generator emits, so a generator that
+# reworded them would fall back to today's behaviour (retry) rather than to
+# something new -- the wrong direction to fail in, but a visible one.
+FABRICATION_REFUSAL_MARKERS = (
+    "refusing to fabricate synthetic data",
+    "Real data only; no synthetic fallback",
+)
+
+
+def is_fabrication_refusal(message: Optional[str]) -> bool:
+    """True when a failure is the generated code refusing to invent its data.
+
+    There is no repair for this. The code is not broken; the dataset is absent.
+    Retrying hands the same error to `_repair_with_llm`, whose prompt asks for
+    working code and says nothing about where data may come from -- so the only
+    "fix" available to a model is to write the data itself, three times over, at
+    the end of which the experiment reports a result. That is the one failure
+    mode this system must never convert into a success.
+    """
+    if not message:
+        return False
+    return any(marker in message for marker in FABRICATION_REFUSAL_MARKERS)
 
 
 class RetryStrategy:
@@ -714,9 +1024,25 @@ class RetryStrategy:
             "by_error_type": {}
         }
 
-    def should_retry(self, attempt: int, error_type: str) -> bool:
-        """Determine if execution should be retried."""
+    def should_retry(
+        self, attempt: int, error_type: str, error_message: str = ""
+    ) -> bool:
+        """Determine if execution should be retried.
+
+        `error_message` is optional and defaults to empty, so every existing
+        two-argument call keeps its exact answer. It exists for the one case the
+        error TYPE cannot decide: the generated code's refusal to fabricate a
+        missing dataset arrives as a bare RuntimeError, and making every
+        RuntimeError terminal would stop repairing the large class of errors
+        this strategy was written for. See `is_fabrication_refusal`.
+        """
         if attempt >= self.max_retries:
+            return False
+
+        # No dataset is not a code defect, so there is no code fix. Checked
+        # before the type list because the type here is RuntimeError, which is
+        # and must remain retryable in general.
+        if is_fabrication_refusal(error_message):
             return False
 
         # Don't retry on certain errors that can't be fixed
@@ -831,7 +1157,17 @@ class RetryStrategy:
         traceback_str: str,
         llm_client: Any
     ) -> Optional[str]:
-        """Use LLM to analyze error and fix code."""
+        """Use LLM to analyze error and fix code.
+
+        The CONSTRAINT below is not decoration. This prompt is reached with
+        whatever error the sandbox produced, and one of those errors is the
+        generated code saying it will not invent a dataset it cannot find. Asked
+        only to "fix this code", a model's cheapest fix for a missing file is to
+        write the file -- and the experiment then reports a result, from numbers
+        nothing measured. `is_fabrication_refusal` keeps that error from
+        reaching here at all; this is the second line, for every other phrasing
+        of "the data is not there" that the marker list does not catch.
+        """
         prompt = f"""Fix the following Python code that produced an error.
 
 ORIGINAL CODE:
@@ -844,6 +1180,11 @@ ERROR:
 
 TRACEBACK:
 {traceback_str}
+
+CONSTRAINT: do not invent, synthesise, simulate, mock or hard-code data, and do
+not replace a missing dataset with a generated one. If the error is that no
+dataset is available, or that a required file or column does not exist, there is
+no fix -- return the code unchanged.
 
 Return ONLY the fixed Python code, no explanations. Wrap the code in ```python``` markers."""
 
@@ -1048,12 +1389,22 @@ def execute_protocol_code(
                 'validation_errors': [f"Emergency stop: {guardrails.emergency_stop.reason}"],
                 'validation_warnings': []
             }
-        # Use guardrails-enforced resource limits for sandbox config
+        # Use guardrails-enforced resource limits for sandbox config.
+        #
+        # These keys must match DockerSandbox.__init__ EXACTLY, because they are
+        # splatted into it (`DockerSandbox(**self.sandbox_config)`). They
+        # previously read `memory_limit_mb` / `timeout_seconds`, which that
+        # constructor does not accept -- it takes `memory_limit` (a Docker size
+        # STRING like "2g", not an int of MB) and `timeout` (seconds). The
+        # mismatch raised TypeError on the one path that would have applied the
+        # operator's configured limit, so MAX_MEMORY_MB was silently inert and
+        # every sandbox ran on the hardcoded 2g default no matter what the
+        # config said.
         if use_sandbox and sandbox_config is None:
             enforced_limits = guardrails.enforce_resource_limits()
             sandbox_config = {
-                'memory_limit_mb': enforced_limits.max_memory_mb,
-                'timeout_seconds': enforced_limits.max_execution_time_seconds,
+                'memory_limit': f"{int(enforced_limits.max_memory_mb)}m",
+                'timeout': int(enforced_limits.max_execution_time_seconds),
             }
     except ImportError:
         logger.debug("SafetyGuardrails not available, proceeding without guardrails")

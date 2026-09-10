@@ -42,6 +42,17 @@ class NextAction(str, Enum):
     ERROR_RECOVERY = "error_recovery"
 
 
+def _state_value(state) -> str:
+    """The string form of a workflow state, whether it arrives as enum or str.
+
+    Needed because `WorkflowTransition` sets `use_enum_values=True` (so pydantic
+    stores strings) while `ResearchWorkflow.current_state` is a plain attribute
+    holding the enum member. Both spellings mean the same state and both must
+    export identically.
+    """
+    return state.value if hasattr(state, "value") else str(state)
+
+
 class WorkflowTransition(BaseModel):
     """A transition between workflow states."""
 
@@ -73,6 +84,11 @@ class ResearchPlan(BaseModel):
     # Experiment tracking
     experiment_queue: List[str] = Field(default_factory=list)  # Protocol IDs
     completed_experiments: List[str] = Field(default_factory=list)
+    # Protocols that raised and were dropped from the queue. Neither queued nor
+    # completed, so without this list a failed experiment is in no list at all
+    # and vanishes from the report -- which is how a Docker outage read as
+    # "no experiment was designed".
+    failed_experiments: List[str] = Field(default_factory=list)
 
     # Results tracking
     results: List[str] = Field(default_factory=list)  # Result IDs
@@ -172,7 +188,23 @@ class ResearchWorkflow:
     """
 
     # Define allowed transitions
+    # NOTE on CONVERGED and ERROR as targets: both are *terminal outcomes*, and
+    # arriving at either must never itself raise. Several states previously
+    # omitted CONVERGED, so a run that decided it was finished while in
+    # EXECUTING/ANALYZING/ERROR died with ValueError at the exact moment it
+    # tried to succeed -- discarding the report after the science was already
+    # done. That decision is reachable from those states in practice (the
+    # action-limit guard returns CONVERGE regardless of state, and
+    # `_should_check_convergence` explicitly whitelists ERROR), so the guard was
+    # rejecting legitimate paths rather than preventing invalid ones. ERROR and
+    # CONVERGED also permit self-transitions: re-entering a terminal state is a
+    # no-op, not a violation.
     ALLOWED_TRANSITIONS = {
+        # INITIALIZING deliberately CANNOT reach CONVERGED: a run that never
+        # started cannot have converged, and no code path decides convergence
+        # from here (unlike EXECUTING/ANALYZING/ERROR below, which are reachable
+        # via the action-limit guard and `_should_check_convergence`). Two tests
+        # pin this as the canonical invalid transition.
         WorkflowState.INITIALIZING: [
             WorkflowState.GENERATING_HYPOTHESES,
             WorkflowState.PAUSED,
@@ -187,17 +219,20 @@ class ResearchWorkflow:
         WorkflowState.DESIGNING_EXPERIMENTS: [
             WorkflowState.EXECUTING,
             WorkflowState.GENERATING_HYPOTHESES,  # If need more hypotheses
+            WorkflowState.CONVERGED,  # Hypothesis-only run: no data to experiment on
             WorkflowState.PAUSED,
             WorkflowState.ERROR
         ],
         WorkflowState.EXECUTING: [
             WorkflowState.ANALYZING,
+            WorkflowState.CONVERGED,
             WorkflowState.ERROR,
             WorkflowState.PAUSED
         ],
         WorkflowState.ANALYZING: [
             WorkflowState.REFINING,
             WorkflowState.DESIGNING_EXPERIMENTS,  # If need immediate retest
+            WorkflowState.CONVERGED,
             WorkflowState.PAUSED,
             WorkflowState.ERROR
         ],
@@ -210,6 +245,7 @@ class ResearchWorkflow:
         ],
         WorkflowState.CONVERGED: [
             WorkflowState.GENERATING_HYPOTHESES,  # Restart if new question
+            WorkflowState.CONVERGED,  # Already done; re-deciding is a no-op
         ],
         WorkflowState.PAUSED: [
             WorkflowState.GENERATING_HYPOTHESES,
@@ -222,6 +258,8 @@ class ResearchWorkflow:
         WorkflowState.ERROR: [
             WorkflowState.INITIALIZING,  # Restart
             WorkflowState.GENERATING_HYPOTHESES,  # Resume from hypothesis gen
+            WorkflowState.CONVERGED,  # Give up cleanly and report what we have
+            WorkflowState.ERROR,  # Another error while already failed
             WorkflowState.PAUSED
         ]
     }
@@ -349,14 +387,24 @@ class ResearchWorkflow:
         logger.info("ResearchWorkflow reset to INITIALIZING state")
 
     def to_dict(self) -> Dict[str, Any]:
-        """Export workflow state to dictionary."""
+        """Export workflow state to dictionary.
+
+        `WorkflowTransition` declares `use_enum_values=True`, so pydantic stores
+        its `from_state`/`to_state` as the enum's STRING value rather than the
+        member -- while `self.current_state` is a plain attribute and stays an
+        enum. Calling `.value` unconditionally therefore raised
+        `AttributeError: 'str' object has no attribute 'value'` on any workflow
+        that had actually transitioned, i.e. on every real run. `_state_value`
+        normalises the two, so this stays correct whichever way a later change
+        moves that model config.
+        """
         return {
-            "current_state": self.current_state.value,
+            "current_state": _state_value(self.current_state),
             "transition_count": len(self.transition_history),
             "recent_transitions": [
                 {
-                    "from": t.from_state.value,
-                    "to": t.to_state.value,
+                    "from": _state_value(t.from_state),
+                    "to": _state_value(t.to_state),
                     "action": t.action,
                     "timestamp": t.timestamp.isoformat()
                 }

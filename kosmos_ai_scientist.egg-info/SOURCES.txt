@@ -264,6 +264,7 @@ kosmos/cli/utils.py
 kosmos/cli/commands/__init__.py
 kosmos/cli/commands/cache.py
 kosmos/cli/commands/config.py
+kosmos/cli/commands/find_data.py
 kosmos/cli/commands/graph.py
 kosmos/cli/commands/history.py
 kosmos/cli/commands/profile.py
@@ -302,6 +303,8 @@ kosmos/core/providers/litellm_provider.py
 kosmos/core/providers/openai.py
 kosmos/core/utils/__init__.py
 kosmos/core/utils/json_parser.py
+kosmos/datasearch/__init__.py
+kosmos/datasearch/emit.py
 kosmos/db/__init__.py
 kosmos/db/models.py
 kosmos/db/operations.py
@@ -322,6 +325,9 @@ kosmos/domains/neuroscience/connectomics.py
 kosmos/domains/neuroscience/neurodegeneration.py
 kosmos/domains/neuroscience/ontology.py
 kosmos/domains/physics/__init__.py
+kosmos/evidence/__init__.py
+kosmos/evidence/client.py
+kosmos/evidence/federation.py
 kosmos/execution/__init__.py
 kosmos/execution/code_generator.py
 kosmos/execution/data_analysis.py
@@ -379,6 +385,7 @@ kosmos/literature/arxiv_http_client.py
 kosmos/literature/base_client.py
 kosmos/literature/cache.py
 kosmos/literature/citations.py
+kosmos/literature/openalex_client.py
 kosmos/literature/pdf_extractor.py
 kosmos/literature/pubmed_client.py
 kosmos/literature/reference_manager.py
@@ -432,3 +439,9 @@ kosmos_ai_scientist.egg-info/dependency_links.txt
 kosmos_ai_scientist.egg-info/entry_points.txt
 kosmos_ai_scientist.egg-info/requires.txt
 kosmos_ai_scientist.egg-info/top_level.txt
+tests/test_evidence_client.py
+tests/test_evidence_federation.py
+tests/test_found_config_runs.py
+tests/test_multi_dataset_experiments.py
+tests/test_protocol_parsing_shapes.py
+tests/test_run_reporting_honesty.py

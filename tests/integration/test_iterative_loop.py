@@ -298,21 +298,28 @@ class TestMultipleIterations:
 class TestMessagePassing:
     """Test message passing between agents."""
 
-    def test_director_sends_to_hypothesis_generator(self, director):
+    # The four _send_to_* methods are `async def` and return the AgentMessage
+    # they sent. Called from a sync test they returned an un-awaited coroutine,
+    # so every assertion below was reading attributes off a coroutine object.
+    # AgentMessage's fields are `from_agent`/`to_agent`/`content` (base.py), not
+    # `from_agent_id`/`to_agent_id`/`context`.
+
+    async def test_director_sends_to_hypothesis_generator(self, director):
         """Test director can send messages to hypothesis generator."""
-        message = director._send_to_hypothesis_generator(
+        message = await director._send_to_hypothesis_generator(
             action="generate",
             context={"count": 3},
         )
 
         assert message is not None
-        assert message.from_agent_id == director.agent_id
-        assert message.to_agent_id is not None
-        assert "count" in message.context
+        assert message.from_agent == director.agent_id
+        assert message.to_agent is not None
+        # The caller's context is nested under content["context"].
+        assert "count" in message.content["context"]
 
-    def test_director_sends_to_experiment_designer(self, director):
+    async def test_director_sends_to_experiment_designer(self, director):
         """Test director can send messages to experiment designer."""
-        message = director._send_to_experiment_designer(
+        message = await director._send_to_experiment_designer(
             hypothesis_id="hyp_001",
             context={},
         )
@@ -320,9 +327,9 @@ class TestMessagePassing:
         assert message is not None
         assert "hypothesis_id" in message.content
 
-    def test_director_sends_to_executor(self, director):
+    async def test_director_sends_to_executor(self, director):
         """Test director can send messages to executor."""
-        message = director._send_to_executor(
+        message = await director._send_to_executor(
             protocol_id="protocol_001",
             context={},
         )
@@ -330,9 +337,9 @@ class TestMessagePassing:
         assert message is not None
         assert "protocol_id" in message.content
 
-    def test_director_sends_to_data_analyst(self, director):
+    async def test_director_sends_to_data_analyst(self, director):
         """Test director can send messages to data analyst."""
-        message = director._send_to_data_analyst(
+        message = await director._send_to_data_analyst(
             result_id="result_001",
             hypothesis_id="hyp_001",
             context={},
@@ -347,11 +354,13 @@ class TestMessagePassing:
         from kosmos.agents.base import AgentMessage
 
         # Create response message
+        from kosmos.agents.base import MessageType
+
         response = AgentMessage(
-            from_agent_id="hypothesis_generator",
-            to_agent_id=director.agent_id,
+            type=MessageType.RESPONSE,
+            from_agent="hypothesis_generator",
+            to_agent=director.agent_id,
             content={"hypothesis_ids": ["hyp_001", "hyp_002"]},
-            context={},
         )
 
         initial_count = len(director.research_plan.hypothesis_pool)
@@ -361,17 +370,21 @@ class TestMessagePassing:
         # Should have added hypotheses to plan
         assert len(director.research_plan.hypothesis_pool) > initial_count
 
-    def test_message_correlation_tracking(self, director):
-        """Test pending requests are tracked correctly."""
-        # Send message
-        message = director._send_to_hypothesis_generator(
+    async def test_message_correlation_tracking(self, director):
+        """Test pending requests are tracked correctly.
+
+        Keyed on `message.id` and recording `agent` -- see the four
+        `pending_requests[message.id] = {...}` sites in research_director.py.
+        The previous version looked up `correlation_id` (None here) and read a
+        `target_agent` key that is never written.
+        """
+        message = await director._send_to_hypothesis_generator(
             action="generate",
             context={},
         )
 
-        # Check it's tracked
-        assert message.correlation_id in director.pending_requests
-        assert director.pending_requests[message.correlation_id]["target_agent"] == "hypothesis_generator"
+        assert message.id in director.pending_requests
+        assert director.pending_requests[message.id]["agent"] == "HypothesisGeneratorAgent"
 
 
 # ============================================================================

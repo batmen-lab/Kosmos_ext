@@ -13,6 +13,7 @@ import logging
 from kosmos.literature.base_client import PaperMetadata, PaperSource
 from kosmos.literature.arxiv_client import ArxivClient
 from kosmos.literature.semantic_scholar import SemanticScholarClient
+from kosmos.literature.openalex_client import OpenAlexClient
 from kosmos.literature.pubmed_client import PubMedClient
 from kosmos.literature.pdf_extractor import get_pdf_extractor
 from kosmos.config import get_config
@@ -31,7 +32,8 @@ class UnifiedLiteratureSearch:
     def __init__(
         self,
         arxiv_enabled: bool = True,
-        semantic_scholar_enabled: bool = True,
+        openalex_enabled: bool = True,
+        semantic_scholar_enabled: bool = False,  # replaced by OpenAlex (free, no key/rate-limit issues)
         pubmed_enabled: bool = True,
         semantic_scholar_api_key: Optional[str] = None,
         pubmed_api_key: Optional[str] = None,
@@ -52,6 +54,10 @@ class UnifiedLiteratureSearch:
 
         if arxiv_enabled:
             self.clients[PaperSource.ARXIV] = ArxivClient()
+
+        # OpenAlex replaces Semantic Scholar: free, no API key, no credit/rate-limit issues.
+        if openalex_enabled:
+            self.clients[PaperSource.OPENALEX] = OpenAlexClient(email=pubmed_email)
 
         if semantic_scholar_enabled:
             self.clients[PaperSource.SEMANTIC_SCHOLAR] = SemanticScholarClient(
@@ -212,7 +218,11 @@ class UnifiedLiteratureSearch:
         Returns:
             PaperMetadata or None if not found
         """
-        # Try Semantic Scholar first (best DOI support)
+        # Try OpenAlex first (excellent DOI coverage), then Semantic Scholar if enabled
+        if PaperSource.OPENALEX in self.clients:
+            paper = self.clients[PaperSource.OPENALEX].get_paper_by_id(f"doi:{doi}")
+            if paper:
+                return paper
         if PaperSource.SEMANTIC_SCHOLAR in self.clients:
             paper = self.clients[PaperSource.SEMANTIC_SCHOLAR].get_paper_by_id(doi)
             if paper:

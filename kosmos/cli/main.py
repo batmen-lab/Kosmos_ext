@@ -165,9 +165,16 @@ def main(
         # Don't exit here - let commands handle the error if they need database
         # Some commands (like --help, version) don't need database
 
-    # Suppress console output if quiet mode
-    if quiet:
-        console.quiet = True
+    # Suppress console output if quiet mode.
+    #
+    # Assigned unconditionally, not under `if quiet`. `console` is a module-level
+    # singleton in kosmos.cli.utils, so a one-way `= True` outlives the command
+    # that asked for it: in any process running more than one command -- the test
+    # suite, an embedding host -- a single `--quiet` invocation silenced every
+    # later command, which reads as "that command printed nothing" rather than as
+    # a mode nobody turned off. Assigning both ways makes the flag describe THIS
+    # invocation instead of latching the process.
+    console.quiet = quiet
 
 
 @app.command()
@@ -401,6 +408,12 @@ def register_commands():
     # doesn't disable all commands.
     _command_specs = [
         ("run", "kosmos.cli.commands.run", "run_research"),
+        # Imports only stdlib, typer, rich and two kosmos modules, deliberately,
+        # so it always registers: the try/except below DROPS a command whose
+        # import fails, and a dataset-search command that vanished whenever its
+        # server was unconfigured would leave the operator with no command and
+        # no reason. It fails at call time instead, with the setup recipe.
+        ("find-data", "kosmos.cli.commands.find_data", "find_data"),
         ("status", "kosmos.cli.commands.status", "show_status"),
         ("history", "kosmos.cli.commands.history", "show_history"),
         ("cache", "kosmos.cli.commands.cache", "manage_cache"),

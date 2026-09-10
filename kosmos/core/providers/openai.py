@@ -28,6 +28,10 @@ from kosmos.core.utils.json_parser import parse_json_response, JSONParseError
 
 logger = logging.getLogger(__name__)
 
+# Distinguishes "caller passed nothing" from "caller explicitly passed None to
+# mean no reasoning". A plain None default could not tell those apart.
+_UNSET = object()
+
 
 class OpenAIProvider(LLMProvider):
     """
@@ -116,6 +120,24 @@ class OpenAIProvider(LLMProvider):
         self.base_url = get_config_value('base_url') or os.environ.get('OPENAI_BASE_URL')
         self.organization = get_config_value('organization') or os.environ.get('OPENAI_ORGANIZATION')
         self.timeout = get_config_value('timeout') or 120
+        self.reasoning_effort = get_config_value('reasoning_effort') or os.environ.get('OPENAI_REASONING_EFFORT')
+
+        # Reasoning tokens are drawn from the SAME max_tokens budget as the
+        # final answer on OpenRouter's unified reasoning API (this is exactly
+        # what produced the pre-existing "response likely truncated mid-
+        # reasoning" warning below, empirically, before this field existed). A
+        # low max_tokens with reasoning enabled can consume the whole budget on
+        # the reasoning trace and leave nothing for content. Warned, not
+        # silently raised -- an operator's explicit OPENAI_MAX_TOKENS is theirs
+        # to keep, but they should know why output might come back empty.
+        if self.reasoning_effort and self.max_tokens < 8192:
+            logger.warning(
+                f"reasoning_effort={self.reasoning_effort!r} is set with "
+                f"max_tokens={self.max_tokens}. Reasoning tokens count against "
+                f"the same budget as the final answer, so a low max_tokens "
+                f"risks a reasoning-only, content-empty response. Consider "
+                f"OPENAI_MAX_TOKENS >= 8192 for effort='high'/'xhigh'."
+            )
 
         # Detect provider type from base_url
         if self.base_url:
@@ -151,6 +173,27 @@ class OpenAIProvider(LLMProvider):
         except Exception as e:
             logger.error(f"Failed to initialize OpenAI client: {e}")
             raise ProviderAPIError("openai", f"Failed to initialize: {e}", raw_error=e)
+
+    def _reasoning_extra_body(self, override: Any = _UNSET) -> Dict[str, Any]:
+        """OpenRouter's unified `reasoning` request field, or {} if unset.
+
+        `override` lets one call opt out of reasoning without changing the
+        provider's configuration -- pass None to send no reasoning field at all.
+        `generate_structured` uses this to retry a call that came back
+        unparseable, because reasoning and a long JSON schema compete for the
+        same token budget.
+
+        `{}` rather than `None` so it can always be splatted into `extra_body`
+        without a conditional at each call site. Only OpenRouter (and providers
+        that adopted the same convention) read this key; a provider that does
+        not recognise it ignores an unknown top-level field, per the OpenAI
+        Chat Completions spec, so this is a no-op rather than an error on a
+        provider that never asked for reasoning support.
+        """
+        effort = self.reasoning_effort if override is _UNSET else override
+        if not effort:
+            return {}
+        return {"reasoning": {"effort": effort}}
 
     def generate(
         self,
@@ -206,6 +249,14 @@ class OpenAIProvider(LLMProvider):
             if stop_sequences:
                 api_args["stop"] = stop_sequences
 
+            # Native JSON mode: when the caller (e.g. generate_structured) asks
+            # for structured output, force the model to emit a raw JSON object so
+            # it cannot prepend prose like "Here is the protocol:" that defeats
+            # JSON parsing. deepseek-v3-0324 / OpenRouter honor this.
+            response_format = kwargs.get("response_format")
+            if response_format:
+                api_args["response_format"] = response_format
+
             # Pre-call logging
             if log_llm:
                 logger.debug(
@@ -221,11 +272,47 @@ class OpenAIProvider(LLMProvider):
             start_time = time_module.time()
 
             # Call OpenAI API
-            response = self.client.chat.completions.create(**api_args, timeout=self.timeout)
+            response = self.client.chat.completions.create(
+                **api_args,
+                timeout=self.timeout,
+                extra_body=self._reasoning_extra_body(
+                    kwargs.get("reasoning_effort", _UNSET)
+                ),
+            )
 
-            # Extract text and usage
-            text = response.choices[0].message.content
+            # Extract text and usage. Reasoning models (e.g. deepseek-v4-flash)
+            # return content=None when the response is truncated mid-reasoning
+            # (finish_reason='length') — guard so len(text) doesn't crash.
+            _msg = response.choices[0].message
             finish_reason = response.choices[0].finish_reason
+
+            # A reasoning trace is the model's scratchpad, NOT its answer. It is
+            # an acceptable last resort for free-text (better to surface
+            # something than an empty string), but it can never be valid JSON --
+            # so when the caller asked for a JSON object, substituting it just
+            # converts "the model ran out of tokens while reasoning" into a
+            # baffling "could not parse JSON after 6 strategies" several frames
+            # away. Fail here instead, naming the actual cause.
+            # `.strip()` because a truncated reasoning response can come back as
+            # whitespace rather than None -- which is falsy-looking to a human
+            # but truthy to Python, so a bare `not _msg.content` would sail past
+            # it and hand " " to the JSON parser.
+            if not (_msg.content or "").strip() and api_args.get("response_format"):
+                raise ProviderAPIError(
+                    "openai",
+                    f"Model returned no content for a JSON-mode request "
+                    f"(finish_reason={finish_reason}). With reasoning enabled the "
+                    f"reasoning trace and the answer share max_tokens "
+                    f"({max_tokens}), so a long schema can leave nothing for the "
+                    f"JSON itself. Raise max_tokens or lower reasoning effort.",
+                )
+
+            text = _msg.content or getattr(_msg, "reasoning", None) or ""
+            if not _msg.content and finish_reason == "length":
+                logger.warning(
+                    "OpenRouter/model returned no content (finish_reason=length); "
+                    "response likely truncated mid-reasoning — increase max_tokens."
+                )
 
             # Handle usage stats (may not be present for local models)
             if hasattr(response, 'usage') and response.usage:
@@ -335,11 +422,16 @@ class OpenAIProvider(LLMProvider):
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                stop=stop_sequences
+                stop=stop_sequences,
+                extra_body=self._reasoning_extra_body(),
             )
 
-            # Parse response (same as sync)
-            content = response.choices[0].message.content or ""
+            # Parse response. Same reasoning-model guard as the sync path
+            # (generate()) -- content is None while the response is reasoning
+            # tokens only, so without this fallback a reasoning model would
+            # silently return "" here instead of surfacing its answer.
+            _msg = response.choices[0].message
+            content = _msg.content or getattr(_msg, "reasoning", None) or ""
             input_tokens = response.usage.prompt_tokens if response.usage else 0
             output_tokens = response.usage.completion_tokens if response.usage else 0
 
@@ -402,10 +494,12 @@ class OpenAIProvider(LLMProvider):
                 max_tokens=max_tokens,
                 temperature=temperature,
                 timeout=self.timeout,
+                extra_body=self._reasoning_extra_body(),
             )
 
-            # Extract and convert
-            text = response.choices[0].message.content
+            # Extract and convert (guard content=None for reasoning models)
+            _msg2 = response.choices[0].message
+            text = _msg2.content or getattr(_msg2, "reasoning", None) or ""
             finish_reason = response.choices[0].finish_reason
 
             # Handle usage stats
@@ -477,14 +571,31 @@ class OpenAIProvider(LLMProvider):
             json_system = (system or "") + "\n\nYou must respond with valid JSON matching this schema:\n" + json.dumps(schema, indent=2)
             json_system += "\n\nIMPORTANT: Return ONLY valid JSON, no additional text or explanations."
 
-            # Generate response
-            response = self.generate(
-                prompt=prompt,
-                system=json_system,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                **kwargs
-            )
+            # Prefer native JSON mode so the model can't wrap the object in prose.
+            # Fall back to a plain call if the model/provider rejects the param.
+            gen_kwargs = dict(kwargs)
+            gen_kwargs.setdefault("response_format", {"type": "json_object"})
+            try:
+                response = self.generate(
+                    prompt=prompt,
+                    system=json_system,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    **gen_kwargs
+                )
+            except ProviderAPIError as e:
+                if "response_format" not in str(getattr(e, "raw_error", "")) and \
+                   "response_format" not in str(e):
+                    raise
+                logger.warning("Model rejected response_format=json_object; retrying without it")
+                gen_kwargs.pop("response_format", None)
+                response = self.generate(
+                    prompt=prompt,
+                    system=json_system,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    **gen_kwargs
+                )
 
             response_text = response.content
 
@@ -492,31 +603,66 @@ class OpenAIProvider(LLMProvider):
             try:
                 return parse_json_response(response_text, schema=schema)
 
-            except JSONParseError as e:
-                logger.error(f"Failed to parse JSON after {e.attempts} attempts")
-                logger.error(f"Response text: {response_text[:500]}")
-
-                # Provide helpful guidance for local model issues
-                if self.provider_type == 'local':
-                    logger.error(
-                        f"\n{'='*60}\n"
-                        f"JSON parsing failed with local model ({self.model}).\n"
-                        f"Local models may not reliably produce structured JSON output.\n\n"
-                        f"Suggestions:\n"
-                        f"  1. Try a larger model (e.g., llama3.1:70b instead of :8b)\n"
-                        f"  2. Set LOCAL_MODEL_STRICT_JSON=false for lenient parsing\n"
-                        f"  3. Use a cloud provider for complex structured outputs\n"
-                        f"  4. Simplify the JSON schema if possible\n"
-                        f"{'='*60}"
+            except JSONParseError:
+                # Reasoning and the answer compete for one token budget, so a
+                # long schema (the experiment designer's is deeply nested) can
+                # come back truncated and unparseable. Structured extraction
+                # gains little from reasoning anyway -- the schema already
+                # dictates the shape -- so retry once with it off before giving
+                # up. Self-healing beats failing a whole research run on a
+                # budget interaction the caller cannot see.
+                # `_UNSET` as the default matters: a plain .get() returns None
+                # when the key is ABSENT, which is also the value meaning
+                # "reasoning already disabled" -- so the two cases would be
+                # indistinguishable and the retry would never fire on the first
+                # attempt, which is the only attempt that matters.
+                if (
+                    self.reasoning_effort
+                    and gen_kwargs.get("reasoning_effort", _UNSET) is not None
+                ):
+                    logger.warning(
+                        "Structured output was unparseable with "
+                        "reasoning_effort=%r; retrying once with reasoning "
+                        "disabled.",
+                        self.reasoning_effort,
                     )
+                    retry_kwargs = dict(gen_kwargs)
+                    retry_kwargs["reasoning_effort"] = None
+                    retry = self.generate(
+                        prompt=prompt,
+                        system=json_system,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        **retry_kwargs,
+                    )
+                    return parse_json_response(retry.content, schema=schema)
+                raise
 
-                # JSON parse errors are NOT recoverable - retrying won't help
-                raise ProviderAPIError(
-                    "openai",
-                    f"Invalid JSON response: {e.message}",
-                    raw_error=e,
-                    recoverable=False
+        except JSONParseError as e:
+            logger.error(f"Failed to parse JSON after {e.attempts} attempts")
+            logger.error(f"Response text: {response_text[:500]}")
+
+            # Provide helpful guidance for local model issues
+            if self.provider_type == 'local':
+                logger.error(
+                    f"\n{'='*60}\n"
+                    f"JSON parsing failed with local model ({self.model}).\n"
+                    f"Local models may not reliably produce structured JSON output.\n\n"
+                    f"Suggestions:\n"
+                    f"  1. Try a larger model (e.g., llama3.1:70b instead of :8b)\n"
+                    f"  2. Set LOCAL_MODEL_STRICT_JSON=false for lenient parsing\n"
+                    f"  3. Use a cloud provider for complex structured outputs\n"
+                    f"  4. Simplify the JSON schema if possible\n"
+                    f"{'='*60}"
                 )
+
+            # JSON parse errors are NOT recoverable - retrying won't help
+            raise ProviderAPIError(
+                "openai",
+                f"Invalid JSON response: {e.message}",
+                raw_error=e,
+                recoverable=False
+            )
 
         except Exception as e:
             if isinstance(e, ProviderAPIError):

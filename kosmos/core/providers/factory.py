@@ -114,6 +114,7 @@ def get_provider_from_config(kosmos_config) -> LLMProvider:
                 'max_tokens': claude_config.max_tokens,
                 'temperature': claude_config.temperature,
                 'enable_cache': claude_config.enable_cache,
+                'timeout': getattr(claude_config, 'timeout', 120),
                 'enable_auto_model_selection': getattr(claude_config, 'enable_auto_model_selection', False)
             }
         elif hasattr(kosmos_config, 'anthropic'):
@@ -126,6 +127,7 @@ def get_provider_from_config(kosmos_config) -> LLMProvider:
                 'temperature': anthropic_config.temperature,
                 'enable_cache': anthropic_config.enable_cache,
                 'base_url': getattr(anthropic_config, 'base_url', None),
+                'timeout': getattr(anthropic_config, 'timeout', 120),
                 'enable_auto_model_selection': getattr(anthropic_config, 'enable_auto_model_selection', False)
             }
         else:
@@ -143,6 +145,7 @@ def get_provider_from_config(kosmos_config) -> LLMProvider:
             'temperature': getattr(openai_config, 'temperature', 0.7),
             'base_url': getattr(openai_config, 'base_url', None),
             'organization': getattr(openai_config, 'organization', None),
+            'timeout': getattr(openai_config, 'timeout', 120),
         }
 
     elif provider_name.lower() == 'litellm':

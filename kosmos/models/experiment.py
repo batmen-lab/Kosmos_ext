@@ -24,6 +24,36 @@ class VariableType(str, Enum):
     DEPENDENT = "dependent"  # Measured outcome
     CONTROL = "control"  # Held constant
     CONFOUNDING = "confounding"  # Potential confound to track
+    MEDIATOR = "mediator"  # Intermediate variable on the causal path
+    MODERATOR = "moderator"  # Modifies the strength/direction of an effect
+    COVARIATE = "covariate"  # Adjusted-for covariate
+
+    @classmethod
+    def _missing_(cls, value):
+        """Coerce unknown/aliased variable-type strings instead of raising.
+
+        LLM-generated protocols occasionally use terms outside this enum
+        (e.g. 'exposure', 'outcome', 'predictor'). Map the common synonyms and
+        fall back to CONFOUNDING for anything else, so protocol parsing never
+        crashes the whole run on a novel string.
+        """
+        if isinstance(value, str):
+            key = value.strip().lower()
+            for member in cls:
+                if member.value == key:
+                    return member
+            aliases = {
+                "exposure": cls.INDEPENDENT,
+                "predictor": cls.INDEPENDENT,
+                "treatment": cls.INDEPENDENT,
+                "outcome": cls.DEPENDENT,
+                "response": cls.DEPENDENT,
+                "confounder": cls.CONFOUNDING,
+                "covariable": cls.COVARIATE,
+            }
+            if key in aliases:
+                return aliases[key]
+        return cls.CONFOUNDING
 
 
 class StatisticalTest(str, Enum):
@@ -37,6 +67,20 @@ class StatisticalTest(str, Enum):
     KRUSKAL_WALLIS = "kruskal_wallis"
     WILCOXON = "wilcoxon"
     CUSTOM = "custom"
+
+    @classmethod
+    def _missing_(cls, value):
+        """Coerce unknown LLM test-type strings to CUSTOM instead of raising.
+
+        Protocols may name tests outside this enum (e.g. 'mendelian_randomization',
+        'mixed_model'); map by case-insensitive value, else fall back to CUSTOM.
+        """
+        if isinstance(value, str):
+            key = value.strip().lower()
+            for member in cls:
+                if member.value == key:
+                    return member
+        return cls.CUSTOM
 
 
 class Variable(BaseModel):
@@ -122,6 +166,18 @@ class ControlGroup(BaseModel):
                 f"sample_size {v} exceeds maximum {_MAX_SAMPLE_SIZE}, clamping"
             )
             return _MAX_SAMPLE_SIZE
+        if isinstance(v, (int, float)) and v < 1:
+            # The upper bound was guarded here; the lower bound was not. A model
+            # answering 0 (or a negative) therefore raised ValidationError out of
+            # the experiment designer and killed the whole research run -- over
+            # an OPTIONAL field. Zero is not a sample size, it is the model
+            # declining to give one, so record it as absent, which is exactly
+            # what `Optional[int] = None` already means. Coercing upward to 1
+            # instead would invent a number no model proposed.
+            _experiment_logger.warning(
+                f"sample_size {v} is not a usable size; treating as unspecified"
+            )
+            return None
         return v
 
     @field_validator('description', 'rationale')
@@ -172,6 +228,38 @@ class ProtocolStep(BaseModel):
     # Code generation hints (for Phase 5)
     code_template: Optional[str] = None
     library_imports: List[str] = Field(default_factory=list)
+
+    @field_validator('library_imports', 'requires_resources', mode='before')
+    @classmethod
+    def coerce_str_list(cls, v):
+        """LLMs often emit a comma-separated string (e.g. 'pandas, numpy')
+        instead of a list. Coerce to a list of stripped items."""
+        if v is None:
+            return []
+        if isinstance(v, str):
+            return [item.strip() for item in v.split(',') if item.strip()]
+        if isinstance(v, list):
+            return v
+        return [str(v)]
+
+    @field_validator('requires_steps', mode='before')
+    @classmethod
+    def coerce_int_list(cls, v):
+        """Coerce a string/scalar of step numbers into a list of ints."""
+        if v is None:
+            return []
+        if isinstance(v, str):
+            out = []
+            for item in v.replace(';', ',').split(','):
+                item = item.strip()
+                if item.isdigit():
+                    out.append(int(item))
+            return out
+        if isinstance(v, list):
+            return v
+        if isinstance(v, int):
+            return [v]
+        return []
 
     @field_validator('title', mode='before')
     @classmethod
@@ -256,6 +344,23 @@ class StatisticalTestSpec(BaseModel):
     alternative: str = Field(default="two-sided", description="Alternative hypothesis type")
     alpha: float = Field(default=0.05, ge=0.0, le=1.0, description="Significance level")
 
+    @field_validator('alpha', 'required_power', mode='before')
+    @classmethod
+    def coerce_probability(cls, v, info):
+        """Coerce non-numeric / out-of-range LLM values to the field default.
+
+        LLM-generated protocols sometimes put descriptive strings in numeric
+        fields (e.g. alpha='bayesian_posterior_probability'); fall back to the
+        sensible default instead of crashing protocol parsing.
+        """
+        try:
+            f = float(v)
+            if 0.0 <= f <= 1.0:
+                return f
+        except (TypeError, ValueError):
+            pass
+        return 0.8 if info.field_name == 'required_power' else 0.05
+
     # Variables involved
     variables: List[str] = Field(..., description="Variable names to test")
 
@@ -265,11 +370,50 @@ class StatisticalTestSpec(BaseModel):
     @field_validator('groups', mode='before')
     @classmethod
     def coerce_groups(cls, v):
-        """Coerce comma-separated string groups from LLM output to list."""
+        """Coerce LLM group specs to a flat list of group names.
+
+        Handles two shapes the model actually produces:
+
+        * a comma-separated string -- split it.
+        * a list of PAIRS, e.g.
+          ``[['nperts_2','nperts_0'], ['nperts_2','nperts_1'], ['nperts_1','nperts_0']]``.
+          That is the model expressing pairwise contrasts, which is perfectly
+          sensible science for a three-level factor -- the schema simply expects
+          the participating group NAMES rather than the comparison structure.
+          Flatten and de-duplicate, preserving first-seen order.
+
+        Before this, the nested form raised ValidationError and aborted the
+        whole research run over a shape mismatch, discarding a protocol whose
+        statistics were correct. The pairing itself is not lost information
+        worth crashing for: which groups are compared is re-derived downstream
+        from the group list and the test type.
+        """
         if v is None:
             return v
         if isinstance(v, str):
             return [g.strip() for g in v.split(',') if g.strip()]
+        if isinstance(v, (list, tuple)):
+            flat: List[str] = []
+            nested = False
+            for item in v:
+                if isinstance(item, (list, tuple)):
+                    nested = True
+                    for inner in item:
+                        text = str(inner).strip()
+                        if text and text not in flat:
+                            flat.append(text)
+                else:
+                    text = str(item).strip()
+                    if text and text not in flat:
+                        flat.append(text)
+            if nested:
+                _experiment_logger.warning(
+                    "Statistical test `groups` arrived as nested pairs %s; "
+                    "flattened to distinct group names %s.",
+                    list(v),
+                    flat,
+                )
+            return flat
         return v
 
     # Multiple testing correction
@@ -376,14 +520,28 @@ class ExperimentProtocol(BaseModel):
         """Coerce and bound sample_size for protocol."""
         if v is None:
             return v
+        # LLMs sometimes nest a power-analysis object here, e.g.
+        # {"sample_size": 1000, "power": 0.8, "alpha": 0.05}. Pull the scalar out.
+        if isinstance(v, dict):
+            for key in ("sample_size", "n", "size", "total", "value"):
+                if key in v and not isinstance(v[key], dict):
+                    v = v[key]
+                    break
+            else:
+                _experiment_logger.warning(
+                    f"Could not extract sample_size from dict {v}, setting to None"
+                )
+                return None
         if isinstance(v, str):
             try:
-                v = int(v)
+                v = int(float(v.strip()))
             except (ValueError, TypeError):
                 _experiment_logger.warning(
                     f"Could not coerce protocol sample_size '{v}' to int, setting to None"
                 )
                 return None
+        if isinstance(v, float):
+            v = int(v)
         if isinstance(v, (int, float)) and v > _MAX_SAMPLE_SIZE:
             _experiment_logger.warning(
                 f"Protocol sample_size {v} exceeds maximum {_MAX_SAMPLE_SIZE}, clamping"
@@ -432,10 +590,54 @@ class ExperimentProtocol(BaseModel):
         expected_nums = set(range(1, len(v) + 1))
         actual_nums = set(step.step_number for step in v)
 
-        if expected_nums != actual_nums:
-            raise ValueError(f"Step numbers must be sequential 1-{len(v)}, got {sorted(actual_nums)}")
+        if expected_nums == actual_nums:
+            return sorted(v, key=lambda s: s.step_number)
 
-        return sorted(v, key=lambda s: s.step_number)
+        # They disagree. This used to raise, which killed the entire research
+        # run -- an LLM emitting two steps numbered "3", or skipping 5, threw
+        # away a protocol whose SCIENCE was fine over its bookkeeping. Note the
+        # comparison is between SETS, so a single duplicated number is enough to
+        # trigger it: 8 steps carrying 7 distinct numbers reads as
+        # "must be sequential 1-8, got [1..7]", which looks like a validator bug
+        # rather than a duplicate.
+        #
+        # The array order IS the model's intended sequence; `step_number` is
+        # redundant metadata restating it. So trust the order and renumber,
+        # rather than discarding the protocol.
+        _experiment_logger.warning(
+            "Protocol step numbers %s are not a sequential 1-%d; renumbering by "
+            "list order. (A duplicate or skipped number causes this.)",
+            sorted(step.step_number for step in v),
+            len(v),
+        )
+
+        # `requires_steps` points at the OLD numbers, so remap it or the
+        # dependency graph silently starts referring to the wrong steps.
+        # Duplicates make the old->new mapping ambiguous; first occurrence wins,
+        # and anything unresolvable is dropped rather than left dangling.
+        old_to_new: Dict[int, int] = {}
+        for new_number, step in enumerate(v, start=1):
+            old_to_new.setdefault(step.step_number, new_number)
+
+        for new_number, step in enumerate(v, start=1):
+            if step.requires_steps:
+                remapped = [
+                    old_to_new[old] for old in step.requires_steps if old in old_to_new
+                ]
+                dropped = [old for old in step.requires_steps if old not in old_to_new]
+                if dropped:
+                    _experiment_logger.warning(
+                        "Step %d referenced unknown step number(s) %s; dropping "
+                        "those dependencies.",
+                        new_number,
+                        dropped,
+                    )
+                # Never let a step depend on itself or on a later step -- a
+                # renumber must not manufacture a cycle that was not there.
+                step.requires_steps = [r for r in remapped if r < new_number]
+            step.step_number = new_number
+
+        return v
 
     def get_step(self, step_number: int) -> Optional[ProtocolStep]:
         """Get a specific step by number."""

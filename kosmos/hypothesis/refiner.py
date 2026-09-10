@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from enum import Enum
 import logging
 import json
+import os
 import uuid
 import numpy as np
 from pydantic import BaseModel, Field
@@ -22,6 +23,16 @@ from kosmos.core.llm import get_client
 from kosmos.knowledge.vector_db import PaperVectorDB as VectorDB, HAS_CHROMADB
 
 logger = logging.getLogger(__name__)
+
+# Reasoning models spend this budget BEFORE emitting any content, so a
+# prose-sized allowance buys nothing: the provider returns
+# `finish_reason=length` with an empty message, the JSON never parses, and the
+# refiner logs "Could not parse variants JSON" and moves on having refined
+# nothing. That failure is silent -- the run continues, minutes per iteration
+# go to calls that return no text -- which is why it survived 231 occurrences
+# in one log before anyone traced it. Sized like `_CODEGEN_MAX_TOKENS`, for the
+# same reason and with the same env override.
+_REFINER_MAX_TOKENS = int(os.environ.get("KOSMOS_REFINER_MAX_TOKENS", "4096"))
 
 
 class RetirementDecision(str, Enum):
@@ -211,7 +222,7 @@ Respond with JSON:
 """
 
         try:
-            response = self.llm_client.generate(prompt, max_tokens=500)
+            response = self.llm_client.generate(prompt, max_tokens=_REFINER_MAX_TOKENS)
 
             # Parse JSON
             json_start = response.find('{')
@@ -351,7 +362,7 @@ Respond with JSON:
 """
 
         try:
-            response = self.llm_client.generate(prompt, max_tokens=800)
+            response = self.llm_client.generate(prompt, max_tokens=_REFINER_MAX_TOKENS)
 
             # Parse JSON
             json_start = response.find('{')
@@ -451,7 +462,7 @@ Respond with JSON array:
 """
 
         try:
-            response = self.llm_client.generate(prompt, max_tokens=1000)
+            response = self.llm_client.generate(prompt, max_tokens=_REFINER_MAX_TOKENS)
 
             # Parse JSON
             json_start = response.find('[')
@@ -699,7 +710,7 @@ Respond with JSON:
 """
 
         try:
-            response = self.llm_client.generate(prompt, max_tokens=800)
+            response = self.llm_client.generate(prompt, max_tokens=_REFINER_MAX_TOKENS)
 
             json_start = response.find('{')
             json_end = response.rfind('}') + 1

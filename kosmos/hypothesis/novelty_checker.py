@@ -19,9 +19,20 @@ from kosmos.literature.base_client import PaperMetadata
 from kosmos.knowledge.embeddings import get_embedder
 from kosmos.knowledge.vector_db import get_vector_db
 from kosmos.db.models import Hypothesis as DBHypothesis
+from kosmos.db.models import HypothesisStatus as DBHypothesisStatus
 from kosmos.db import get_session
 
 logger = logging.getLogger(__name__)
+
+
+# A hypothesis counts as prior art only once it has actually been tested.
+# GENERATED and UNDER_REVIEW are proposals; TESTING is in flight and has no
+# answer yet.
+_TESTED_STATUSES = (
+    DBHypothesisStatus.SUPPORTED,
+    DBHypothesisStatus.REJECTED,
+    DBHypothesisStatus.INCONCLUSIVE,
+)
 
 
 class NoveltyChecker:
@@ -269,9 +280,25 @@ class NoveltyChecker:
         """
         try:
             with get_session() as session:
-                # Query hypotheses in same domain
+                # TESTED hypotheses only. An untested one is not prior art.
+                #
+                # This queried every hypothesis ever stored in the domain, and
+                # the domain is "biology" for all of this work -- so each new
+                # hypothesis was scored against every sibling from every past
+                # run, tested or not. The cost is not abstract: a two-sample MR
+                # hypothesis, the paper's own method and the only one of
+                # nineteen that could reproduce the result, scored novelty 0.00
+                # because it read like the untested correlation hypotheses
+                # beside it. Priority is 30% novelty, so it was never executed.
+                #
+                # Novelty asks "has this question been answered". A hypothesis
+                # nobody has tested answers nothing, so it cannot be the reason
+                # to skip a better formulation of the same question. Literature
+                # prior art is unaffected -- published work HAS been done, and
+                # is still compared in full.
                 db_hypotheses = session.query(DBHypothesis).filter(
-                    DBHypothesis.domain == hypothesis.domain
+                    DBHypothesis.domain == hypothesis.domain,
+                    DBHypothesis.status.in_(_TESTED_STATUSES),
                 ).all()
 
                 # Convert to Pydantic models
@@ -452,9 +479,12 @@ class NoveltyChecker:
                     f"Maximum similarity: {max_similarity:.2f}. "
                     f"Consider revising or expanding this hypothesis."
                 )
-            elif similar_papers and len(similar_papers) > 0:
-                paper_title = similar_papers[0].title if similar_papers[0].title else "Untitled"
-                paper_year = similar_papers[0].year if similar_papers[0].year else "unknown"
+            elif similar_papers and similar_papers[0] is not None:
+                # The list can contain None entries (a reconstruction that failed),
+                # so guard the element itself, not just the list length.
+                top_paper = similar_papers[0]
+                paper_title = top_paper.title if top_paper.title else "Untitled"
+                paper_year = top_paper.year if top_paper.year else "unknown"
                 return (
                     f"LOW NOVELTY (score: {novelty_score:.2f}). "
                     f"Very similar to existing work: '{paper_title}' ({paper_year}). "

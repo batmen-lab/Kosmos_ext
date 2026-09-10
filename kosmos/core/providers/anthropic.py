@@ -279,7 +279,12 @@ class AnthropicProvider(LLMProvider):
             )
 
             # Extract text and usage
-            text = response.content[0].text
+            # Guard against empty/non-text content blocks so an empty API
+            # response doesn't crash with "list index out of range".
+            text = next(
+                (block.text for block in (response.content or []) if getattr(block, "text", None)),
+                "",
+            )
 
             # Post-call logging
             latency_ms = int((time_module.time() - start_time) * 1000)
@@ -474,7 +479,12 @@ class AnthropicProvider(LLMProvider):
             )
 
             # Extract and convert
-            text = response.content[0].text
+            # Guard against empty/non-text content blocks so an empty API
+            # response doesn't crash with "list index out of range".
+            text = next(
+                (block.text for block in (response.content or []) if getattr(block, "text", None)),
+                "",
+            )
             usage_stats = UsageStats(
                 input_tokens=response.usage.input_tokens,
                 output_tokens=response.usage.output_tokens,
@@ -546,7 +556,9 @@ class AnthropicProvider(LLMProvider):
 
             except JSONParseError as e:
                 logger.error(f"Failed to parse JSON after {e.attempts} attempts")
-                logger.error(f"Response text: {response_text[:500]}")
+                logger.error(f"Response length: {len(response_text)} chars")
+                logger.error(f"Response HEAD: {response_text[:300]}")
+                logger.error(f"Response TAIL: {response_text[-300:]}")
                 # JSON parse errors are NOT recoverable - retrying won't help
                 raise ProviderAPIError(
                     "anthropic",

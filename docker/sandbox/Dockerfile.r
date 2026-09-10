@@ -59,9 +59,10 @@ RUN pip install --no-cache-dir rpy2>=3.5.0
 RUN R -e "install.packages(c('devtools', 'remotes'), repos='https://cloud.r-project.org', quiet=TRUE)" && \
     R -e "install.packages(c('dplyr', 'tidyr', 'ggplot2', 'data.table'), repos='https://cloud.r-project.org', quiet=TRUE)"
 
-# Install TwoSampleMR from GitHub (main MR package)
-RUN R -e "remotes::install_github('MRCIEU/TwoSampleMR', quiet=TRUE)" || \
-    R -e "install.packages('TwoSampleMR', repos='https://cloud.r-project.org', quiet=TRUE)" || \
+# Install TwoSampleMR (main MR package). r-universe ships prebuilt binaries and
+# is far more reliable than a from-source GitHub build; fall back to GitHub.
+RUN R -e "install.packages('TwoSampleMR', repos=c('https://mrcieu.r-universe.dev','https://cloud.r-project.org'), quiet=TRUE)" || \
+    R -e "remotes::install_github('MRCIEU/TwoSampleMR', quiet=TRUE)" || \
     echo "Warning: TwoSampleMR installation failed, continuing anyway"
 
 # Install susieR for fine-mapping
@@ -70,6 +71,17 @@ RUN R -e "install.packages('susieR', repos='https://cloud.r-project.org', quiet=
 
 # Install additional statistical packages
 RUN R -e "install.packages(c('MendelianRandomization', 'MASS', 'survival', 'lme4'), repos='https://cloud.r-project.org', quiet=TRUE)"
+
+# coloc (pairwise colocalisation) and LDlinkR (LD matrices) -- the two packages
+# the pipeline was missing. coloc uses susieR (installed above) for SuSiE-coloc;
+# LDlinkR needs an LDlink API token at RUN time (register at ldlink.nih.gov),
+# not at install time.
+RUN R -e "install.packages(c('coloc','LDlinkR'), repos='https://cloud.r-project.org', quiet=TRUE)"
+
+# Report which statistical-genetics packages ended up installed. Does not fail
+# the build -- TwoSampleMR in particular is best-effort -- but makes the final
+# build log state plainly what is available in the image.
+RUN R -e "for (p in c('coloc','susieR','TwoSampleMR','MendelianRandomization','LDlinkR')) cat(sprintf('%-24s %s\n', p, if (requireNamespace(p, quietly=TRUE)) 'OK' else 'MISSING'))"
 
 # Create non-root user for code execution (security)
 RUN useradd -m -u 1000 -s /bin/bash sandbox && \

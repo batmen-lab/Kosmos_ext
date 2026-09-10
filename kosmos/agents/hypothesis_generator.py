@@ -144,16 +144,20 @@ class HypothesisGeneratorAgent(BaseAgent):
         research_question: str,
         num_hypotheses: Optional[int] = None,
         domain: Optional[str] = None,
-        store_in_db: bool = True
+        store_in_db: bool = True,
+        data_context: Optional[str] = None,
     ) -> HypothesisGenerationResponse:
         """
-        Generate hypotheses from research question.
+        Generate hypotheses from a research question and/or a dataset.
 
         Args:
             research_question: Research question to generate hypotheses for
             num_hypotheses: Number of hypotheses to generate (default: config value)
             domain: Scientific domain (auto-detected if None)
             store_in_db: Whether to store hypotheses in database
+            data_context: Optional dataset schema/summary (column names, types,
+                basic stats). When present, hypotheses are grounded in these
+                actual variables -- this is what makes a data-driven run possible.
 
         Returns:
             HypothesisGenerationResponse: Generated hypotheses with metadata
@@ -188,7 +192,8 @@ class HypothesisGeneratorAgent(BaseAgent):
             research_question=research_question,
             domain=domain,
             num_hypotheses=num_hypotheses,
-            context_papers=papers
+            context_papers=papers,
+            data_context=data_context
         )
 
         # Step 4: Validate hypotheses
@@ -324,7 +329,8 @@ No explanation needed."""
         research_question: str,
         domain: str,
         num_hypotheses: int,
-        context_papers: List[PaperMetadata]
+        context_papers: List[PaperMetadata],
+        data_context: Optional[str] = None,
     ) -> List[Hypothesis]:
         """
         Generate hypotheses using Claude with structured output.
@@ -334,6 +340,7 @@ No explanation needed."""
             domain: Scientific domain
             num_hypotheses: Number of hypotheses to generate
             context_papers: Literature context
+            data_context: Optional dataset schema/summary to ground hypotheses in.
 
         Returns:
             List[Hypothesis]: Generated hypotheses
@@ -359,6 +366,18 @@ No explanation needed."""
             num_hypotheses=num_hypotheses,
             literature_context=literature_context or "No specific literature context provided."
         )
+
+        # Ground the hypotheses in the actual dataset when one is available. This
+        # is what turns a generic question into a data-driven run: the model is
+        # told the real variables and asked to hypothesise about relationships
+        # AMONG them, testable with this data.
+        if data_context:
+            prompt = (
+                "DATASET UNDER STUDY — base your hypotheses on THESE actual "
+                "variables, and make each one testable with this dataset:\n"
+                f"{data_context}\n\n"
+                + prompt
+            )
 
         # Define expected JSON schema
         schema = {

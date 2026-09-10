@@ -80,14 +80,32 @@ class DockerSandbox:
 
     # Default resource limits
     DEFAULT_CPU_LIMIT = 2.0  # CPU cores
-    DEFAULT_MEMORY_LIMIT = "2g"  # Memory limit
+    # Memory ceiling for the analysis container. `None` means "no explicit cap":
+    # the container may use whatever the Docker VM has, which IS the upper bound
+    # on this machine -- there is nothing above it to grant.
+    #
+    # It defaults to None because the old 2g default was wrong for the data this
+    # runs on. A 548 MB staged CSV needs roughly 3 GB to read into pandas, so a
+    # run over full summary statistics was killed before it computed anything:
+    # exit 137, no stderr, nothing to debug from, and a correct analysis lost to
+    # a number that had nothing to do with it.
+    #
+    # What this gives up is real and worth stating: the cap also bounded runaway
+    # generated code, and without it a pathological script can pressure the
+    # whole Docker VM rather than dying alone. Set KOSMOS_SANDBOX_MEMORY (e.g.
+    # "6g") to put a bound back.
+    DEFAULT_MEMORY_LIMIT = None  # set below, once the reader is defined
     DEFAULT_TIMEOUT = 300  # seconds (5 minutes)
 
     def __init__(
         self,
         image: str = DEFAULT_IMAGE,
         cpu_limit: float = DEFAULT_CPU_LIMIT,
-        memory_limit: str = DEFAULT_MEMORY_LIMIT,
+        # Sentinel, not DEFAULT_MEMORY_LIMIT: a default argument binds at
+        # `def` time to the class-body value, so reassigning the class attribute
+        # afterwards never reached this signature and KOSMOS_SANDBOX_MEMORY was
+        # silently ignored -- the setting existed and did nothing.
+        memory_limit: Optional[str] = "__default__",
         timeout: int = DEFAULT_TIMEOUT,
         network_disabled: bool = True,
         read_only: bool = True,
@@ -107,7 +125,9 @@ class DockerSandbox:
         """
         self.image = image
         self.cpu_limit = cpu_limit
-        self.memory_limit = memory_limit
+        self.memory_limit = (
+            _default_memory_limit() if memory_limit == "__default__" else memory_limit
+        )
         self.timeout = timeout
         self.network_disabled = network_disabled
         self.read_only = read_only
@@ -262,7 +282,9 @@ class DockerSandbox:
             'volumes': volumes,
             'environment': env,
             'detach': True,
-            'mem_limit': self.memory_limit,
+            # Omitted entirely when unset: passing mem_limit=None is not the
+            # same as not passing it, and Docker rejects the former.
+            **({'mem_limit': self.memory_limit} if self.memory_limit else {}),
             'nano_cpus': int(self.cpu_limit * 1e9),  # Convert to nano CPUs
             'network_disabled': self.network_disabled,
             'read_only': self.read_only,
@@ -345,7 +367,69 @@ class DockerSandbox:
                     error = f"Execution timeout after {self.timeout} seconds"
                     error_type = "TimeoutError"
                 else:
-                    error = f"Container exited with code {exit_code}"
+                    # Carry the container's own stderr into the error. Without
+                    # it the failure reads "Container exited with code 1" all
+                    # the way up into the experiments table and the database --
+                    # which says only that something went wrong, while the
+                    # traceback saying WHAT is sitting right here in `stderr`
+                    # and was being discarded. Tail, not head: the exception
+                    # line is at the end of a traceback.
+                    detail = (stderr or "").strip()
+                    # 137 is SIGKILL, and in a container it is the memory cap
+                    # essentially every time. The diagnosis used to sit only in
+                    # the no-stderr branch, on the assumption that a killed
+                    # process writes nothing -- but a pandas DtypeWarning on a
+                    # 548 MB CSV lands on stderr before the kill, so the branch
+                    # that explains the failure was skipped in exactly the case
+                    # that produces it.
+                    oom = (
+                        (
+                            f" -- exit 137 is the kernel killing the container, "
+                            f"almost always the memory limit of "
+                            f"{self.memory_limit}, set via KOSMOS_SANDBOX_MEMORY; "
+                            f"raise or unset it, or read fewer columns/rows."
+                            if self.memory_limit else
+                            " -- exit 137 is the kernel killing the container, "
+                            "almost always memory. No container limit is set, so "
+                            "this is the Docker VM's own allocation: raise it in "
+                            "Docker Desktop (Settings > Resources), or read fewer "
+                            "columns/rows."
+                        )
+                        if exit_code == 137 else ""
+                    )
+                    if detail:
+                        tail = detail[-1500:]
+                        error = (
+                            f"Container exited with code {exit_code}: "
+                            f"{tail.splitlines()[-1]}{oom}\n"
+                            f"--- container stderr ---\n{tail}"
+                        )
+                    else:
+                        error = (
+                            f"Container exited with code {exit_code} "
+                            f"(no stderr produced)"
+                            + (
+                                # 137 is SIGKILL, and in a memory-capped
+                                # container it is the cap essentially every
+                                # time. The process is killed outright, so it
+                                # never gets to write a traceback -- which is
+                                # why this message has to carry the diagnosis
+                                # the missing stderr would have.
+                                f": killed by the kernel, almost always "
+                                + (
+                                    f"the container memory limit of "
+                                    f"{self.memory_limit}, set via "
+                                    f"KOSMOS_SANDBOX_MEMORY. Raise or unset it, "
+                                    f"or read fewer columns/rows."
+                                    if self.memory_limit else
+                                    "memory. No container limit is set, so this "
+                                    "is the Docker VM's own allocation -- raise "
+                                    "it in Docker Desktop (Settings > "
+                                    "Resources), or read fewer columns/rows."
+                                )
+                                if exit_code == 137 else ""
+                            )
+                        )
                     error_type = "ExecutionError"
             else:
                 # Try to parse return value from stdout
@@ -458,11 +542,26 @@ class DockerSandbox:
             logger.warning(f"Error closing Docker client: {e}")
 
 
+def _default_memory_limit() -> Optional[str]:
+    """The configured ceiling, read at call time.
+
+    A function rather than an inline `os.environ.get` so a test can exercise it
+    by setting the variable, instead of reloading this module -- a reload
+    replaces `DockerSandbox` itself and quietly breaks any test already holding
+    a reference to the old class. Observed exactly that: a reload-based test
+    passed alone and broke `test_execute_simple_code` when run beside it.
+    """
+    return os.environ.get("KOSMOS_SANDBOX_MEMORY") or None
+
+
+DockerSandbox.DEFAULT_MEMORY_LIMIT = _default_memory_limit()
+
+
 def execute_in_sandbox(
     code: str,
     data_files: Optional[Dict[str, str]] = None,
     cpu_limit: float = DockerSandbox.DEFAULT_CPU_LIMIT,
-    memory_limit: str = DockerSandbox.DEFAULT_MEMORY_LIMIT,
+    memory_limit: Optional[str] = DockerSandbox.DEFAULT_MEMORY_LIMIT,
     timeout: int = DockerSandbox.DEFAULT_TIMEOUT
 ) -> Dict[str, Any]:
     """

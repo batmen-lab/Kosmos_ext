@@ -9,6 +9,7 @@ import pytest
 from datetime import datetime
 from unittest.mock import Mock, patch, MagicMock, call
 from typing import Dict, Any
+import asyncio
 import threading
 import time
 
@@ -152,7 +153,16 @@ class TestREQ_ORCH_LIFE_001_DirectorInitialization:
         assert hasattr(director, '_research_plan_lock')
         assert hasattr(director, '_strategy_stats_lock')
         assert hasattr(director, '_workflow_lock')
-        assert isinstance(director._research_plan_lock, threading.RLock)
+        # These are `asyncio.Lock`s (research_director.py), not threading.RLocks
+        # -- the director's guarded sections are async. The original assertion
+        # named threading.RLock, which is a factory FUNCTION rather than a class,
+        # so isinstance() against it raises TypeError before it can even be wrong
+        # about the type. Assert what the requirement is actually about: each
+        # guarded resource has a lock, and it is an async one.
+        for lock in (director._research_plan_lock,
+                     director._strategy_stats_lock,
+                     director._workflow_lock):
+            assert isinstance(lock, asyncio.Lock)
 
 
 @pytest.mark.requirement("REQ-ORCH-LIFE-002")
@@ -177,7 +187,7 @@ class TestREQ_ORCH_LIFE_002_DirectorStartup:
         director.start()
 
         assert director.workflow.current_state == WorkflowState.GENERATING_HYPOTHESES
-        assert director.get_status() in [AgentStatus.RUNNING, AgentStatus.IDLE]
+        assert director.get_status()["status"] in [AgentStatus.RUNNING, AgentStatus.IDLE]
 
     @patch('kosmos.agents.research_director.get_client')
     @patch('kosmos.world_model.get_world_model')
@@ -247,7 +257,7 @@ class TestREQ_ORCH_LIFE_003_PauseResume:
         director.pause()
 
         # Verify paused state
-        assert director.get_status() == AgentStatus.PAUSED
+        assert director.get_status()["status"] == AgentStatus.PAUSED
 
     @patch('kosmos.agents.research_director.get_client')
     @patch('kosmos.world_model.get_world_model')
@@ -286,11 +296,11 @@ class TestREQ_ORCH_LIFE_003_PauseResume:
         director.start()
         director.pause()
 
-        assert director.get_status() == AgentStatus.PAUSED
+        assert director.get_status()["status"] == AgentStatus.PAUSED
 
         director.resume()
 
-        assert director.get_status() in [AgentStatus.RUNNING, AgentStatus.IDLE]
+        assert director.get_status()["status"] in [AgentStatus.RUNNING, AgentStatus.IDLE]
 
     @patch('kosmos.agents.research_director.get_client')
     @patch('kosmos.world_model.get_world_model')
@@ -338,7 +348,7 @@ class TestREQ_ORCH_LIFE_004_DirectorShutdown:
 
         director.stop()
 
-        assert director.get_status() == AgentStatus.STOPPED
+        assert director.get_status()["status"] == AgentStatus.STOPPED
 
     @patch('kosmos.agents.research_director.get_client')
     @patch('kosmos.world_model.get_world_model')
@@ -414,11 +424,11 @@ class TestREQ_ORCH_LIFE_004_DirectorShutdown:
         director.start()
 
         director.stop()
-        assert director.get_status() == AgentStatus.STOPPED
+        assert director.get_status()["status"] == AgentStatus.STOPPED
 
         # Stopping again should not cause errors
         director.stop()
-        assert director.get_status() == AgentStatus.STOPPED
+        assert director.get_status()["status"] == AgentStatus.STOPPED
 
 
 @pytest.mark.requirement("REQ-ORCH-LIFE-005")

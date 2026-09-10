@@ -557,8 +557,12 @@ Format your response as JSON with the following structure:
                 f"P-value: {result.primary_p_value}",
                 f"Effect size: {result.primary_effect_size}"
             ],
-            significance_interpretation=f"P-value of {result.primary_p_value} indicates "
-                                       f"{'significant' if result.primary_p_value < 0.05 else 'non-significant'} results",
+            significance_interpretation=(
+                f"P-value of {result.primary_p_value} indicates "
+                f"{'significant' if result.primary_p_value < 0.05 else 'non-significant'} results"
+                if result.primary_p_value is not None
+                else "No p-value available (experiment produced no valid statistical result)"
+            ),
             biological_significance=None,
             comparison_to_prior_work=None,
             potential_confounds=["Automated analysis - manual review recommended"],

@@ -496,7 +496,7 @@ class ExperimentDesignerAgent(BaseAgent):
                 prompt=prompt,
                 schema=schema,
                 system=EXPERIMENT_DESIGNER.system_prompt,  # Fixed: was system_prompt
-                max_tokens=8192  # Increased from default 4096 for detailed protocols
+                max_tokens=16384  # Raised from 8192: verbose protocols were truncating mid-JSON (unparseable)
             )
 
             # Parse and validate protocol
@@ -522,25 +522,89 @@ class ExperimentDesignerAgent(BaseAgent):
         experiment_type: ExperimentType
     ) -> ExperimentProtocol:
         """Parse Claude's response into ExperimentProtocol."""
-        # Parse steps
+        # Parse steps. Each ProtocolStep is built defensively: an LLM-produced
+        # step with a field outside the strict schema is skipped rather than
+        # crashing the whole protocol (which would fail the entire run).
         steps = []
         for step_data in data.get("steps", []):
+            # A step may arrive as a plain string. `steps: ["Load the two GWAS",
+            # "Harmonise alleles", ...]` is a perfectly reasonable thing for a
+            # model to emit, and calling `.get` on it raised `'str' object has
+            # no attribute 'get'` -- caught below and the step DISCARDED. Five
+            # steps were dropped that way in one run, leaving a protocol the
+            # designer then filled with generic defaults, so the experiment was
+            # built from boilerplate while the real plan sat in the response.
+            if isinstance(step_data, str):
+                step_data = {"title": step_data[:80], "description": step_data,
+                             "action": step_data}
+            elif not isinstance(step_data, dict):
+                step_data = {"title": str(step_data), "description": str(step_data),
+                             "action": str(step_data)}
+            try:
+                # `description` is required to be >= 10 characters and had no
+                # fallback at all, unlike `action` -- so a step carrying its
+                # text in `action` alone was dropped for want of a field that
+                # could have been derived from the one beside it.
+                _n = step_data.get("step_number", len(steps) + 1)
+                _text = (step_data.get("description") or step_data.get("action")
+                         or step_data.get("title") or "")
+                if len(_text.strip()) < 10:
+                    _text = f"Step {_n}: {_text.strip() or 'run the analysis'}"
+                steps.append(ProtocolStep(
+                    step_number=_n,
+                    title=step_data.get("title", "") or "Untitled Step",
+                    description=_text,
+                    # `action` is required non-empty; LLMs sometimes omit it or
+                    # send "". Fall back to description/title so parsing succeeds.
+                    action=(step_data.get("action") or step_data.get("description")
+                            or step_data.get("title")
+                            or f"Execute step {step_data.get('step_number', len(steps) + 1)}"),
+                    expected_duration_minutes=step_data.get("expected_duration_minutes"),
+                    requires_steps=step_data.get("requires_steps", []),
+                    expected_output=step_data.get("expected_output"),
+                    validation_check=step_data.get("validation_check"),
+                    code_template=step_data.get("code_template"),
+                    library_imports=step_data.get("library_imports", []),
+                ))
+            except Exception as e:
+                logger.warning("Skipping malformed protocol step: %s", e)
+
+        # A protocol needs at least one step; synthesize a minimal analysis step
+        # if the LLM produced none (or all were malformed).
+        if not steps:
             steps.append(ProtocolStep(
-                step_number=step_data.get("step_number", len(steps) + 1),
-                title=step_data.get("title", "") or "Untitled Step",
-                description=step_data.get("description", ""),
-                action=step_data.get("action", ""),
-                expected_duration_minutes=step_data.get("expected_duration_minutes"),
-                requires_steps=step_data.get("requires_steps", []),
-                expected_output=step_data.get("expected_output"),
-                validation_check=step_data.get("validation_check"),
-                code_template=step_data.get("code_template"),
-                library_imports=step_data.get("library_imports", []),
+                step_number=1,
+                title="Analyze dataset",
+                description="Run the specified statistical analysis on the provided dataset.",
+                action="Load the dataset and compute the specified statistics.",
             ))
 
-        # Parse variables
+        # Parse variables.
+        #
+        # Three shapes arrive and only the first was handled: a mapping of name
+        # to spec, a LIST of specs each carrying its own `name`, and a mapping
+        # of name to a bare description string. The list form raised
+        # AttributeError on `.items()` and took the whole protocol with it; the
+        # string form was skipped by the isinstance check below, emptying
+        # `variables` and triggering the generic defaults.
+        raw_variables = data.get("variables", {}) or {}
+        if isinstance(raw_variables, list):
+            listed = {}
+            for entry in raw_variables:
+                if isinstance(entry, dict) and entry.get("name"):
+                    listed[str(entry["name"])] = entry
+                elif isinstance(entry, str):
+                    listed[entry] = {"description": entry}
+            raw_variables = listed
+        elif not isinstance(raw_variables, dict):
+            raw_variables = {}
+        raw_variables = {
+            name: ({"description": spec} if isinstance(spec, str) else spec)
+            for name, spec in raw_variables.items()
+        }
+
         variables = {}
-        for var_name, var_data in data.get("variables", {}).items():
+        for var_name, var_data in raw_variables.items():
             if isinstance(var_data, dict):
                 # Coerce values to list — LLMs sometimes return description
                 # strings like "Variable (from dataset)" instead of lists
@@ -554,15 +618,33 @@ class ExperimentDesignerAgent(BaseAgent):
                 else:
                     coerced_values = [raw_values]  # Single scalar value
 
-                variables[var_name] = Variable(
-                    name=var_name,
-                    type=VariableType(var_data.get("type", "independent")),
-                    description=var_data.get("description", f"Variable: {var_name}"),
-                    values=coerced_values,
-                    fixed_value=var_data.get("fixed_value"),
-                    unit=var_data.get("unit"),
-                    measurement_method=var_data.get("measurement_method"),
-                )
+                # Guarded per item, like the steps above. `description` is
+                # required at >= 10 characters, so one variable described as
+                # "Age" or "native T1" raised ValidationError and took the whole
+                # protocol with it -- an entire experiment lost to a short
+                # string. An unparseable type is likewise not worth the protocol.
+                try:
+                    _desc = str(var_data.get("description") or "").strip()
+                    if len(_desc) < 10:
+                        _desc = f"Variable {var_name}: {_desc or 'from the dataset'}"
+                    try:
+                        _type = VariableType(var_data.get("type", "independent"))
+                    except ValueError:
+                        _type = VariableType("independent")
+                    variables[var_name] = Variable(
+                        name=var_name,
+                        type=_type,
+                        description=_desc,
+                        values=coerced_values,
+                        fixed_value=var_data.get("fixed_value"),
+                        unit=var_data.get("unit"),
+                        measurement_method=var_data.get("measurement_method"),
+                    )
+                except Exception as var_error:
+                    logger.warning(
+                        "Skipping malformed protocol variable %r: %s",
+                        var_name, var_error,
+                    )
 
         # Validate: generate minimal default steps if LLM returned empty list
         if not steps:

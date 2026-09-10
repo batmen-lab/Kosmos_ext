@@ -153,3 +153,63 @@ data/*.parquet
 data/*.h5
 !data/benchmarks/
 CLAUDE.md
+
+# ===========================================================================
+# AEKosmos working setup -- keep source code pushable, keep everything else out
+# ===========================================================================
+
+# --- Virtualenvs -----------------------------------------------------------
+# The stock rules above cover `venv` but NOT `.venv`, which is the name this
+# checkout uses. Without this, `git add .` stages ~49,000 files.
+.venv/
+**/.venv/
+venv_*/
+**/site-packages/
+
+# --- Secrets ---------------------------------------------------------------
+# `.env` is already listed; these are the variants that show up in practice.
+# `.env.example` is deliberately kept -- it is the template, and carries no key.
+.env
+.env.*
+!.env.example
+*.pem
+*.pfx
+keys/
+**/capsule_signing.key
+
+# --- Datasets and staged evidence -----------------------------------------
+# Fetched or generated, frequently large, and staged evidence can hold
+# record-level data released under a policy. None of it belongs in git.
+staging/
+**/staging/
+data/**/*.csv
+data/**/*.tsv
+data/**/*.parquet
+data/**/*.txt
+data/**/*.gz
+data/**/*.xlsx
+found_*/
+*_run/
+!data/benchmarks/
+
+# --- Reports and run outputs ----------------------------------------------
+reports/
+**/report.md
+*_report.md
+*.report.md
+found_datasets.json
+evidence.yaml
+**/evidence*.yaml
+
+# --- Test-run artifacts ----------------------------------------------------
+# These are OUTPUTS of test runs (staged data, configs, reports, databases).
+# The pytest suite under tests/ is source code and is NOT ignored.
+data/t[0-9]*_*/
+*.db
+*.db.bak*
+probe_*.db
+
+# --- Claude ---------------------------------------------------------------
+.claude/
+CLAUDE.md
+.mcp.json

@@ -10,10 +10,36 @@ Models:
 """
 
 from sqlalchemy import Column, String, Integer, Float, Boolean, Text, DateTime, ForeignKey, JSON, Enum as SQLEnum
+from sqlalchemy.types import TypeDecorator
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 import enum
+
+
+class UTCDateTime(TypeDecorator):
+    """DateTime that always returns tz-aware UTC values.
+
+    SQLite does not persist tzinfo, so a value written as
+    ``datetime.now(timezone.utc)`` (aware) comes back naive — which then blows up
+    any ``datetime.now(timezone.utc) - <row>.created_at`` subtraction with
+    "can't subtract offset-naive and offset-aware datetimes". This decorator
+    normalizes to naive-UTC on write and reattaches UTC tzinfo on read so all
+    timestamps stay aware and comparable across the codebase.
+    """
+
+    impl = DateTime
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None and value.tzinfo is not None:
+            value = value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None and value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value
 
 
 Base = declarative_base()
@@ -60,13 +86,37 @@ class Experiment(Base):
     error_message = Column(Text, nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(UTCDateTime, default=lambda: datetime.now(timezone.utc))
+    started_at = Column(UTCDateTime, nullable=True)
+    completed_at = Column(UTCDateTime, nullable=True)
 
     # Relationships
     hypothesis = relationship("Hypothesis", back_populates="experiments")
     results = relationship("Result", back_populates="experiment", cascade="all, delete-orphan")
+
+    def to_dict(self) -> dict:
+        """Serialize to a plain dict for reporting/JSON export.
+
+        Includes 'type' and 'duration_seconds' aliases expected by the results
+        viewer/markdown exporter (which otherwise crashed on raw ORM objects).
+        """
+        return {
+            "id": self.id,
+            "hypothesis_id": self.hypothesis_id,
+            "experiment_type": self.experiment_type,
+            "type": self.experiment_type,  # alias for results viewer / markdown export
+            "description": self.description,
+            "protocol": self.protocol,
+            "status": self.status.value if self.status is not None else "pending",
+            "domain": self.domain,
+            # Default to 0.0 (not None) so format_duration()/numeric formatting is safe.
+            "execution_time_seconds": self.execution_time_seconds if self.execution_time_seconds is not None else 0.0,
+            "duration_seconds": self.execution_time_seconds if self.execution_time_seconds is not None else 0.0,  # alias for markdown export
+            "error_message": self.error_message,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+        }
 
     def __repr__(self):
         return f"<Experiment {self.id} status={self.status}>"
@@ -97,11 +147,36 @@ class Hypothesis(Base):
     related_papers = Column(JSON, nullable=True)  # List of paper IDs
 
     # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(UTCDateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(UTCDateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     experiments = relationship("Experiment", back_populates="hypothesis")
+
+    def to_dict(self) -> dict:
+        """Serialize to a plain dict for reporting/JSON export.
+
+        Includes a 'claim' alias (mapped from 'statement') expected by the results
+        viewer/markdown exporter (which otherwise crashed on raw ORM objects).
+        """
+        return {
+            "id": self.id,
+            "research_question": self.research_question,
+            "statement": self.statement,
+            "claim": self.statement,  # alias for results viewer / markdown export
+            "rationale": self.rationale,
+            "domain": self.domain,
+            "status": self.status.value if self.status is not None else "pending",
+            # Numeric scores default to 0.0 (not None) so downstream :.2f/metric
+            # formatting in the results viewer/exporter never chokes on None.
+            "novelty_score": self.novelty_score if self.novelty_score is not None else 0.0,
+            "testability_score": self.testability_score if self.testability_score is not None else 0.0,
+            "confidence_score": self.confidence_score if self.confidence_score is not None else 0.0,
+            "priority_score": self.confidence_score if self.confidence_score is not None else 0.0,
+            "related_papers": self.related_papers,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
 
     def __repr__(self):
         return f"<Hypothesis {self.id} status={self.status}>"
@@ -136,7 +211,7 @@ class Result(Base):
     figures = Column(JSON, nullable=True)  # Paths to generated figures
 
     # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(UTCDateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     experiment = relationship("Experiment", back_populates="results")
@@ -165,7 +240,7 @@ class Paper(Base):
     arxiv_id = Column(String, nullable=True)
 
     # Metadata
-    publication_date = Column(DateTime, nullable=True)
+    publication_date = Column(UTCDateTime, nullable=True)
     domain = Column(String, nullable=True)
     keywords = Column(JSON, nullable=True)
 
@@ -179,8 +254,8 @@ class Paper(Base):
     embedding = Column(JSON, nullable=True)  # Vector embedding
 
     # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    analyzed_at = Column(DateTime, nullable=True)
+    created_at = Column(UTCDateTime, default=lambda: datetime.now(timezone.utc))
+    analyzed_at = Column(UTCDateTime, nullable=True)
 
     def __repr__(self):
         return f"<Paper {self.id}: {self.title[:50]}>"
@@ -211,9 +286,9 @@ class AgentRecord(Base):
     errors_encountered = Column(Integer, default=0)
 
     # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    stopped_at = Column(DateTime, nullable=True)
+    created_at = Column(UTCDateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(UTCDateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    stopped_at = Column(UTCDateTime, nullable=True)
 
     def __repr__(self):
         return f"<Agent {self.agent_type} {self.id}>"
@@ -245,9 +320,9 @@ class ResearchSession(Base):
     autonomous_mode = Column(Boolean, default=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(UTCDateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(UTCDateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    completed_at = Column(UTCDateTime, nullable=True)
 
     def __repr__(self):
         return f"<ResearchSession {self.id} iteration={self.iteration}>"

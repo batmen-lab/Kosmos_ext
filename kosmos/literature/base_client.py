@@ -18,6 +18,7 @@ class PaperSource(str, Enum):
     """Source of the paper."""
     ARXIV = "arxiv"
     SEMANTIC_SCHOLAR = "semantic_scholar"
+    OPENALEX = "openalex"
     PUBMED = "pubmed"
     UNKNOWN = "unknown"
     MANUAL = "manual"
