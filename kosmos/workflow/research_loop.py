@@ -9,7 +9,9 @@ Emits streaming events for real-time visibility via EventBus.
 
 import logging
 import uuid
-from typing import Dict, List, Optional
+import asyncio
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Sequence
 from datetime import datetime
 
 # Gap imports
@@ -19,7 +21,7 @@ from kosmos.orchestration import (
     PlanCreatorAgent,
     PlanReviewerAgent,
     DelegationManager,
-    NoveltyDetector
+    NoveltyDetector,
 )
 from kosmos.validation import ScholarEvalValidator
 from kosmos.agents import SkillLoader
@@ -60,7 +62,15 @@ class ResearchWorkflow:
         world_model=None,
         max_cycles: int = 20,
         seed: Optional[int] = None,
-        temperature: Optional[float] = None
+        temperature: Optional[float] = None,
+        evidence_pipeline=None,
+        evidence_candidates: Optional[Sequence[Any]] = None,
+        evidence_discoverer: Optional[Callable[..., Sequence[Any]]] = None,
+        evidence_predictor=None,
+        evidence_trainer=None,
+        evidence_config=None,
+        evidence_output_dir: Optional[str] = None,
+        evidence_every_cycle: bool = False,
     ):
         """
         Initialize Research Workflow.
@@ -73,15 +83,54 @@ class ResearchWorkflow:
             max_cycles: Maximum research cycles
             seed: Random seed for reproducibility (Issue #64)
             temperature: LLM temperature override (Issue #64)
+            evidence_pipeline: Optional kosmos.evidence.EvidencePipeline.
+                When supplied, enables the explicit non-gold evidence stage.
+            evidence_candidates: CandidateDataset manifests already retrieved by
+                Kosmos or an upstream scientific data discovery adapter.
+            evidence_discoverer: Callable receiving research objective, cycle and
+                context, returning CandidateDataset manifests.
+            evidence_predictor: Frozen gold-derived or reviewed pretrained
+                pseudo-label predictor.
+            evidence_trainer: PPI trainer adapter, for example
+                kosmos.ppi.PPIEvidenceTrainer.
+            evidence_config: Routing/PPI configuration passed to the trainer.
+            evidence_output_dir: Artifact root for evidence runs.
+            evidence_every_cycle: Run the evidence stage after every cycle;
+                otherwise run once after the final research cycle.
         """
         self.research_objective = research_objective
         self.max_cycles = max_cycles
         self._seed = seed
         self._temperature = temperature
+        self.evidence_pipeline = evidence_pipeline
+        self.evidence_candidates = list(evidence_candidates or [])
+        self.evidence_discoverer = evidence_discoverer
+        self.evidence_predictor = evidence_predictor
+        self.evidence_trainer = evidence_trainer
+        self.evidence_config = evidence_config
+        self.evidence_output_dir = Path(evidence_output_dir or (Path(artifacts_dir) / "evidence"))
+        self.evidence_every_cycle = evidence_every_cycle
+        supplied_evidence = [
+            evidence_pipeline,
+            evidence_predictor,
+            evidence_trainer,
+            evidence_config,
+        ]
+        if any(value is not None for value in supplied_evidence) and not all(
+            value is not None for value in supplied_evidence
+        ):
+            raise ValueError(
+                "evidence_pipeline, evidence_predictor, evidence_trainer and "
+                "evidence_config must be supplied together"
+            )
+        self.evidence_enabled = all(value is not None for value in supplied_evidence)
+        if self.evidence_enabled and not (self.evidence_candidates or self.evidence_discoverer):
+            raise ValueError("Evidence workflow requires candidates or an evidence_discoverer")
 
         # Apply seed if provided (Issue #64: Multi-Run Convergence)
         if seed is not None:
             from kosmos.safety.reproducibility import ReproducibilityManager
+
             self._reproducibility_manager = ReproducibilityManager(default_seed=seed)
             self._reproducibility_manager.set_seed(seed)
             logger.info(f"Set random seed: {seed}")
@@ -97,8 +146,7 @@ class ResearchWorkflow:
 
         # Gap 1: State Manager
         self.state_manager = ArtifactStateManager(
-            artifacts_dir=artifacts_dir,
-            world_model=world_model
+            artifacts_dir=artifacts_dir, world_model=world_model
         )
         logger.info("✓ Gap 1: State Manager initialized")
 
@@ -123,11 +171,12 @@ class ResearchWorkflow:
                 ExperimentDesignerAgent,
                 LiteratureAnalyzerAgent,
             )
+
             agents = {
-                'data_analyst': DataAnalystAgent(),
-                'hypothesis_generator': HypothesisGeneratorAgent(),
-                'experiment_designer': ExperimentDesignerAgent(),
-                'literature_analyzer': LiteratureAnalyzerAgent(),
+                "data_analyst": DataAnalystAgent(),
+                "hypothesis_generator": HypothesisGeneratorAgent(),
+                "experiment_designer": ExperimentDesignerAgent(),
+                "literature_analyzer": LiteratureAnalyzerAgent(),
             }
 
         self.delegation_manager = DelegationManager(agents=agents)
@@ -138,6 +187,7 @@ class ResearchWorkflow:
         self.past_tasks = []
         self.cycle_results = []
         self.start_time = None
+        self.evidence_results = []
 
         # Streaming event support
         self.process_id = f"research_{uuid.uuid4().hex[:8]}"
@@ -147,16 +197,13 @@ class ResearchWorkflow:
         # Try to get event bus
         try:
             from kosmos.core.event_bus import get_event_bus
+
             self._event_bus = get_event_bus()
         except ImportError:
             self._emit_events = False
             logger.debug("EventBus not available, streaming disabled")
 
-    async def run(
-        self,
-        num_cycles: int = 5,
-        tasks_per_cycle: int = 10
-    ) -> Dict:
+    async def run(self, num_cycles: int = 5, tasks_per_cycle: int = 10) -> Dict:
         """
         Run autonomous research workflow.
 
@@ -173,6 +220,7 @@ class ResearchWorkflow:
             - total_time: Execution time in seconds
         """
         self.start_time = datetime.now()
+        self._run_num_cycles = num_cycles
 
         logger.info(
             f"\n{'='*70}\n"
@@ -184,25 +232,20 @@ class ResearchWorkflow:
         )
 
         # Emit workflow started event
-        await self._emit_workflow_event(
-            "started",
-            cycle=0,
-            max_cycles=num_cycles
-        )
+        await self._emit_workflow_event("started", cycle=0, max_cycles=num_cycles)
 
         for cycle in range(1, num_cycles + 1):
             logger.info(f"\n--- Cycle {cycle}/{num_cycles} ---")
 
             # Emit cycle started event
             await self._emit_cycle_event(
-                "started",
-                cycle=cycle,
-                max_cycles=num_cycles,
-                tasks_count=tasks_per_cycle
+                "started", cycle=cycle, max_cycles=num_cycles, tasks_count=tasks_per_cycle
             )
 
             try:
                 cycle_result = await self._execute_cycle(cycle, tasks_per_cycle)
+                if self.evidence_enabled and self.evidence_every_cycle:
+                    cycle_result["evidence"] = await self._execute_evidence_stage(cycle)
                 self.cycle_results.append(cycle_result)
 
                 logger.info(
@@ -217,19 +260,19 @@ class ResearchWorkflow:
                     cycle=cycle,
                     max_cycles=num_cycles,
                     tasks_count=tasks_per_cycle,
-                    completed_tasks=cycle_result.get('tasks_completed', 0),
-                    findings_count=cycle_result.get('validated_findings', 0)
+                    completed_tasks=cycle_result.get("tasks_completed", 0),
+                    findings_count=cycle_result.get("validated_findings", 0),
                 )
 
                 # Emit workflow progress event
                 progress_percent = (cycle / num_cycles) * 100
-                total_findings = sum(r.get('validated_findings', 0) for r in self.cycle_results)
+                total_findings = sum(r.get("validated_findings", 0) for r in self.cycle_results)
                 await self._emit_workflow_event(
                     "progress",
                     cycle=cycle,
                     max_cycles=num_cycles,
                     progress_percent=progress_percent,
-                    findings_count=total_findings
+                    findings_count=total_findings,
                 )
 
             except Exception as e:
@@ -237,10 +280,7 @@ class ResearchWorkflow:
 
                 # Emit cycle failed event
                 await self._emit_cycle_event(
-                    "failed",
-                    cycle=cycle,
-                    max_cycles=num_cycles,
-                    tasks_count=tasks_per_cycle
+                    "failed", cycle=cycle, max_cycles=num_cycles, tasks_count=tasks_per_cycle
                 )
                 continue
 
@@ -253,26 +293,75 @@ class ResearchWorkflow:
             cycle=num_cycles,
             max_cycles=num_cycles,
             progress_percent=100.0,
-            findings_count=results.get('validated_findings', 0),
-            validated_count=results.get('validated_findings', 0)
+            findings_count=results.get("validated_findings", 0),
+            validated_count=results.get("validated_findings", 0),
         )
 
         return results
+
+    async def _execute_evidence_stage(
+        self, cycle: int, context: Optional[dict] = None
+    ) -> Dict[str, Any]:
+        """Run routing, pseudo-labeling and PPI without changing the task loop.
+
+        Dataset retrieval is intentionally upstream: candidates must contain
+        persistent IDs, provenance and a scientific relevance assessment. This
+        prevents the trainer from silently treating a search hit as evidence.
+        The synchronous scientific/ML adapter runs in a worker thread so event
+        streaming remains responsive.
+        """
+        output_dir = self.evidence_output_dir / f"cycle-{cycle:03d}"
+        candidates = self.evidence_candidates
+        if self.evidence_discoverer is not None:
+            candidates = list(
+                await asyncio.to_thread(
+                    self.evidence_discoverer,
+                    self.research_objective,
+                    cycle,
+                    context or {},
+                )
+            )
+        if not candidates:
+            raise ValueError("Evidence discovery returned no CandidateDataset manifests")
+        logger.info("  Evidence stage: routing %d candidate datasets", len(candidates))
+        result = await asyncio.to_thread(
+            self.evidence_pipeline.run,
+            candidates=candidates,
+            predictor=self.evidence_predictor,
+            trainer=self.evidence_trainer,
+            config=self.evidence_config,
+            output_dir=str(output_dir),
+        )
+        summary = {
+            "cycle": cycle,
+            "datasets": len(result.get("records", [])),
+            "accepted": sum(r.decision == "accept" for r in result.get("records", [])),
+            "deferred": sum(r.decision == "defer" for r in result.get("records", [])),
+            "rejected": sum(r.decision == "reject" for r in result.get("records", [])),
+            "evaluations": result.get("evaluations", []),
+            "artifact_dir": str(output_dir),
+        }
+        self.evidence_results.append(summary)
+        logger.info(
+            "  Evidence stage complete: %d accepted, %d deferred, %d rejected",
+            summary["accepted"],
+            summary["deferred"],
+            summary["rejected"],
+        )
+        return summary
 
     async def _execute_cycle(self, cycle: int, num_tasks: int) -> Dict:
         """Execute one research cycle."""
 
         # Step 1: Get context from State Manager
         context = self.state_manager.get_cycle_context(cycle, lookback=3)
-        context['research_objective'] = self.research_objective
+        context["research_objective"] = self.research_objective
 
         logger.info(f"  Context: {context.get('findings_count', 0)} recent findings")
 
         # Step 2: Plan Creator generates tasks
         plan = self.plan_creator.create_plan(
-            research_objective=self.research_objective,
-            context=context,
-            num_tasks=num_tasks
+            research_objective=self.research_objective, context=context, num_tasks=num_tasks
         )
 
         logger.info(f"  Generated plan with {len(plan.tasks)} tasks")
@@ -300,30 +389,24 @@ class ResearchWorkflow:
             plan = self.plan_creator.revise_plan(plan, review.to_dict(), context)
             review = self.plan_reviewer.review_plan(plan.to_dict(), context)
 
-            logger.info(
-                f"  Revised plan: {'APPROVED' if review.approved else 'REJECTED'}"
-            )
+            logger.info(f"  Revised plan: {'APPROVED' if review.approved else 'REJECTED'}")
 
         # Step 5: Delegation Manager executes approved tasks
         completed_tasks = []
         if review.approved:
             execution_result = await self.delegation_manager.execute_plan(
-                plan.to_dict(),
-                cycle,
-                context
+                plan.to_dict(), cycle, context
             )
 
-            completed_tasks = execution_result.get('completed_tasks', [])
-            logger.info(
-                f"  Execution: {len(completed_tasks)}/{num_tasks} tasks completed"
-            )
+            completed_tasks = execution_result.get("completed_tasks", [])
+            logger.info(f"  Execution: {len(completed_tasks)}/{num_tasks} tasks completed")
         else:
             logger.warning("  Plan rejected after revision, skipping execution")
 
         # Step 6 & 7: Validate and save findings
         validated_count = 0
         for task_result in completed_tasks:
-            finding = task_result.get('finding')
+            finding = task_result.get("finding")
             if not finding:
                 continue
 
@@ -332,17 +415,13 @@ class ResearchWorkflow:
 
             if eval_score.passes_threshold:
                 # Save validated finding
-                finding['scholar_eval'] = eval_score.to_dict()
+                finding["scholar_eval"] = eval_score.to_dict()
                 await self.state_manager.save_finding_artifact(
-                    cycle,
-                    task_result.get('task_id', 0),
-                    finding
+                    cycle, task_result.get("task_id", 0), finding
                 )
                 validated_count += 1
             else:
-                logger.debug(
-                    f"    Finding rejected: score={eval_score.overall_score:.2f}"
-                )
+                logger.debug(f"    Finding rejected: score={eval_score.overall_score:.2f}")
 
         logger.info(f"  Validated: {validated_count}/{len(completed_tasks)} findings")
 
@@ -350,13 +429,11 @@ class ResearchWorkflow:
         compressed_summary = None
         if completed_tasks:
             compressed_cycle = self.context_compressor.compress_cycle_results(
-                cycle,
-                completed_tasks
+                cycle, completed_tasks
             )
             compressed_summary = compressed_cycle.summary
             logger.info(
-                f"  Compressed: {len(completed_tasks)} tasks → "
-                f"{len(compressed_summary)} chars"
+                f"  Compressed: {len(completed_tasks)} tasks → " f"{len(compressed_summary)} chars"
             )
 
         # Track tasks for novelty detection
@@ -366,14 +443,25 @@ class ResearchWorkflow:
         # Generate cycle summary
         await self.state_manager.generate_cycle_summary(cycle)
 
+        evidence = None
+        # By default evidence runs once after the final research cycle. Running
+        # every cycle is opt-in because it may retrain PPI and create artifacts.
+        if (
+            self.evidence_enabled
+            and not self.evidence_every_cycle
+            and cycle == getattr(self, "_run_num_cycles", self.max_cycles)
+        ):
+            evidence = await self._execute_evidence_stage(cycle)
+
         return {
-            'cycle': cycle,
-            'tasks_generated': len(plan.tasks),
-            'tasks_completed': len(completed_tasks),
-            'validated_findings': validated_count,
-            'plan_approved': review.approved,
-            'plan_score': review.average_score,
-            'compressed_summary': compressed_summary
+            "cycle": cycle,
+            "tasks_generated": len(plan.tasks),
+            "tasks_completed": len(completed_tasks),
+            "validated_findings": validated_count,
+            "plan_approved": review.approved,
+            "plan_score": review.average_score,
+            "compressed_summary": compressed_summary,
+            "evidence": evidence,
         }
 
     def _compute_final_statistics(self) -> Dict:
@@ -383,29 +471,25 @@ class ResearchWorkflow:
         all_findings = self.state_manager.get_all_findings()
         validated_findings = self.state_manager.get_validated_findings()
 
-        total_tasks_completed = sum(
-            r.get('tasks_completed', 0) for r in self.cycle_results
-        )
-        total_tasks_generated = sum(
-            r.get('tasks_generated', 0) for r in self.cycle_results
-        )
+        total_tasks_completed = sum(r.get("tasks_completed", 0) for r in self.cycle_results)
+        total_tasks_generated = sum(r.get("tasks_generated", 0) for r in self.cycle_results)
 
         results = {
-            'cycles_completed': len(self.cycle_results),
-            'total_findings': len(all_findings),
-            'validated_findings': len(validated_findings),
-            'validation_rate': (
-                len(validated_findings) / len(all_findings)
-                if all_findings else 0
+            "cycles_completed": len(self.cycle_results),
+            "total_findings": len(all_findings),
+            "validated_findings": len(validated_findings),
+            "validation_rate": (len(validated_findings) / len(all_findings) if all_findings else 0),
+            "total_tasks_generated": total_tasks_generated,
+            "total_tasks_completed": total_tasks_completed,
+            "task_completion_rate": (
+                total_tasks_completed / total_tasks_generated if total_tasks_generated else 0
             ),
-            'total_tasks_generated': total_tasks_generated,
-            'total_tasks_completed': total_tasks_completed,
-            'task_completion_rate': (
-                total_tasks_completed / total_tasks_generated
-                if total_tasks_generated else 0
-            ),
-            'total_time': total_time,
-            'research_objective': self.research_objective
+            "total_time": total_time,
+            "research_objective": self.research_objective,
+        }
+        results["evidence"] = {
+            "enabled": self.evidence_enabled,
+            "runs": self.evidence_results,
         }
 
         logger.info(
@@ -441,6 +525,17 @@ class ResearchWorkflow:
         report += f"This autonomous research system completed {len(self.cycle_results)} "
         report += f"research cycles, generating {len(validated_findings)} validated findings.\n\n"
 
+        if self.evidence_enabled:
+            report += "## External Evidence\n\n"
+            report += f"Evidence routing ran {len(self.evidence_results)} time(s).\n\n"
+            for run in self.evidence_results:
+                report += (
+                    f"- Cycle {run['cycle']}: {run['accepted']} accepted, "
+                    f"{run['deferred']} deferred, {run['rejected']} rejected; "
+                    f"artifacts: `{run['artifact_dir']}`\n"
+                )
+            report += "\n"
+
         report += f"## Key Findings\n\n"
         for i, finding in enumerate(validated_findings[:10], 1):  # Top 10
             report += f"### Finding {i}\n\n"
@@ -459,10 +554,12 @@ class ResearchWorkflow:
             # Evidence with code provenance (Issue #62)
             if finding.code_provenance:
                 prov = finding.code_provenance
-                hyperlink = f"{prov['notebook_path']}#cell={prov['cell_index']}&line={prov['start_line']}"
-                filename = prov['notebook_path'].split('/')[-1]
+                hyperlink = (
+                    f"{prov['notebook_path']}#cell={prov['cell_index']}&line={prov['start_line']}"
+                )
+                filename = prov["notebook_path"].split("/")[-1]
                 report += f"**Code Citation**: [{filename}]({hyperlink})"
-                if prov.get('start_line') and prov.get('end_line'):
+                if prov.get("start_line") and prov.get("end_line"):
                     report += f" (lines {prov['start_line']}-{prov['end_line']})"
                 report += "\n\n"
             elif finding.notebook_path:
@@ -470,7 +567,7 @@ class ResearchWorkflow:
 
             # Quality score
             if finding.scholar_eval:
-                overall = finding.scholar_eval.get('overall_score', 0)
+                overall = finding.scholar_eval.get("overall_score", 0)
                 report += f"**Quality Score**: {overall:.2f}/1.0\n\n"
 
         return report
@@ -478,14 +575,18 @@ class ResearchWorkflow:
     def get_statistics(self) -> Dict:
         """Get comprehensive statistics."""
         return {
-            'workflow': {
-                'research_objective': self.research_objective,
-                'max_cycles': self.max_cycles,
-                'cycles_completed': len(self.cycle_results)
+            "workflow": {
+                "research_objective": self.research_objective,
+                "max_cycles": self.max_cycles,
+                "cycles_completed": len(self.cycle_results),
             },
-            'state_manager': self.state_manager.get_statistics(),
-            'skill_loader': self.skill_loader.get_statistics(),
-            'novelty_detector': self.novelty_detector.get_statistics()
+            "evidence": {
+                "enabled": self.evidence_enabled,
+                "runs": len(self.evidence_results),
+            },
+            "state_manager": self.state_manager.get_statistics(),
+            "skill_loader": self.skill_loader.get_statistics(),
+            "novelty_detector": self.novelty_detector.get_statistics(),
         }
 
     async def _emit_workflow_event(
@@ -495,7 +596,7 @@ class ResearchWorkflow:
         max_cycles: int = 0,
         progress_percent: float = 0.0,
         findings_count: int = 0,
-        validated_count: int = 0
+        validated_count: int = 0,
     ) -> None:
         """
         Emit a workflow lifecycle event.
@@ -530,7 +631,7 @@ class ResearchWorkflow:
                 max_cycles=max_cycles,
                 progress_percent=progress_percent,
                 findings_count=findings_count,
-                validated_count=validated_count
+                validated_count=validated_count,
             )
 
             await self._event_bus.publish(event)
@@ -546,7 +647,7 @@ class ResearchWorkflow:
         tasks_count: int = 0,
         completed_tasks: int = 0,
         findings_count: int = 0,
-        duration_ms: int = None
+        duration_ms: int = None,
     ) -> None:
         """
         Emit a research cycle event.
@@ -580,7 +681,7 @@ class ResearchWorkflow:
                 tasks_count=tasks_count,
                 completed_tasks=completed_tasks,
                 findings_count=findings_count,
-                duration_ms=duration_ms
+                duration_ms=duration_ms,
             )
 
             await self._event_bus.publish(event)

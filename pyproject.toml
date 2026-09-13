@@ -30,7 +30,7 @@ dependencies = [
 
     # Configuration and validation
     "pydantic>=2.0.0",
-    "pydantic-settings>=2.0.0",
+    "pydantic-settings>=2.3.0",  # NoDecode used by kosmos.config for list env vars
     "python-dotenv>=1.0.0",
 
     # Database
@@ -100,6 +100,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+ppi = [
+    "torch>=2.0.0",
+]
+
 dev = [
     # Testing
     "pytest>=7.4.0",

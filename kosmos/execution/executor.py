@@ -61,6 +61,7 @@ SAFE_BUILTINS = {
     'isinstance': isinstance, 'issubclass': issubclass,
     'type': type, 'id': id, 'callable': callable,
     'hasattr': hasattr, 'len': len,
+    'getattr': getattr, 'setattr': setattr,
     # IO
     'print': print,
     # Object creation helpers
@@ -633,7 +634,8 @@ class CodeExecutor:
         self,
         code: str,
         data_path: str,
-        retry_on_error: bool = False
+        retry_on_error: bool = False,
+        llm_client: Optional[Any] = None,
     ) -> ExecutionResult:
         """
         Execute code with data file path provided.
@@ -657,7 +659,12 @@ class CodeExecutor:
         # Also inject as local variable for safety
         local_vars = {'data_path': data_path}
 
-        return self.execute(augmented_code, local_vars, retry_on_error)
+        return self.execute(
+            augmented_code,
+            local_vars,
+            retry_on_error,
+            llm_client=llm_client,
+        )
 
 
 # Re-export CodeValidator from canonical safety module (F-22: removed duplicate)
@@ -848,7 +855,8 @@ TRACEBACK:
 Return ONLY the fixed Python code, no explanations. Wrap the code in ```python``` markers."""
 
         try:
-            response = llm_client.generate(prompt, max_tokens=2000)
+            response = llm_client.generate(prompt, max_tokens=8000)
+            response = getattr(response, "content", response)
 
             # Extract code from response
             if "```python" in response:
@@ -925,6 +933,24 @@ except NameError as e:
 
     def _fix_type_error(self, code: str, error: str) -> str:
         """Fix TypeError by adding type checks."""
+        import re as regex_module
+
+        # Real fix: remove unexpected keyword argument (e.g. sklearn removed
+        # multi_class) instead of hiding the failure in a caught error result.
+        match = regex_module.search(
+            r"unexpected keyword argument ['\"](\w+)['\"]", error
+        )
+        if match:
+            keyword = match.group(1)
+            fixed = regex_module.sub(
+                rf",?\s*{keyword}\s*=\s*[^,)]+", "", code, count=5
+            )
+            if fixed and fixed != code:
+                logger.info(
+                    "TypeError fix: removed unexpected keyword argument '%s'",
+                    keyword,
+                )
+                return fixed
         indented = self._indent(code, 4)
         return f"""try:
 {indented}

@@ -21,7 +21,12 @@ from kosmos.config import _DEFAULT_CLAUDE_SONNET_MODEL, _DEFAULT_CLAUDE_HAIKU_MO
 from kosmos.core.pricing import get_model_cost
 
 try:
-    from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
+    from anthropic import Anthropic
+    try:
+        from anthropic import HUMAN_PROMPT, AI_PROMPT  # removed in anthropic>=1.x
+    except ImportError:
+        HUMAN_PROMPT = None
+        AI_PROMPT = None
     HAS_ANTHROPIC = True
 except ImportError:
     HAS_ANTHROPIC = False

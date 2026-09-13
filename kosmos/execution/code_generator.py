@@ -467,78 +467,83 @@ class MLExperimentCodeTemplate(CodeTemplate):
             "import numpy as np",
             "from sklearn.model_selection import train_test_split",
             "from sklearn.linear_model import LogisticRegression",
-            "from sklearn.datasets import make_classification",
-            "from pathlib import Path",
-            "from kosmos.execution.ml_experiments import MLAnalyzer",
+            "from sklearn.preprocessing import StandardScaler",
+            "from sklearn.pipeline import Pipeline",
+            "from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, recall_score",
             "",
-            "# Data loading with synthetic fallback",
-            "df = None",
-            "if 'data_path' in dir() and data_path:",
-            "    try:",
-            "        df = pd.read_csv(data_path)",
-            "        _data_source = 'file'",
-            "    except Exception as e:",
-            "        print(f'Warning: Could not load data: {e}')",
-            "        df = None",
-            "if df is None:",
-            "    # Generate synthetic classification data",
-            "    X_syn, y_syn = make_classification(n_samples=200, n_features=10, random_state=42)",
-            "    df = pd.DataFrame(X_syn, columns=[f'feature_{i}' for i in range(10)])",
-            "    df['target'] = y_syn",
-            "    _data_source = 'synthetic'",
+            "# Load data (data_path variable is injected by the executor)",
+            "df = pd.read_csv(data_path)",
             "",
-            "# Prepare features and target",
-            "# Assuming last column is target",
-            "X = df.iloc[:, :-1]",
-            "y = df.iloc[:, -1]",
+            "# Target column: cell_type when present, otherwise the last column",
+            "target_col = 'cell_type' if 'cell_type' in df.columns else df.columns[-1]",
+            "id_cols = []",
+            "for _c in ('cell_id', 'DonorID', 'sample_id', 'sample'):",
+            "    if _c in df.columns:",
+            "        id_cols.append(_c)",
+            "feature_cols = []",
+            "for _c in df.columns:",
+            "    if _c not in id_cols and _c != target_col:",
+            "        feature_cols.append(_c)",
+            "X_all = df[feature_cols].astype(float)",
+            "y_all = df[target_col].astype(str)",
             "",
-            "# Initialize ML analyzer",
-            "analyzer = MLAnalyzer(random_state=42)",
+            "# Donor-aware split when possible (cross-donor held-out)",
+            "donor_col = 'DonorID' if 'DonorID' in df.columns else None",
+            "donor_counts = df[donor_col].value_counts() if donor_col else None",
+            "if donor_col and len(donor_counts) >= 2:",
+            "    train_donor = donor_counts.index[0]",
+            "    test_donor = donor_counts.index[1]",
+            "    train_mask = df[donor_col] == train_donor",
+            "    test_mask = df[donor_col] == test_donor",
+            "    X_train, y_train = X_all[train_mask], y_all[train_mask]",
+            "    X_test, y_test = X_all[test_mask], y_all[test_mask]",
+            "else:",
+            "    train_donor = test_donor = None",
+            "    X_train, X_test, y_train, y_test = train_test_split(",
+            "        X_all, y_all, test_size=0.2, stratify=y_all, random_state=42)",
             "",
-            "# Run complete experiment with cross-validation",
-            "model = LogisticRegression(max_iter=1000)",
-            "results = analyzer.run_experiment(",
-            "    model, X, y,",
-            "    test_size=0.2,",
-            "    cv=5,",
-            "    task_type='classification',",
-            "    scale_features=True",
-            ")",
+            "# Train multinomial logistic regression",
+            "model = Pipeline([",
+            "    ('scaler', StandardScaler()),",
+            "    ('clf', LogisticRegression(max_iter=1000, random_state=42)),",
+            "])",
+            "model.fit(X_train, y_train)",
             "",
-            "# Print results",
-            "print(f\"Test Accuracy: {{results['train_test_results']['accuracy']:.4f}}\")",
-            "print(f\"CV Mean Score: {{results['cv_results']['mean_score']:.4f}}\")",
-            "print(f\"F1 Score: {{results['train_test_results']['f1_score']:.4f}}\")",
+            "# Evaluate on the held-out split",
+            "y_pred = model.predict(X_test)",
+            "accuracy = accuracy_score(y_test, y_pred)",
+            "balanced_acc = balanced_accuracy_score(y_test, y_pred)",
+            "macro_f1 = f1_score(y_test, y_pred, average='macro')",
+            "recall_all = recall_score(y_test, y_pred, average=None)",
+            "recall_by_class = {}",
+            "for _cls, _r in zip(model.classes_, recall_all):",
+            "    recall_by_class[str(_cls)] = float(_r)",
+            "sorted_classes = sorted(recall_by_class.items(), key=lambda item: item[1])",
+            "bottom_5 = dict(sorted_classes[:5])",
+            "top_5 = dict(sorted_classes[-5:])",
             "",
-            "# Generate publication-quality figure (Issue #60)",
-            "from kosmos.analysis.visualization import PublicationVisualizer",
-            "viz = PublicationVisualizer()",
+            "# Optional: most informative features from coefficient magnitude",
+            "coef = getattr(model.named_steps['clf'], 'coef_', None)",
+            "top_features = []",
+            "if coef is not None and len(feature_cols) == coef.shape[1]:",
+            "    importance = np.linalg.norm(np.asarray(coef, dtype=float), axis=0)",
+            "    order = np.argsort(importance)[::-1][:10]",
+            "    for _i in order:",
+            "        top_features.append(feature_cols[int(_i)])",
             "",
-            "# Generate predicted vs actual scatter plot if figure_path is provided",
-            "if 'figure_path' in dir() and figure_path and 'y_test' in results.get('train_test_results', {}):",
-            "    y_test = results['train_test_results'].get('y_test', [])",
-            "    y_pred = results['train_test_results'].get('y_pred', [])",
-            "    if len(y_test) > 0 and len(y_pred) > 0:",
-            "        viz.scatter_with_regression(",
-            "            x=np.array(y_test),",
-            "            y=np.array(y_pred),",
-            "            x_label='Actual',",
-            "            y_label='Predicted',",
-            f"            title='{protocol.name}',",
-            "            output_path=str(figure_path)",
-            "        )",
-            "        results['figure_path'] = str(figure_path)",
-            "",
-            "# Propagate data source and assumption checks into results",
-            "if '_data_source' in dir():",
-            "    results['data_source'] = _data_source",
-            "results['assumption_checks'] = {",
-            "    'normality_tested': False,",
-            "    'sample_size_adequate': len(df) >= 30,",
-            "}",
-            "",
-            "# Return results",
-            "results = results"
+            "results = {",
+            "    'accuracy': float(accuracy),",
+            "    'balanced_accuracy': float(balanced_acc),",
+            "    'macro_f1': float(macro_f1),",
+            "    'per_class_recall': recall_by_class,",
+            "    'top_5_classes': top_5,",
+            "    'bottom_5_classes': bottom_5,",
+            "    'top_features': top_features,",
+            "    'training_donor': str(train_donor) if train_donor else None,",
+            "    'test_donor': str(test_donor) if test_donor else None,",
+            "    'n_training_samples': int(len(X_train)),",
+            "    'n_test_samples': int(len(X_test)),",
+            "}"
         ]
 
         return "\n".join(code_lines)
@@ -761,17 +766,21 @@ class ExperimentCodeGenerator:
         # Initialize LLM client with error handling
         if use_llm and llm_client is None:
             try:
-                self.llm_client = ClaudeClient()
+                from kosmos.core.llm import get_client
+
+                self.llm_client = get_client()
+                self.use_llm = True
+                logger.info(
+                    "Experiment code generation using provider client: %s",
+                    type(self.llm_client).__name__,
+                )
             except (ValueError, Exception) as e:
-                logger.warning(f"ClaudeClient failed: {e}. Trying LiteLLM fallback.")
+                logger.warning(f"Provider client failed: {e}. Trying ClaudeClient.")
                 try:
-                    from kosmos.core.providers.litellm_provider import LiteLLMProvider
-                    from kosmos.config import get_config
-                    config = get_config()
-                    self.llm_client = LiteLLMProvider(config.get_active_provider_config())
+                    self.llm_client = ClaudeClient()
                     self.use_llm = True
                 except Exception as e2:
-                    logger.warning(f"LiteLLM fallback also failed: {e2}. LLM generation disabled.")
+                    logger.warning(f"ClaudeClient fallback also failed: {e2}. LLM generation disabled.")
                     self.llm_client = None
                     self.use_llm = False
         else:
@@ -897,8 +906,23 @@ IMPORTANT: Use `data_path` variable for loading data, e.g., `pd.read_csv(data_pa
 Do NOT hardcode 'data.csv' - use the data_path variable instead.
 
 Use these libraries: pandas, numpy, scipy.stats
-Use kosmos.execution.data_analysis.DataAnalyzer for statistical tests
+Use sklearn for machine-learning experiments (never import kosmos.* modules:
+the execution environment only allows pandas, numpy, scipy, sklearn,
+matplotlib, statsmodels and other standard scientific packages).
 Include comments explaining each section
+
+If the dataframe contains a cell_type column, treat it as the target. Treat
+cell_id and DonorID as identifiers, never as features. When DonorID has two
+groups, train on the larger group and evaluate on the other group (cross-donor
+held-out); otherwise do a stratified 80/20 split. For classification with many
+classes, use StandardScaler + LogisticRegression(multi_class='multinomial',
+max_iter=1000) when appropriate and report balanced accuracy and macro F1.
+Important: do NOT pass multi_class=... to sklearn LogisticRegression; recent
+sklearn removed that argument (multinomial behavior is automatic).
+
+End the script by assigning a JSON-serializable dict to the variable named
+`results`, e.g. results = {{"accuracy": ..., "balanced_accuracy": ...,
+"macro_f1": ..., "per_class_recall": {{...}}, "top_features": [...]}}.
 
 Return ONLY the Python code, no explanations."""
 
@@ -906,6 +930,8 @@ Return ONLY the Python code, no explanations."""
 
     def _extract_code_from_response(self, response: str) -> str:
         """Extract Python code from LLM response."""
+        # Provider clients return LLMResponse wrappers; legacy clients return str.
+        response = getattr(response, "content", response)
         # Look for code blocks
         if "```python" in response:
             # Extract from python code block

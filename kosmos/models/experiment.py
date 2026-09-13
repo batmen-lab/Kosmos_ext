@@ -122,6 +122,11 @@ class ControlGroup(BaseModel):
                 f"sample_size {v} exceeds maximum {_MAX_SAMPLE_SIZE}, clamping"
             )
             return _MAX_SAMPLE_SIZE
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and v <= 0:
+            _experiment_logger.warning(
+                f"sample_size {v} is not positive, setting to None"
+            )
+            return None
         return v
 
     @field_validator('description', 'rationale')
@@ -389,6 +394,11 @@ class ExperimentProtocol(BaseModel):
                 f"Protocol sample_size {v} exceeds maximum {_MAX_SAMPLE_SIZE}, clamping"
             )
             return _MAX_SAMPLE_SIZE
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and v <= 0:
+            _experiment_logger.warning(
+                f"Protocol sample_size {v} is not positive, setting to None"
+            )
+            return None
         return v
 
     # Resources & constraints

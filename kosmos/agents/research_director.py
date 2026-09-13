@@ -13,12 +13,14 @@ Async Architecture (Issue #66 fix):
 """
 
 from typing import Dict, Any, Optional, List
+from pathlib import Path
 from datetime import datetime, timezone
 import logging
 import asyncio
 import concurrent.futures
 import threading
 import time
+import os
 from contextlib import contextmanager
 
 from kosmos.agents.base import BaseAgent, AgentMessage, MessageType, AgentStatus
@@ -36,7 +38,12 @@ from kosmos.core.stage_tracker import get_stage_tracker
 from kosmos.models.hypothesis import Hypothesis, HypothesisStatus
 from kosmos.world_model import get_world_model, Entity, Relationship
 from kosmos.db import get_session
-from kosmos.db.operations import get_hypothesis, get_experiment, get_result
+from kosmos.db.operations import (
+    get_hypothesis,
+    get_experiment,
+    get_result,
+    update_result_analysis,
+)
 from kosmos.agents.skill_loader import SkillLoader
 
 logger = logging.getLogger(__name__)
@@ -671,17 +678,12 @@ class ResearchDirectorAgent(BaseAgent):
                 f"(attempt {self._consecutive_errors + 1})"
             )
 
-            # Use asyncio.sleep if an event loop is running to avoid blocking it;
-            # fall back to time.sleep for sync contexts.
+            # In async context we must not block the running loop with
+            # run_coroutine_threadsafe().  Sync callers still get the backoff;
+            # async callers skip the sleep to avoid a deadlock/TimeoutError.
             try:
-                loop = asyncio.get_running_loop()
-                # Schedule the sleep as a task so we don't block the event loop
-                future = asyncio.run_coroutine_threadsafe(
-                    asyncio.sleep(backoff_seconds), loop
-                )
-                future.result(timeout=backoff_seconds + 5)
+                asyncio.get_running_loop()
             except RuntimeError:
-                # No running event loop — safe to use blocking sleep
                 time.sleep(backoff_seconds)
 
             # Re-evaluate what action to take
@@ -1546,9 +1548,24 @@ class ResearchDirectorAgent(BaseAgent):
         try:
             # Lazy-init components
             if self._code_generator is None:
-                self._code_generator = ExperimentCodeGenerator(use_templates=True, use_llm=True)
+                self._code_generator = ExperimentCodeGenerator(
+                    use_templates=self.config.get("use_experiment_templates", True),
+                    use_llm=True,
+                )
             if self._code_executor is None:
-                self._code_executor = CodeExecutor(max_retries=3)
+                # Preserve the framework's sandbox-first default. Callers may
+                # opt out via config.enable_sandboxing or ENABLE_SANDBOXING=false.
+                _sandbox = self.config.get("enable_sandboxing")
+                if _sandbox is None:
+                    _sandbox = os.environ.get("ENABLE_SANDBOXING", "true").lower() in (
+                        "1",
+                        "true",
+                        "yes",
+                    )
+                self._code_executor = CodeExecutor(
+                    max_retries=3,
+                    use_sandbox=_sandbox,
+                )
             if self._data_provider is None:
                 self._data_provider = DataProvider(
                     default_data_dir=self.data_path
@@ -1571,16 +1588,110 @@ class ResearchDirectorAgent(BaseAgent):
                 else:
                     raise ValueError(f"Experiment {protocol_id} has no valid protocol data")
 
-            # Generate code from protocol
-            code = self._code_generator.generate(protocol)
+            # PPI-augmented execution path: external unlabeled evidence is
+            # consumed through the signed PPILoss correction instead of being
+            # treated as labeled gold.
+            ppi_external_path = self.config.get("ppi_external_data_path")
+            if ppi_external_path and self.data_path:
+                from kosmos.execution.executor import ExecutionResult
+                from kosmos.ppi.flow import run_cross_donor_ppi_classification
 
-            # Execute code
-            if self.data_path:
-                exec_result = self._code_executor.execute_with_data(
-                    code, self.data_path, retry_on_error=True
+                import time as _time
+
+                ppi_out = Path(
+                    self.config.get("ppi_output_dir")
+                    or f"artifacts/ppi/research-{protocol_id[:8]}-{int(_time.time())}"
+                )
+                logger.info(
+                    "PPI experiment: external evidence %s -> %s",
+                    ppi_external_path,
+                    ppi_out,
+                )
+                model_factory = None
+                model_design = None
+                stage1 = int(self.config.get("ppi_stage1_epochs", 4))
+                stage2 = int(self.config.get("ppi_stage2_epochs", 1))
+                if self.config.get("ppi_model_design", "deepseek") == "deepseek":
+                    import pandas as pd  # local, only in PPI deepseek-design mode
+
+                    from kosmos.ppi.model_design import design_ppi_model
+
+                    header = pd.read_csv(self.data_path, nrows=1)
+                    feature_names = [c for c in header.columns if c.startswith("ENSG")]
+                    gold = pd.read_csv(
+                        self.data_path,
+                        usecols=["DonorID", "cell_type"],
+                        dtype={"DonorID": str, "cell_type": str},
+                    )
+                    train_donor = self.config.get("ppi_train_donor", "13272")
+                    classes = sorted(gold.loc[gold["DonorID"] == train_donor, "cell_type"].unique())
+                    protocol_text = (
+                        f"{protocol.name}\n{protocol.description}\n{protocol.objective}"
+                    )
+                    logger.info(
+                        "Requesting DeepSeek-designed PPI model "
+                        "(n_features=%d, n_classes=%d)",
+                        len(feature_names),
+                        len(classes),
+                    )
+                    design = design_ppi_model(
+                        research_question=self.research_question,
+                        protocol_text=protocol_text,
+                        n_features=len(feature_names),
+                        n_classes=len(classes),
+                        client=self._code_generator.llm_client or get_client(),
+                        seed=int(self.config.get("ppi_seed", 42)),
+                    )
+                    model_factory = design.factory
+                    model_design = design.to_dict()
+                ppi_summary = run_cross_donor_ppi_classification(
+                    gold_test_csv=self.data_path,
+                    external_csv=ppi_external_path,
+                    output_dir=str(ppi_out),
+                    seed=int(self.config.get("ppi_seed", 42)),
+                    per_donor_limit=int(self.config.get("ppi_external_per_donor", 5000)),
+                    max_external_samples=int(
+                        self.config.get("ppi_max_external_samples", 20000)
+                    ),
+                    external_weight_budget=float(
+                        self.config.get("ppi_external_weight_budget", 0.5)
+                    ),
+                    max_epochs=int(self.config.get("ppi_max_epochs", 20)),
+                    patience=int(self.config.get("ppi_patience", 5)),
+                    cross_fit_folds=int(self.config.get("ppi_cross_fit_folds", 3)),
+                    stage1_epochs=stage1,
+                    stage2_epochs=stage2,
+                    pseudo_mode=str(self.config.get("ppi_pseudo_mode", "cross_fit")),
+                    model_factory=model_factory,
+                    model_design=model_design,
+                )
+                if model_design:
+                    from kosmos.ppi.model_design import write_design
+
+                    write_design(design, ppi_out)
+                exec_result = ExecutionResult(
+                    success=True,
+                    return_value=ppi_summary,
+                    stdout="",
+                    data_source="ppi",
                 )
             else:
-                exec_result = self._code_executor.execute(code, retry_on_error=True)
+                # Standard code execution path.
+                code = self._code_generator.generate(protocol)
+                llm_client = getattr(self._code_generator, "llm_client", None)
+                if self.data_path:
+                    exec_result = self._code_executor.execute_with_data(
+                        code,
+                        self.data_path,
+                        retry_on_error=True,
+                        llm_client=llm_client,
+                    )
+                else:
+                    exec_result = self._code_executor.execute(
+                        code,
+                        retry_on_error=True,
+                        llm_client=llm_client,
+                    )
 
             # Track rollout (Issue #58)
             self.rollout_tracker.increment("experiment_execution")
@@ -1763,6 +1874,23 @@ class ResearchDirectorAgent(BaseAgent):
                 f"Result {result_id} interpretation: "
                 f"hypothesis {hypothesis_id} supported={hypothesis_supported}"
             )
+
+            # Persist the analyst's narrative so runs leave a readable analysis.
+            try:
+                import json as _json
+
+                with get_session() as session:
+                    update_result_analysis(
+                        session,
+                        result_id,
+                        interpretation=_json.dumps(
+                            interpretation.to_dict(), default=str
+                        ),
+                        key_findings=list(getattr(interpretation, "key_findings", []) or []),
+                        supports_hypothesis=hypothesis_supported,
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to persist result interpretation: {e}")
 
             # Reset error streak on success
             self._reset_error_streak()

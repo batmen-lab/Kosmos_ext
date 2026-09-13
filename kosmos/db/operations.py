@@ -371,6 +371,28 @@ def create_result(
     return result
 
 
+def update_result_analysis(
+    session: Session,
+    result_id: str,
+    interpretation: str,
+    key_findings: Optional[List[str]] = None,
+    supports_hypothesis: Optional[bool] = None,
+) -> Optional[Result]:
+    """Persist DataAnalyst interpretation back onto a result row."""
+    result = session.get(Result, result_id)
+    if result is None:
+        return None
+    result.interpretation = interpretation
+    if key_findings is not None:
+        result.key_findings = key_findings
+    if supports_hypothesis is not None:
+        result.supports_hypothesis = supports_hypothesis
+    session.commit()
+    session.refresh(result)
+    logger.info("Updated result %s with DataAnalyst interpretation", result_id)
+    return result
+
+
 def get_result(session: Session, result_id: str, with_experiment: bool = False) -> Optional[Result]:
     """
     Get result by ID.

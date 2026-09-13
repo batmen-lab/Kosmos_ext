@@ -88,6 +88,7 @@ class ResultsViewer:
         Args:
             hypotheses: List of hypothesis dictionaries
         """
+        hypotheses = [h for h in (hypotheses or []) if isinstance(h, dict)]
         if not hypotheses:
             self.console.print("[muted]No hypotheses yet.[/muted]")
             return
@@ -176,6 +177,7 @@ class ResultsViewer:
         Args:
             experiments: List of experiment dictionaries
         """
+        experiments = [e for e in (experiments or []) if isinstance(e, dict)]
         if not experiments:
             self.console.print("[muted]No experiments yet.[/muted]")
             return

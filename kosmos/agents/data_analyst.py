@@ -387,8 +387,23 @@ class DataAnalystAgent(BaseAgent):
             "primary_p_value": result.primary_p_value,
             "primary_effect_size": result.primary_effect_size,
             "supports_hypothesis": result.supports_hypothesis,
-            "statistical_tests": []
+            "statistical_tests": [],
+            "metrics": {},
         }
+
+        # PPI-style results store baseline/PPI comparison metrics in raw_data.
+        raw = getattr(result, "raw_data", None)
+        if isinstance(raw, dict):
+            for section in ("validation_metrics", "final_test_metrics"):
+                if section in raw and isinstance(raw[section], dict):
+                    summary["metrics"][section] = raw[section]
+            if "external_used" in raw:
+                summary["metrics"]["context"] = {
+                    "external_used": raw.get("external_used"),
+                    "external_sources": raw.get("external_sources"),
+                    "n_gold_train": raw.get("n_gold_train"),
+                    "n_final_test": raw.get("n_final_test"),
+                }
 
         # Add statistical test details
         for test in result.statistical_tests:
@@ -458,6 +473,41 @@ Test {i}: {test['test_name']}
   - Significance: {test['significance_label']}
   - Sample Size: {test['sample_size']}
 """)
+
+        # PPI comparison metrics (baseline vs augmented model)
+        metrics = result_summary.get("metrics") or {}
+        if metrics:
+            prompt_parts.append("\n\nPPI METRICS (baseline vs PPI-augmented):")
+            for section in ("validation_metrics", "final_test_metrics"):
+                block = metrics.get(section)
+                if not block:
+                    continue
+                prompt_parts.append(f"\n[{section}]")
+                prompt_parts.append(
+                    "metric | baseline | PPI | delta\n"
+                    "---|---|---|---"
+                )
+                baseline = block.get("baseline") or {}
+                ppi = block.get("ppi") or {}
+                delta = block.get("delta") or {}
+                for metric in ("accuracy", "balanced_accuracy", "macro_f1"):
+                    b = baseline.get(metric)
+                    p = ppi.get(metric)
+                    if b is None or p is None:
+                        continue
+                    d = delta.get(metric)
+                    prompt_parts.append(
+                        f"{metric} | {float(b):.4f} | {float(p):.4f} | "
+                        f"{float(d) if d is not None else float(p)-float(b):+.4f}"
+                    )
+            if "context" in metrics:
+                ctx = metrics["context"]
+                prompt_parts.append(
+                    "\nExperiment context: "
+                    f"gold_train={ctx.get('n_gold_train')}, "
+                    f"final_test={ctx.get('n_final_test')}, "
+                    f"external_used={ctx.get('external_used')}"
+                )
 
         # Literature context
         if literature_context and self.use_literature_context:

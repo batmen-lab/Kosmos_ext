@@ -396,3 +396,21 @@ MIT License
 ---
 
 **Version**: 0.2.0-alpha | **Tests**: 3704 passing | **Last Updated**: 2025-12-09
+
+### Non-gold evidence for predictive learning
+
+The opt-in `kosmos.evidence` prototype routes already-retrieved datasets through
+Direct-PPI (observed/harmonized features) or Translate-PPI (a reviewed translator),
+keeps source labels auxiliary, and records provenance, uncertainty and validation
+utility. It reuses file loading and provides adapters for your gold-trained
+predictor and PPI trainer. See [the integration guide](docs/evidence_routing.md)
+for contracts, safeguards and current limitations.
+
+`kosmos.ppi` adds a self-contained classification trainer with gold and external
+pseudo predictions, a signed PPI correction, cross-fitting or reviewed pretrained
+classifiers, a matched gold-only baseline, and validation artifacts. See
+[PPI training](docs/ppi_training.md), or run
+`python -m kosmos.ppi.train --synthetic --output-dir artifacts/ppi/synthetic-001`.
+
+The evidence route can also be enabled inside `ResearchWorkflow`; see the
+[ResearchWorkflow integration section](docs/evidence_routing.md#researchworkflow-integration).

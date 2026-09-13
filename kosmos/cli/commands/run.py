@@ -13,6 +13,7 @@ import sys
 import time
 import logging
 import asyncio
+import os
 from typing import Optional
 from datetime import datetime, timezone
 from pathlib import Path
@@ -54,6 +55,11 @@ def run_research(
     max_iterations: int = typer.Option(10, "--max-iterations", "-i", help="Maximum number of research iterations"),
     budget: Optional[float] = typer.Option(None, "--budget", "-b", help="Budget limit in USD"),
     data_path: Optional[Path] = typer.Option(None, "--data-path", "-D", help="Path to CSV dataset for experiments"),
+    external_data_path: Optional[Path] = typer.Option(
+        None,
+        "--external-data-path",
+        help="Optional unlabeled external CSV used as PPI evidence (PPILoss path)",
+    ),
     no_cache: bool = typer.Option(False, "--no-cache", help="Disable caching"),
     interactive: bool = typer.Option(False, "--interactive", help="Use interactive mode"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Save results to file (JSON or Markdown)"),
@@ -113,6 +119,9 @@ def run_research(
     if data_path and not data_path.exists():
         print_error(f"Data file not found: {data_path}")
         raise typer.Exit(1)
+    if external_data_path and not external_data_path.exists():
+        print_error(f"External data file not found: {external_data_path}")
+        raise typer.Exit(1)
 
     # Show starting message
     console.print()
@@ -171,8 +180,37 @@ def run_research(
             "llm_provider": config_obj.llm_provider,
             "enable_cache": cache_enabled,
 
+            # Optional behavior switches (kept off by default to preserve
+            # framework behavior; set env vars to override for deterministic runs)
+            "use_literature_context": os.getenv(
+                "USE_LITERATURE_CONTEXT", "true"
+            ).lower() not in ("0", "false", "no"),
+            "use_experiment_templates": os.getenv(
+                "USE_EXPERIMENT_TEMPLATES", "true"
+            ).lower() not in ("0", "false", "no"),
+            "require_novelty_check": os.getenv(
+                "REQUIRE_NOVELTY_CHECK", "true"
+            ).lower() not in ("0", "false", "no"),
+            "num_hypotheses": int(os.getenv("NUM_HYPOTHESES", "3")),
+
             # Dataset path
             "data_path": str(data_path.resolve()) if data_path else None,
+            "ppi_external_data_path": (
+                str(external_data_path.resolve()) if external_data_path else None
+            ),
+            "ppi_output_dir": os.getenv("PPI_OUTPUT_DIR"),
+            "ppi_seed": int(os.getenv("PPI_SEED", "42")),
+            "ppi_external_per_donor": int(os.getenv("PPI_EXTERNAL_PER_DONOR", "5000")),
+            "ppi_max_external_samples": int(os.getenv("PPI_MAX_EXTERNAL_SAMPLES", "20000")),
+            "ppi_external_weight_budget": float(os.getenv("PPI_EXTERNAL_WEIGHT_BUDGET", "0.5")),
+            "ppi_max_epochs": int(os.getenv("PPI_MAX_EPOCHS", "20")),
+            "ppi_patience": int(os.getenv("PPI_PATIENCE", "5")),
+            "ppi_cross_fit_folds": int(os.getenv("PPI_CROSS_FIT_FOLDS", "3")),
+            "ppi_model_design": os.getenv("PPI_MODEL_DESIGN", "deepseek"),
+            "ppi_stage1_epochs": int(os.getenv("PPI_STAGE1_EPOCHS", "4")),
+            "ppi_stage2_epochs": int(os.getenv("PPI_STAGE2_EPOCHS", "1")),
+            "ppi_pseudo_mode": os.getenv("PPI_PSEUDO_MODE", "cross_fit"),
+            "ppi_train_donor": os.getenv("PPI_TRAIN_DONOR", "13272"),
 
             # Interactive mode settings
             "auto_model_selection": auto_model_selection,
@@ -409,6 +447,15 @@ async def run_with_progress_async(
             # Get final research status
             final_status = director.get_research_status()
 
+            # Provider usage: OpenAI/DeepSeek providers expose usage via
+            # get_usage_stats(); legacy ClaudeClient exposes attributes.
+            usage_stats = {}
+            try:
+                if hasattr(director.llm_client, "get_usage_stats"):
+                    usage_stats = director.llm_client.get_usage_stats() or {}
+            except Exception as e:
+                logger.warning(f"Could not read provider usage stats: {e}")
+
             # Build results from actual research
             # Fetch actual hypothesis and experiment objects from database
             from kosmos.db import get_session
@@ -456,9 +503,15 @@ async def run_with_progress_async(
                 "hypotheses": hypotheses_data,
                 "experiments": experiments_data,
                 "metrics": {
-                    "api_calls": getattr(director.llm_client, 'total_requests', 0),
+                    "api_calls": usage_stats.get(
+                        "total_requests",
+                        getattr(director.llm_client, "total_requests", 0),
+                    ),
                     "cache_hits": getattr(director.llm_client, 'cache_hits', 0),
                     "cache_misses": getattr(director.llm_client, 'cache_misses', 0),
+                    "total_input_tokens": usage_stats.get("total_input_tokens", 0),
+                    "total_output_tokens": usage_stats.get("total_output_tokens", 0),
+                    "total_cost_usd": usage_stats.get("total_cost_usd"),
                     "hypotheses_generated": final_status.get("hypothesis_pool_size", 0),
                     "hypotheses_tested": final_status.get("hypotheses_tested", 0),
                     "hypotheses_supported": final_status.get("hypotheses_supported", 0),

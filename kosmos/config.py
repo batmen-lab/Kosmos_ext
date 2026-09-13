@@ -7,7 +7,7 @@ for all Kosmos components.
 
 from typing import List, Optional, Literal, Union, Annotated
 from pydantic import Field, field_validator, model_validator, BeforeValidator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from pathlib import Path
 import os
 
@@ -207,12 +207,12 @@ class ResearchConfig(BaseSettings):
         description="Maximum research iterations",
         alias="MAX_RESEARCH_ITERATIONS"
     )
-    enabled_domains: Annotated[List[str], BeforeValidator(parse_comma_separated)] = Field(
+    enabled_domains: Annotated[List[str], NoDecode, BeforeValidator(parse_comma_separated)] = Field(
         default=["biology", "physics", "chemistry", "neuroscience"],
         description="Enabled scientific domains",
         alias="ENABLED_DOMAINS"
     )
-    enabled_experiment_types: Annotated[List[str], BeforeValidator(parse_comma_separated)] = Field(
+    enabled_experiment_types: Annotated[List[str], NoDecode, BeforeValidator(parse_comma_separated)] = Field(
         default=["computational", "data_analysis", "literature_synthesis"],
         description="Enabled experiment types",
         alias="ENABLED_EXPERIMENT_TYPES"

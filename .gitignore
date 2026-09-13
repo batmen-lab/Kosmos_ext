@@ -102,6 +102,7 @@ pip-log.txt
 pip-wheel-metadata/
 venv
 venv/
+.venv/
 env/
 ENV/
 
@@ -151,5 +152,7 @@ req_to_paper_analysis_*.md
 data/*.h5ad
 data/*.parquet
 data/*.h5
+# Donor-split CSVs used by the PPI / evidence experiments (hundreds of MB)
+data/csv_donor_splits/
 !data/benchmarks/
 CLAUDE.md
