@@ -6,6 +6,7 @@ with literature context and novelty checking.
 """
 
 import logging
+import os
 import time
 import uuid
 from typing import List, Dict, Any, Optional
@@ -28,6 +29,83 @@ from kosmos.db.models import Hypothesis as DBHypothesis, HypothesisStatus as DBH
 from kosmos.db import get_session
 
 logger = logging.getLogger(__name__)
+
+
+def _shorten(text: str, limit: int) -> str:
+    """Cut to `limit` characters at a word boundary, and say it was cut.
+
+    A model that writes 540 characters has answered the question; refusing the
+    answer costs the whole hypothesis, and the run then converges with "no
+    testable hypotheses" -- which is a parsing failure wearing a research
+    failure's clothes.
+    """
+    text = " ".join(str(text).split())
+    if len(text) <= limit:
+        return text
+    cut = text[: limit - 1].rsplit(" ", 1)[0].rstrip(",;:")
+    return (cut or text[: limit - 1]) + "…"
+
+
+def _build_hypothesis(
+    hyp_data,
+    *,
+    hypothesis_cls,
+    status,
+    research_question,
+    domain,
+    exp_types,
+    context_papers,
+    generated_by,
+):
+    """One hypothesis from the model's JSON, repaired where it is only too long.
+
+    `statement` has a 500-character limit in the model and a generative LLM
+    overshoots it often; the length is not the hypothesis. Anything else that
+    fails validation still raises, so a genuinely broken payload is reported.
+    """
+    payload = dict(hyp_data)
+    statement = str(payload.get("statement") or "")
+    if len(statement) > 500:
+        payload["statement"] = _shorten(statement, 500)
+        logger.warning(
+            "Hypothesis statement was %d characters (limit 500); shortened for "
+            "use rather than dropped",
+            len(statement),
+        )
+    return hypothesis_cls(
+        id=str(uuid.uuid4()),
+        research_question=research_question,
+        statement=payload["statement"],
+        rationale=payload["rationale"],
+        domain=domain,
+        status=status,
+        testability_score=payload.get("testability_score"),
+        confidence_score=payload.get("confidence_score"),
+        suggested_experiment_types=exp_types,
+        related_papers=[
+            p.arxiv_id or p.doi or p.title
+            for p in context_papers
+            if p is not None and (p.arxiv_id or p.doi or p.title)
+        ],
+        generated_by=generated_by,
+    )
+
+
+def _literature_enabled_by_default() -> bool:
+    """`USE_LITERATURE_CONTEXT`, for an agent built without a config.
+
+    Kosmos's own CLI turns literature off for a training run; an agent built by
+    another entry point used to default it on regardless, which is how a run
+    that asked for no literature still spent minutes on a rate-limited API.
+    """
+    raw = os.getenv("USE_LITERATURE_CONTEXT", "true").strip().lower()
+    return raw not in ("0", "false", "no", "off")
+
+
+def _novelty_enabled_by_default() -> bool:
+    """`REQUIRE_NOVELTY_CHECK`, for an agent built without a config."""
+    raw = os.getenv("REQUIRE_NOVELTY_CHECK", "true").strip().lower()
+    return raw not in ("0", "false", "no", "off")
 
 
 class HypothesisGeneratorAgent(BaseAgent):
@@ -77,9 +155,22 @@ class HypothesisGeneratorAgent(BaseAgent):
 
         # Configuration
         self.num_hypotheses = self.config.get("num_hypotheses", 3)
-        self.use_literature_context = self.config.get("use_literature_context", True)
+        # The default follows the environment, not a hard-coded True: this agent
+        # is also built by callers that pass no config, and a literature search
+        # that the caller switched off must stay off -- it is the step that made
+        # hypothesis generation look stuck (a rate-limited API, retried for
+        # minutes on a thread nothing can cancel).
+        self.use_literature_context = self.config.get(
+            "use_literature_context", _literature_enabled_by_default()
+        )
         self.max_papers_context = self.config.get("max_papers_context", 10)
-        self.require_novelty_check = self.config.get("require_novelty_check", True)
+        # Same rule as the literature switch: an agent built without a config
+        # follows `REQUIRE_NOVELTY_CHECK`, because the novelty check embeds with
+        # a transformer on the research loop's thread and a caller that turned it
+        # off must not get it back by default.
+        self.require_novelty_check = self.config.get(
+            "require_novelty_check", _novelty_enabled_by_default()
+        )
         self.min_novelty_score = self.config.get("min_novelty_score", 0.5)
 
         # Components
@@ -204,8 +295,11 @@ class HypothesisGeneratorAgent(BaseAgent):
 
         logger.info(f"Generated {len(validated_hypotheses)} valid hypotheses")
 
-        # Step 4b: Novelty scoring — always annotate, only filter if enabled
-        if validated_hypotheses:
+        # Step 4b: Novelty scoring. It is annotated when the run wants it (and
+        # only then: building the checker loads an embedding model and searching
+        # prior art calls three APIs, none of which a training run needs), and it
+        # is filtered only when `require_novelty_check` is on.
+        if validated_hypotheses and self.require_novelty_check:
             try:
                 from kosmos.hypothesis.novelty_checker import NoveltyChecker
                 checker = NoveltyChecker(similarity_threshold=1.0 - self.min_novelty_score)
@@ -214,7 +308,7 @@ class HypothesisGeneratorAgent(BaseAgent):
                     try:
                         report = checker.check_novelty(hyp)
                         hyp.novelty_score = report.novelty_score
-                        if self.require_novelty_check and report.novelty_score < self.min_novelty_score:
+                        if report.novelty_score < self.min_novelty_score:
                             logger.info("Filtered low-novelty hypothesis (%.2f): %s",
                                         report.novelty_score, hyp.statement[:60])
                         else:
@@ -226,6 +320,12 @@ class HypothesisGeneratorAgent(BaseAgent):
                 logger.info(f"After novelty scoring: {len(validated_hypotheses)} hypotheses")
             except ImportError:
                 logger.warning("NoveltyChecker unavailable, skipping novelty scoring")
+        elif validated_hypotheses:
+            logger.info(
+                "Novelty checking is off (REQUIRE_NOVELTY_CHECK=false); keeping "
+                "all %d hypothesis(es) unscored",
+                len(validated_hypotheses),
+            )
 
         # Step 5: Store in database if requested
         if store_in_db:
@@ -384,6 +484,10 @@ No explanation needed."""
 
             # Parse response into Hypothesis objects
             hypotheses = []
+            #: Why a hypothesis the model returned did not become one: dropping
+            #: them silently is how a run reaches "no testable hypotheses" while
+            #: the model did produce three.
+            rejected: list[str] = []
             for i, hyp_data in enumerate(response.get("hypotheses", [])):
                 try:
                     # Map experiment types
@@ -394,28 +498,39 @@ No explanation needed."""
                         except ValueError:
                             logger.warning(f"Unknown experiment type: {exp_type_str}")
 
-                    hypothesis = Hypothesis(
-                        id=str(uuid.uuid4()),
+                    hypothesis = _build_hypothesis(
+                        hyp_data,
+                        hypothesis_cls=Hypothesis,
                         research_question=research_question,
-                        statement=hyp_data["statement"],
-                        rationale=hyp_data["rationale"],
                         domain=domain,
                         status=HypothesisStatus.GENERATED,
-                        testability_score=hyp_data.get("testability_score"),
-                        confidence_score=hyp_data.get("confidence_score"),
-                        suggested_experiment_types=exp_types,
-                        related_papers=[
-                            p.arxiv_id or p.doi or p.title
-                            for p in context_papers
-                            if p is not None and (p.arxiv_id or p.doi or p.title)
-                        ],
-                        generated_by=self.agent_id
+                        exp_types=exp_types,
+                        context_papers=context_papers,
+                        generated_by=self.agent_id,
                     )
                     hypotheses.append(hypothesis)
 
                 except Exception as e:
+                    rejected.append(f"hypothesis {i}: {type(e).__name__}: {e}")
                     logger.error(f"Error parsing hypothesis {i}: {e}")
                     continue
+
+            if rejected:
+                # Said on the console, not only in the log file: a run whose
+                # hypotheses were all rejected converges with "no testable
+                # hypotheses", and that reads like a model failure when it is a
+                # parsing one.
+                print(
+                    f"  ⚠ {len(rejected)} of {len(response.get('hypotheses', []))} "
+                    f"hypothesis(es) from the model could not be used: "
+                    + "; ".join(rejected[:2]),
+                    flush=True,
+                )
+                logger.warning(
+                    "Rejected %d hypothesis(es) from the model: %s",
+                    len(rejected),
+                    "; ".join(rejected),
+                )
 
             return hypotheses
 

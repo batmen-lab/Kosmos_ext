@@ -31,6 +31,20 @@ class SemanticScholarClient(BaseLiteratureClient):
     API Docs: https://api.semanticscholar.org/
     """
 
+    #: Once the API says "too many requests" (or refuses the connection), it is
+    #: not going to answer a moment later: the library's own retry policy keeps
+    #: asking for minutes, on a background thread that the caller's timeout
+    #: cannot stop. A rate limit is a fact about the next few minutes, so the
+    #: client goes quiet for the rest of the run instead of spending it.
+    _UNAVAILABLE_MARKERS = (
+        "429",
+        "too many requests",
+        "connectionrefused",
+        "connection refused",
+        "max retries",
+        "retryerror",
+    )
+
     def __init__(self, api_key: Optional[str] = None, cache_enabled: bool = True):
         """
         Initialize the Semantic Scholar client.
@@ -47,7 +61,12 @@ class SemanticScholarClient(BaseLiteratureClient):
 
         # Initialize API client
         self.api_key = api_key or config.literature.semantic_scholar_api_key
-        self.client = SemanticScholar(api_key=self.api_key, timeout=30)
+        # `retry=False`: the requests the library would make again are the ones
+        # that just came back 429, and the caller is a hypothesis step that is
+        # waiting on this thread with a 90-second budget.
+        self.client = SemanticScholar(api_key=self.api_key, timeout=30, retry=False)
+        #: Set once the API has refused: the rest of the run skips this source.
+        self.unavailable_reason: str = ""
 
         # Initialize cache if enabled
         self.cache = get_cache() if cache_enabled else None
@@ -109,6 +128,12 @@ class SemanticScholarClient(BaseLiteratureClient):
         if not self._validate_query(query):
             return []
 
+        if self.unavailable_reason:
+            self.logger.debug(
+                f"Skipping Semantic Scholar ({self.unavailable_reason})"
+            )
+            return []
+
         # Check cache
         cache_params = {
             "query": query,
@@ -157,8 +182,42 @@ class SemanticScholarClient(BaseLiteratureClient):
             return papers
 
         except Exception as e:
-            self._handle_api_error(e, f"search query='{query}'")
+            # A refusal is remembered so the next caller does not pay for it
+            # again; anything else is logged as before.
+            if self._note_unavailable(e):
+                self.logger.warning(f"Semantic Scholar search skipped: {e}")
+            else:
+                self._log_api_error(e, f"search query='{query}'")
             return []
+
+    def _note_unavailable(self, error: Exception) -> str:
+        """Remember a refusal, in one line, and stop asking this run."""
+        text = str(error).lower()
+        if any(marker in text for marker in self._UNAVAILABLE_MARKERS):
+            reason = f"the API refused the request ({type(error).__name__})"
+            if not self.unavailable_reason:
+                self.unavailable_reason = reason
+                self.logger.warning(
+                    f"Semantic Scholar is unavailable ({reason}); skipping it for "
+                    f"the rest of this run -- arXiv and PubMed still answer"
+                )
+        return self.unavailable_reason
+
+    def _log_api_error(self, error: Exception, operation: str) -> None:
+        """Record a failed call and carry on.
+
+        The base client re-raises, which is right for a call the caller asked
+        for by itself. This client is one of three sources behind a unified
+        search: the hypothesis step is waiting on it with a 90-second budget, and
+        a source that cannot answer must cost that budget, not the run.
+        """
+        if self._note_unavailable(error):
+            self.logger.warning(f"Semantic Scholar {operation} skipped: {error}")
+            return
+        self.logger.error(
+            f"Error in Semantic Scholar API during {operation}: {error}",
+            exc_info=True,
+        )
 
     def get_paper_by_id(self, paper_id: str) -> Optional[PaperMetadata]:
         """
@@ -213,7 +272,7 @@ class SemanticScholarClient(BaseLiteratureClient):
             return paper
 
         except Exception as e:
-            self._handle_api_error(e, f"get_paper_by_id id={paper_id}")
+            self._log_api_error(e, f"get_paper_by_id id={paper_id}")
             return None
 
     def get_paper_references(self, paper_id: str, max_refs: int = 50) -> List[PaperMetadata]:
@@ -258,7 +317,7 @@ class SemanticScholarClient(BaseLiteratureClient):
             return papers
 
         except Exception as e:
-            self._handle_api_error(e, f"get_paper_references id={paper_id}")
+            self._log_api_error(e, f"get_paper_references id={paper_id}")
             return []
 
     def get_paper_citations(self, paper_id: str, max_cites: int = 50) -> List[PaperMetadata]:
@@ -303,7 +362,7 @@ class SemanticScholarClient(BaseLiteratureClient):
             return papers
 
         except Exception as e:
-            self._handle_api_error(e, f"get_paper_citations id={paper_id}")
+            self._log_api_error(e, f"get_paper_citations id={paper_id}")
             return []
 
     def _s2_to_metadata(self, result: S2Paper) -> PaperMetadata:

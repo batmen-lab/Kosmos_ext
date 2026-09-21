@@ -53,6 +53,26 @@ MAX_CONSECUTIVE_ERRORS = 3  # Halt after this many failures in a row
 ERROR_BACKOFF_SECONDS = [2, 4, 8]  # Exponential backoff delays
 ERROR_RECOVERY_LOG_PREFIX = "[ERROR-RECOVERY]"
 
+#: Failures that are a fact about the run's configuration rather than a
+#: transient fault. Retrying them re-runs the same call, costs an experiment's
+#: worth of tokens, and fails identically, so they are reported once.
+_CONFIGURATION_ERRORS = (
+    "output dir must be empty/new",
+    "has no column",
+    "feature column(s) the table does not have",
+    "is missing",
+    "no such file",
+)
+
+
+def _is_configuration_error(error: Exception) -> bool:
+    """True when the error is about the inputs, not about a flaky step."""
+    if not isinstance(error, (ValueError, FileNotFoundError, KeyError)):
+        return False
+    text = str(error)
+    return any(needle in text for needle in _CONFIGURATION_ERRORS)
+
+
 # Infinite loop prevention (Issue #51)
 MAX_ACTIONS_PER_ITERATION = 50  # Force convergence if exceeded
 
@@ -1418,12 +1438,18 @@ class ResearchDirectorAgent(BaseAgent):
 
             logger.info("Generating hypotheses via direct call (bypassing message router)")
 
-            response = self._hypothesis_agent.generate_hypotheses(
-                research_question=self.research_question,
-                num_hypotheses=self.config.get("num_hypotheses", 3),
-                domain=self.domain,
-                store_in_db=True
-            )
+            # Named and timed: this step calls the model, and (when literature is
+            # on) three APIs behind it. "Generating hypotheses…" for ten minutes
+            # used to be indistinguishable from a hang.
+            from kosmos.core.diagnostics import stage
+
+            with stage("generating hypotheses"):
+                response = self._hypothesis_agent.generate_hypotheses(
+                    research_question=self.research_question,
+                    num_hypotheses=self.config.get("num_hypotheses", 3),
+                    domain=self.domain,
+                    store_in_db=True
+                )
 
             # Track rollout (Issue #58)
             self.rollout_tracker.increment("hypothesis_generation")
@@ -1588,84 +1614,196 @@ class ResearchDirectorAgent(BaseAgent):
                 else:
                     raise ValueError(f"Experiment {protocol_id} has no valid protocol data")
 
-            # PPI-augmented execution path: external unlabeled evidence is
-            # consumed through the signed PPILoss correction instead of being
-            # treated as labeled gold.
             ppi_external_path = self.config.get("ppi_external_data_path")
-            if ppi_external_path and self.data_path:
-                from kosmos.execution.executor import ExecutionResult
-                from kosmos.ppi.flow import run_cross_donor_ppi_classification
-
+            task_target = self.config.get("task_target_column")
+            if task_target and self.data_path:
+                # Training-task path. A task is a label column and a feature
+                # selection, so nothing here knows what the columns mean:
+                #   labeled data alone            -> supervised training
+                #   plus unlabeled data           -> the same run, with the PPI
+                #                                    correction over the extra rows
+                # Unlabeled data is any table without the task's label column;
+                # where it came from is provenance, not a role.
                 import time as _time
 
+                from kosmos.execution.executor import ExecutionResult
+                from kosmos.ppi import PPITrainingConfig, run_training
+                from kosmos.ppi.task_spec import task_spec_from_config
+                from kosmos.ppi.tabular import read_table as _read_table
+
+                task = task_spec_from_config(
+                    self.config, description=f"{protocol.name}: {task_target}"
+                )
+                supplementary_paths = list(
+                    self.config.get("ppi_supplementary_paths")
+                    or ([ppi_external_path] if ppi_external_path else [])
+                )
+                test_path = self.config.get("ppi_test_path")
                 ppi_out = Path(
                     self.config.get("ppi_output_dir")
                     or f"artifacts/ppi/research-{protocol_id[:8]}-{int(_time.time())}"
                 )
+                # The engine refuses to write into a directory that already holds
+                # a run, and a re-run of the same question points at the same
+                # path. Deciding it here means the attempt gets `run-2` (and says
+                # so) instead of failing after this call and being retried -- a
+                # retry that re-designs the experiment and fails identically.
+                from kosmos.ppi.flow import next_output_dir
+
+                configured = ppi_out
+                ppi_out = next_output_dir(ppi_out)
+                if ppi_out != configured:
+                    logger.warning(
+                        "PPI output dir %s already holds a run; writing this one "
+                        "to %s instead",
+                        configured,
+                        ppi_out,
+                    )
                 logger.info(
-                    "PPI experiment: external evidence %s -> %s",
-                    ppi_external_path,
+                    "Training task %r (%d labeled row source(s), %d supplementary "
+                    "source(s)) -> %s",
+                    task_target,
+                    1,
+                    len(supplementary_paths),
                     ppi_out,
                 )
+
+                # Header only, then just the label column: the labeled table can
+                # be hundreds of megabytes and none of it is needed here. The
+                # separator is sniffed: fetched data is not always comma-CSV.
+                header = _read_table(self.data_path, nrows=0)
+                if not task.has_target(header.columns):
+                    raise ValueError(
+                        f"--data-path {self.data_path} has no column "
+                        f"{task_target!r}, so it cannot train this task. Point "
+                        f"--data-path at the labeled table, or declare the right "
+                        f"target column."
+                    )
+                feature_names = task.feature_names(header.columns)
+                # Features and label in one pass: the label gives the classes,
+                # and the feature columns give the encoder the width the model is
+                # actually built with. Reporting the raw column count would
+                # describe a different model than the one that trains (one-hot
+                # turns `thal` into four columns).
+                sample = _read_table(
+                    self.data_path, columns=[*feature_names, str(task_target)]
+                )
+                labels = sample[str(task_target)]
+                classes = sorted(
+                    {str(v) for v in labels.dropna().unique()}
+                )
+                from kosmos.ppi.features import FeatureEncoder
+
+                encoder = FeatureEncoder.fit(sample, feature_names)
+                n_features = encoder.width
+                if n_features != len(feature_names):
+                    logger.info(
+                        "Encoding %d raw feature(s) as %d column(s); categorical: %s",
+                        len(feature_names),
+                        n_features,
+                        encoder.categorical_features,
+                    )
+
                 model_factory = None
                 model_design = None
+                design = None
+                n_outputs = 1 if task.task_type == "regression" else len(classes)
                 stage1 = int(self.config.get("ppi_stage1_epochs", 4))
                 stage2 = int(self.config.get("ppi_stage2_epochs", 1))
                 if self.config.get("ppi_model_design", "deepseek") == "deepseek":
-                    import pandas as pd  # local, only in PPI deepseek-design mode
-
                     from kosmos.ppi.model_design import design_ppi_model
 
-                    header = pd.read_csv(self.data_path, nrows=1)
-                    feature_names = [c for c in header.columns if c.startswith("ENSG")]
-                    gold = pd.read_csv(
-                        self.data_path,
-                        usecols=["DonorID", "cell_type"],
-                        dtype={"DonorID": str, "cell_type": str},
-                    )
-                    train_donor = self.config.get("ppi_train_donor", "13272")
-                    classes = sorted(gold.loc[gold["DonorID"] == train_donor, "cell_type"].unique())
                     protocol_text = (
                         f"{protocol.name}\n{protocol.description}\n{protocol.objective}"
                     )
                     logger.info(
-                        "Requesting DeepSeek-designed PPI model "
-                        "(n_features=%d, n_classes=%d)",
-                        len(feature_names),
-                        len(classes),
+                        "Requesting DeepSeek-designed model (n_features=%d, "
+                        "n_outputs=%d, task=%s)",
+                        n_features,
+                        n_outputs,
+                        task.task_type,
                     )
                     design = design_ppi_model(
                         research_question=self.research_question,
                         protocol_text=protocol_text,
-                        n_features=len(feature_names),
-                        n_classes=len(classes),
+                        n_features=n_features,
+                        n_classes=n_outputs,
+                        task_type=task.task_type,
                         client=self._code_generator.llm_client or get_client(),
                         seed=int(self.config.get("ppi_seed", 42)),
                     )
                     model_factory = design.factory
                     model_design = design.to_dict()
-                ppi_summary = run_cross_donor_ppi_classification(
-                    gold_test_csv=self.data_path,
-                    external_csv=ppi_external_path,
-                    output_dir=str(ppi_out),
+                training_config = PPITrainingConfig(
+                    task_type=task.task_type,
                     seed=int(self.config.get("ppi_seed", 42)),
-                    per_donor_limit=int(self.config.get("ppi_external_per_donor", 5000)),
+                    max_epochs=int(self.config.get("ppi_max_epochs", 20)),
+                    patience=int(self.config.get("ppi_patience", 5)),
+                    cross_fit_folds=int(self.config.get("ppi_cross_fit_folds", 3)),
                     max_external_samples=int(
                         self.config.get("ppi_max_external_samples", 20000)
+                    ),
+                    max_rows_per_dataset=int(
+                        self.config.get("ppi_external_per_donor", 5000)
                     ),
                     external_weight_budget=float(
                         self.config.get("ppi_external_weight_budget", 0.5)
                     ),
-                    max_epochs=int(self.config.get("ppi_max_epochs", 20)),
-                    patience=int(self.config.get("ppi_patience", 5)),
-                    cross_fit_folds=int(self.config.get("ppi_cross_fit_folds", 3)),
+                    ppi_lambda=float(self.config.get("ppi_lambda", 1.0)),
+                    evaluation_metric=str(
+                        self.config.get("ppi_evaluation_metric", "balanced_accuracy")
+                    ),
                     stage1_epochs=stage1,
                     stage2_epochs=stage2,
                     pseudo_mode=str(self.config.get("ppi_pseudo_mode", "cross_fit")),
-                    model_factory=model_factory,
-                    model_design=model_design,
+                    pseudo_targets=str(self.config.get("ppi_pseudo_targets", "hard")),
+                    loss_mode=str(self.config.get("ppi_loss_mode", "signed")),
+                    loss_ramp_epochs=int(self.config.get("ppi_loss_ramp_epochs", 0)),
+                    # The gradient gate, when `loss_mode` is `gradient_gated`:
+                    # gold sets the direction, synthetic data may only accelerate.
+                    gate_kappa=float(self.config.get("ppi_gate_kappa", 1.0)),
+                    gate_scope=str(self.config.get("ppi_gate_scope", "batch")),
+                    gate_gamma=float(self.config.get("ppi_gate_gamma", 1.0)),
+                    gate_lambda=float(self.config.get("ppi_gate_lambda", 1.0)),
+                    # Single-cell preprocessing (counts -> HVG -> log1p ->
+                    # per-gene z-score -> clip), per source, with the panel and
+                    # the figures it produces.
+                    single_cell_preprocess=str(
+                        self.config.get("ppi_single_cell_preprocess", "auto")
+                    ),
+                    single_cell_top_genes=int(
+                        self.config.get("ppi_single_cell_top_genes", 2000)
+                    ),
+                    single_cell_target_sum=float(
+                        self.config.get("ppi_single_cell_target_sum", 1e4)
+                    ),
+                    single_cell_min_cells=int(
+                        self.config.get("ppi_single_cell_min_cells", 3)
+                    ),
+                    single_cell_figures=bool(
+                        self.config.get("ppi_single_cell_figures", True)
+                    ),
                 )
-                if model_design:
+                # The training itself is named and timed, and the flow names the
+                # file reads inside it: a run that is reading a gigabyte table is
+                # a run that is working, and now it says so.
+                from kosmos.core.diagnostics import stage
+
+                with stage("training the task (labeled + evidence)"):
+                    ppi_summary = run_training(
+                        labeled_paths=list(
+                            self.config.get("task_labeled_paths") or [self.data_path]
+                        ),
+                        task=task,
+                        supplementary_paths=supplementary_paths,
+                        test_path=test_path,
+                        output_dir=str(ppi_out),
+                        config=training_config,
+                        model_factory=model_factory,
+                        model_design=model_design,
+                        supplementary_renames=self.config.get("ppi_supplementary_renames"),
+                    )
+                if design is not None:
                     from kosmos.ppi.model_design import write_design
 
                     write_design(design, ppi_out)
@@ -1778,6 +1916,23 @@ class ResearchDirectorAgent(BaseAgent):
 
         except Exception as e:
             logger.error(f"Direct experiment execution failed: {e}", exc_info=True)
+            if _is_configuration_error(e):
+                # A configuration error fails the same way however many times it
+                # is retried, and each retry here re-enters the decision loop and
+                # costs an LLM call: three of them took nine minutes and ended in
+                # the same place. Say what is wrong and stop.
+                logger.error(
+                    f"{ERROR_RECOVERY_LOG_PREFIX} {e} -- this is a fact about the "
+                    f"run's configuration, not a transient fault, so it is not "
+                    f"retried; stopping this run"
+                )
+                with self._workflow_context():
+                    self.workflow.transition_to(
+                        WorkflowState.ERROR,
+                        action=f"Configuration error: {e}",
+                        metadata={"protocol_id": protocol_id},
+                    )
+                return
             self._handle_error_with_recovery(
                 error_source="CodeExecutor",
                 error_message=str(e),

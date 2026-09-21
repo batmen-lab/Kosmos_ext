@@ -121,6 +121,13 @@ def main(
     # to avoid mutating os.environ when the module is merely imported)
     load_dotenv()
 
+    # A run that looks stuck should say where it is: every thread's stack is
+    # dumped periodically (and on SIGUSR1), so "is it stuck, and in what" is a
+    # question the process answers itself rather than one to guess at.
+    from kosmos.core.diagnostics import install
+
+    install()
+
     ctx.ensure_object(dict)
     ctx.obj["verbose"] = verbose
     ctx.obj["debug"] = debug
@@ -407,6 +414,7 @@ def register_commands():
         ("config", "kosmos.cli.commands.config", "manage_config"),
         ("profile", "kosmos.cli.commands.profile", "profile_command"),
         ("graph", "kosmos.cli.commands.graph", "manage_graph"),
+        ("infer-task", "kosmos.cli.commands.infer_task", "infer_task_command"),
     ]
 
     import importlib

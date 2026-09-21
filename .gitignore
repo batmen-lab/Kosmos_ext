@@ -154,5 +154,56 @@ data/*.parquet
 data/*.h5
 # Donor-split CSVs used by the PPI / evidence experiments (hundreds of MB)
 data/csv_donor_splits/
+# Artifacts staged by the standalone datafetcher board (data + ledger)
+data/fetched/
 !data/benchmarks/
 CLAUDE.md
+
+
+# ---------------------------------------------------------------------------
+# Kosmos_ext: local runs, staged data and vendored copies
+# ---------------------------------------------------------------------------
+# Every `run.py` question writes a plan, a data report, figures, checkpoints
+# and pseudo-label tensors under artifacts/runs; a few weeks of testing is
+# 2 GB, and all of it is reproducible from the command that made it. The small
+# hand-written fixtures (`artifacts/baseline_run`, `artifacts/model_comparison`)
+# stay tracked.
+artifacts/runs/
+
+# Dated archive folders kept locally while the ppi/flow modules were rewritten
+# (`archived/ppi-signed-v1-2026-09-13`, `archived/removed-2026-09-14`).
+archived/*-20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
+
+# ToolUniverse is vendored into the workspace as a clone with its own .git
+# (163 MB). It is a dependency, not this repository's history: commit it as a
+# submodule, or delete its .git, before tracking it here.
+ToolUniverse/
+
+# What a fetch stages, in its own formats. Keyed by reference and re-created by
+# `datafetcher fetch`, so none of it belongs in git.
+data/**/*.h5ad
+data/**/*.h5ad.gz
+data/**/*.csv.gz
+data/**/*.mtx
+data/**/*.mtx.gz
+data/**/*.tar
+data/**/*.bw
+
+# Model checkpoints, pseudo-label tensors and matrices: always generated.
+*.npz
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# Crash dumps: a segfault inside torch/BLAS leaves a multi-gigabyte core file.
+core
+core.*
+*.core
+vgcore.*
+
+# Caches and state written by the tooling that runs in this workspace.
+.ruff_cache/
+.codex/
+.agents/
+*.egg-info/

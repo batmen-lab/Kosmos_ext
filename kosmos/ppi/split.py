@@ -1,17 +1,19 @@
 """Development splitting and identity checks; final-test evaluation is separate."""
 
+import logging
 from dataclasses import replace
 
 import numpy as np
-from sklearn.model_selection import GroupShuffleSplit, train_test_split
+from sklearn.model_selection import GroupShuffleSplit
 
 from .schemas import ExternalEvidenceDataset, GoldDataset
+
+logger = logging.getLogger(__name__)
 
 
 def split_gold(dataset: GoldDataset, validation_fraction=0.2, seed=42):
     if type(dataset) is not GoldDataset or dataset.role != "gold_train":
         raise ValueError("Only gold_train can be split for development")
-    indices = np.arange(len(dataset.X))
     if dataset.groups is not None:
         train, val = next(
             GroupShuffleSplit(n_splits=1, test_size=validation_fraction, random_state=seed).split(
@@ -19,9 +21,7 @@ def split_gold(dataset: GoldDataset, validation_fraction=0.2, seed=42):
             )
         )
     else:
-        train, val = train_test_split(
-            indices, test_size=validation_fraction, random_state=seed, stratify=dataset.y
-        )
+        train, val = stratified_split(dataset.y, validation_fraction, seed)
 
     def subset(idx, role):
         return replace(
@@ -34,6 +34,46 @@ def split_gold(dataset: GoldDataset, validation_fraction=0.2, seed=42):
         )
 
     return subset(train, "gold_train"), subset(val, "gold_validation")
+
+
+def stratified_split(
+    labels: np.ndarray, validation_fraction: float, seed: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """A split where every class in validation was also seen in training.
+
+    `train_test_split(stratify=...)` does not promise that: with a two-row class
+    both rows can land in validation, and the training loop then refuses the
+    split -- "Validation contains classes absent from gold training". In a
+    single-cell table (45 cell types over 2,000 cells) the rare classes are
+    exactly the ones the question is about, so each class gives up rows
+    proportionally and keeps at least one for training.
+    """
+    rng = np.random.default_rng(seed)
+    train_indices: list[int] = []
+    validation_indices: list[int] = []
+    held_out_nothing: list[str] = []
+    for label in np.unique(labels):
+        members = np.flatnonzero(labels == label)
+        rng.shuffle(members)
+        wanted = int(round(len(members) * validation_fraction))
+        # At least one row of every class stays in training: a class the model
+        # has never seen is not a validation case, it is a different problem.
+        take = min(wanted, max(0, len(members) - 1))
+        if take == 0:
+            held_out_nothing.append(str(label))
+        validation_indices.extend(int(index) for index in members[:take])
+        train_indices.extend(int(index) for index in members[take:])
+    if held_out_nothing:
+        logger.info(
+            "%d class(es) were too small to hold a row out for validation, e.g. "
+            "%s; they train and are not scored",
+            len(held_out_nothing),
+            held_out_nothing[:3],
+        )
+    return (
+        np.sort(np.asarray(train_indices, dtype=int)),
+        np.sort(np.asarray(validation_indices, dtype=int)),
+    )
 
 
 def validate_roles(train, validation, external):

@@ -20,10 +20,25 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# Optional sandbox import
+# Optional sandbox import. Import success is not enough to call the sandbox
+# available: this repository has a `docker/` directory at its root, so a bare
+# `import docker` inside the working tree resolves to that namespace package,
+# which has none of the client API. The name imports, `DockerSandbox()` then
+# raises `AttributeError: module 'docker' has no attribute 'errors'`, and every
+# experiment fails while the research loop still reports success. Requiring the
+# attribute makes the documented graceful fallback actually happen.
 try:
+    import docker as _docker_client
     from kosmos.execution.sandbox import DockerSandbox, SandboxExecutionResult
-    SANDBOX_AVAILABLE = True
+
+    SANDBOX_AVAILABLE = hasattr(_docker_client, "from_env")
+    if not SANDBOX_AVAILABLE:
+        logger.warning(
+            "The `docker` module resolves to %r, which has no client API. "
+            "Sandboxed execution is unavailable; install the docker package or "
+            "run with ENABLE_SANDBOXING=false.",
+            getattr(_docker_client, "__path__", None) or getattr(_docker_client, "__file__", None),
+        )
 except ImportError:
     SANDBOX_AVAILABLE = False
     logger.warning("Docker sandbox not available. Install docker package for sandboxed execution.")

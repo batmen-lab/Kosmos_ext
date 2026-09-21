@@ -7,6 +7,7 @@ identifying anomalies, and generating scientific insights.
 
 import logging
 import json
+import os
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timezone
 import numpy as np
@@ -17,6 +18,12 @@ from kosmos.models.result import ExperimentResult, ResultStatus, StatisticalTest
 from kosmos.models.hypothesis import Hypothesis
 
 logger = logging.getLogger(__name__)
+
+
+def _literature_enabled_by_default() -> bool:
+    """`USE_LITERATURE_CONTEXT`, for an agent built without a config."""
+    raw = os.getenv("USE_LITERATURE_CONTEXT", "true").strip().lower()
+    return raw not in ("0", "false", "no", "off")
 
 
 class ResultInterpretation:
@@ -141,7 +148,11 @@ class DataAnalystAgent(BaseAgent):
         super().__init__(agent_id, agent_type or "DataAnalystAgent", config)
 
         # Configuration
-        self.use_literature_context = self.config.get("use_literature_context", True)
+        # Same rule as the hypothesis generator: an agent built without a config
+        # follows `USE_LITERATURE_CONTEXT` rather than defaulting it on.
+        self.use_literature_context = self.config.get(
+            "use_literature_context", _literature_enabled_by_default()
+        )
         self.detailed_interpretation = self.config.get("detailed_interpretation", True)
         self.anomaly_detection_enabled = self.config.get("anomaly_detection_enabled", True)
         self.pattern_detection_enabled = self.config.get("pattern_detection_enabled", True)

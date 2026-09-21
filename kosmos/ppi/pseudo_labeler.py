@@ -1,20 +1,22 @@
 """Gold-only cross-fitting or reviewed frozen pretrained classifiers."""
 
 import copy
+import logging
+from collections import Counter
 from hashlib import sha256
-from typing import Protocol
 
 import numpy as np
 from sklearn.base import clone
-from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
+from sklearn.model_selection import (
+    GroupKFold,
+    KFold,
+    StratifiedGroupKFold,
+    StratifiedKFold,
+)
 
 from .schemas import PseudoLabeledGold
 
-
-class PseudoLabeler(Protocol):
-    def fit(self, X, y): ...
-    def predict(self, X): ...
-    def predict_proba(self, X): ...
+logger = logging.getLogger(__name__)
 
 
 class PretrainedPseudoLabeler:
@@ -74,7 +76,14 @@ def fingerprint(gold):
     return digest.hexdigest()
 
 
-def predictions(estimator, X, classes):
+def predictions(estimator, X, classes, task_type="classification"):
+    if task_type == "regression":
+        values = np.asarray(estimator.predict(X), dtype=float).reshape(-1)
+        if values.shape != (len(X),) or not np.isfinite(values).all():
+            raise ValueError(
+                "A regression teacher must predict one finite value per row"
+            )
+        return values, None
     y = np.asarray(estimator.predict(X))
     if y.shape != (len(X),) or not set(y).issubset(set(classes)):
         raise ValueError("Pseudo predictions must align with rows and target classes")
@@ -102,8 +111,9 @@ def predictions(estimator, X, classes):
 
 
 class PreparedPseudoLabeler:
-    def __init__(self, models, classes, gold, pseudo_gold, provenance):
+    def __init__(self, models, classes, gold, pseudo_gold, provenance, task_type="classification"):
         self.models, self.classes = models, classes
+        self.task_type = task_type
         self.gold_fingerprint = fingerprint(gold)
         self.gold_dataset_id = gold.dataset_id
         self.pseudo_gold = pseudo_gold
@@ -112,7 +122,14 @@ class PreparedPseudoLabeler:
         self.code_reference = provenance["code_reference"]
 
     def predict_with_probabilities(self, X):
-        outputs = [predictions(m, X, self.classes) for m in self.models]
+        outputs = [
+            predictions(m, X, self.classes, self.task_type) for m in self.models
+        ]
+        if self.task_type == "regression":
+            # The fold models predict values; their mean is the teacher's
+            # prediction, and there is no distribution to call "soft".
+            stacked = np.stack([values for values, _ in outputs])
+            return stacked.mean(axis=0), None
         if all(p is not None for _, p in outputs):
             prob = np.mean([p for _, p in outputs], axis=0)
             return self.classes[prob.argmax(1)], prob
@@ -130,8 +147,12 @@ def prepare_pseudo_labeler(gold, estimator, config):
         if estimator.provenance["settings"] != pseudo_settings(config):
             raise ValueError("Prepared pseudo-labeler settings differ from experiment config")
         return estimator
-    classes = np.unique(gold.y)
-    if len(classes) < 2:
+    regression = getattr(config, "task_type", "classification") == "regression"
+    classes = None if regression else np.unique(gold.y)
+    if regression:
+        if len(gold.y) < 2:
+            raise ValueError("Regression requires at least two gold training rows")
+    elif len(classes) < 2:
         raise ValueError("Classification requires at least two gold training classes")
     models, folds = [], []
     probabilities = None
@@ -143,7 +164,9 @@ def prepare_pseudo_labeler(gold, estimator, config):
         if estimator.training_sample_ids.intersection(gold.sample_ids):
             raise ValueError("Pretrained training samples overlap gold correction examples")
         model = copy.deepcopy(estimator)
-        y_pred, probabilities = predictions(model, gold.X, classes)
+        y_pred, probabilities = predictions(
+            model, gold.X, classes, "regression" if regression else "classification"
+        )
         models.append(model)
         provenance = {
             "model_reference": estimator.model_reference,
@@ -169,26 +192,75 @@ def prepare_pseudo_labeler(gold, estimator, config):
 
         if config.pseudo_mode == "in_sample":
             model = fit(np.arange(len(gold.X)), 0)
-            y_pred, probabilities = predictions(model, gold.X, classes)
+            y_pred, probabilities = predictions(
+                model, gold.X, classes, "regression" if regression else "classification"
+            )
+            models.append(model)
+        elif not regression and min(Counter(gold.y.tolist()).values()) < 2:
+            # A class with one row cannot be held out and kept at the same time,
+            # and `StratifiedKFold` will not try. Rather than refuse the run --
+            # a single-cell table's rarest cell type is exactly what the question
+            # is about -- the teacher is trained on all the labeled rows, as
+            # `in_sample` does, and the provenance says so.
+            logger.warning(
+                "the rarest of %d classes has a single row, so no cross-fit fold "
+                "can hold it out; the pseudo-label teacher is fitted in-sample "
+                "instead (pseudo_mode=in_sample)",
+                len(classes),
+            )
+            model = fit(np.arange(len(gold.X)), 0)
+            y_pred, probabilities = predictions(
+                model, gold.X, classes, "classification"
+            )
             models.append(model)
         else:
-            if gold.groups is None:
-                splitter = StratifiedKFold(
-                    config.cross_fit_folds, shuffle=True, random_state=config.seed
+            if regression:
+                # There are no strata to keep: KFold still holds every row out
+                # exactly once, which is the property cross-fitting needs.
+                splitter = (
+                    GroupKFold(config.cross_fit_folds)
+                    if gold.groups is not None
+                    else KFold(config.cross_fit_folds, shuffle=True, random_state=config.seed)
                 )
+            elif gold.groups is None:
+                # `StratifiedKFold` needs at least one row of every class in
+                # every fold. A single-cell table has 45 cell types over 2,000
+                # cells and several of them are rarer than that, so the fold
+                # count comes down to what the rarest class can carry. Below two
+                # there is no cross-fit to do at all -- the teacher then sees all
+                # the labeled rows, which is what `in_sample` means.
+                counts = Counter(gold.y.tolist())
+                usable = min([config.cross_fit_folds, *counts.values()])
+                splitter = StratifiedKFold(
+                    usable, shuffle=True, random_state=config.seed
+                )
+                if usable < config.cross_fit_folds:
+                    logger.info(
+                        "cross-fit folds reduced from %d to %d: the rarest class has "
+                        "%d row(s)",
+                        config.cross_fit_folds,
+                        usable,
+                        min(counts.values()),
+                    )
             else:
                 splitter = StratifiedGroupKFold(
                     config.cross_fit_folds, shuffle=True, random_state=config.seed
                 )
-            y_pred = np.empty_like(gold.y)
+            y_pred = (
+                np.zeros(len(gold.X), dtype=float)
+                if regression
+                else np.empty_like(gold.y)
+            )
             covered = np.zeros(len(gold.X), dtype=int)
             for fold, (train, holdout) in enumerate(splitter.split(gold.X, gold.y, gold.groups)):
-                if set(gold.y[train]) != set(classes):
+                if not regression and set(gold.y[train]) != set(classes):
                     raise ValueError(
                         "Every cross-fit training fold must contain every target class"
                     )
                 model = fit(train, fold)
-                pred, prob = predictions(model, gold.X[holdout], classes)
+                pred, prob = predictions(
+                    model, gold.X[holdout], classes, "regression" if regression else "classification"
+                )
                 models.append(model)
                 y_pred[holdout], covered[holdout] = pred, covered[holdout] + 1
                 if prob is not None:
@@ -216,7 +288,7 @@ def prepare_pseudo_labeler(gold, estimator, config):
         gold_prediction_mode=config.pseudo_mode,
         external_prediction_mode="fold_ensemble" if len(models) > 1 else "single_model",
     )
-    if config.pseudo_targets == "soft" and probabilities is None:
+    if config.pseudo_targets == "soft" and probabilities is None and not regression:
         raise ValueError("Soft pseudo targets require predict_proba")
     return PreparedPseudoLabeler(
         models,
@@ -226,6 +298,7 @@ def prepare_pseudo_labeler(gold, estimator, config):
             gold.X.copy(), gold.y.copy(), y_pred, probabilities, gold.sample_ids.copy()
         ),
         provenance,
+        "regression" if regression else "classification",
     )
 
 

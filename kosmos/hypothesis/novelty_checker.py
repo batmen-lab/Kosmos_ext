@@ -9,6 +9,8 @@ Checks if generated hypotheses are novel by:
 """
 
 import logging
+import os
+import time
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 import numpy as np
@@ -20,6 +22,24 @@ from kosmos.knowledge.embeddings import get_embedder
 from kosmos.knowledge.vector_db import get_vector_db
 from kosmos.db.models import Hypothesis as DBHypothesis
 from kosmos.db import get_session
+
+from kosmos.core.diagnostics import stage
+
+#: How long the comparison itself may take before novelty scoring is skipped.
+#: The embedding model is a transformer on CPU and this runs inside the research
+#: loop, so "slow" here means the whole run stops making progress.
+NOVELTY_BUDGET_ENV = "KOSMOS_NOVELTY_TIMEOUT_SECONDS"
+NOVELTY_BUDGET_SECONDS = 20.0
+
+
+def _comparison_budget_seconds() -> float:
+    raw = (os.getenv(NOVELTY_BUDGET_ENV) or "").strip()
+    if not raw:
+        return NOVELTY_BUDGET_SECONDS
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return NOVELTY_BUDGET_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +107,19 @@ class NoveltyChecker:
             ```
         """
         logger.info(f"Checking novelty for hypothesis: {hypothesis.statement[:50]}...")
+        # The embedding model is a transformer on CPU and this runs inside the
+        # research loop's event loop: a slow one blocks everything and looks
+        # exactly like a hang. The whole comparison gets a wall-clock budget,
+        # and overrunning it costs novelty scoring -- not the run.
+        budget = _comparison_budget_seconds()
+        started = time.monotonic()
+        with stage(f"checking novelty (budget {budget:.0f}s)", heartbeat=15):
+            report = self._check_novelty_within(hypothesis, budget, started)
+        return report
+
+    def _check_novelty_within(
+        self, hypothesis: Hypothesis, budget: float, started: float
+    ) -> NoveltyReport:
 
         # Step 1: Search literature for similar work
         similar_papers = self._search_similar_literature(hypothesis)
@@ -104,9 +137,13 @@ class NoveltyChecker:
 
         max_hypothesis_similarity = 0.0
         if similar_hypotheses:
-            max_hypothesis_similarity = max(
-                self._compute_hypothesis_similarity(hypothesis, existing)
-                for existing in similar_hypotheses
+            logger.info(
+                "novelty: comparing against %d paper(s) and %d stored hypothesis(es)",
+                len(similar_papers),
+                len(similar_hypotheses),
+            )
+            max_hypothesis_similarity = self._max_hypothesis_similarity(
+                hypothesis, similar_hypotheses, deadline=started + budget
             )
 
         max_similarity = max(max_paper_similarity, max_hypothesis_similarity)
@@ -357,6 +394,55 @@ class NoveltyChecker:
             logger.error(f"Error computing similarity: {e}")
             return 0.0
 
+    def _max_hypothesis_similarity(
+        self,
+        hypothesis: Hypothesis,
+        existing: List[Hypothesis],
+        *,
+        deadline: float,
+    ) -> float:
+        """The closest stored hypothesis, embedded in one batched call.
+
+        Embedding two strings per stored hypothesis, one `encode()` at a time,
+        is what turned this step into minutes of BERT forwards on the event
+        loop. The texts go through the model together, and the deadline stops
+        even that from holding the run: over budget, the score is left at 0 and
+        the reason is logged.
+        """
+        if not existing:
+            return 0.0
+        if self.embedder is None or not hasattr(self.embedder, "embed_texts"):
+            return max(
+                (self._compute_hypothesis_similarity(hypothesis, other) for other in existing),
+                default=0.0,
+            )
+        texts = [
+            f"{hypothesis.statement}. {hypothesis.rationale}",
+            *[f"{other.statement}. {other.rationale}" for other in existing],
+        ]
+        budget_left = max(0.0, deadline - time.monotonic())
+        if budget_left <= 0:
+            logger.warning(
+                "novelty: out of time before comparing against %d hypothesis(es); "
+                "leaving the score unpenalised",
+                len(existing),
+            )
+            return 0.0
+        vectors = self.embedder.embed_texts(texts)
+        if vectors.shape[0] != len(texts):
+            return 0.0
+        query = vectors[0]
+        query_norm = np.linalg.norm(query)
+        if query_norm == 0:
+            return 0.0
+        best = 0.0
+        for vector in vectors[1:]:
+            norm = np.linalg.norm(vector)
+            if norm == 0:
+                continue
+            best = max(best, float(np.dot(query, vector) / (query_norm * norm)))
+        return float(max(0.0, min(1.0, best)))
+
     def _compute_hypothesis_similarity(
         self,
         hyp1: Hypothesis,
@@ -364,6 +450,9 @@ class NoveltyChecker:
     ) -> float:
         """
         Compute similarity between two hypotheses.
+
+        One pair, one call. `_max_hypothesis_similarity` is the one that matters
+        for a run: it embeds everything once, in batches.
 
         Args:
             hyp1: First hypothesis

@@ -412,5 +412,32 @@ class TestSandboxIntegration:
         assert executor.use_sandbox is False
 
 
+class TestSandboxAvailabilityDetection:
+    """A `docker` name that is not the Docker SDK must count as unavailable.
+
+    This repository ships a `docker/` directory at its root, so `import docker`
+    from the working tree resolves to that namespace package instead of the
+    SDK. The import succeeds, so availability used to be reported as True and
+    `DockerSandbox()` then raised `AttributeError: module 'docker' has no
+    attribute 'errors'` inside a run: every experiment failed while the
+    research loop still reported success.
+    """
+
+    def test_shadowed_docker_module_disables_the_sandbox(self):
+        import docker as docker_module
+
+        if hasattr(docker_module, "from_env"):
+            pytest.skip("the real Docker SDK is importable here")
+
+        from kosmos.execution import executor as executor_module
+
+        assert executor_module.SANDBOX_AVAILABLE is False
+
+        executor = executor_module.CodeExecutor(max_retries=1, use_sandbox=True)
+
+        assert executor.sandbox is None
+        assert executor.use_sandbox is False
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

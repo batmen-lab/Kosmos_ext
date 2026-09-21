@@ -1,0 +1,10 @@
+.venv/bin/python run.py \
+  "Determine how environmental parameters during spin coating and thermal annealing affect perovskite solar-cell efficiency." \
+  --domain materials \
+  --intent "perovskite solar cell fabrication database with spin-coating and annealing conditions (humidity, temperature, time, solvent, antisolvent) and device power conversion efficiency as a direct CSV link" \
+  --hint PCE --hint efficiency --hint "power conversion efficiency" \
+  --exclude-col id \
+  --fetch-limit 4 \
+  --model-design linear \
+  --max-epochs 8 --patience 3 \
+  --plan-only

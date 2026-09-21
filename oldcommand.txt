@@ -1,0 +1,188 @@
+================================================================================
+oldcommand.txt -- Kosmos_ext: the commands we have actually run so far
+================================================================================
+
+Working directory for every command:  cd /home/ydong233/Kosmos_ext
+All python is the project venv:        .venv/bin/python
+
+
+--------------------------------------------------------------------------------
+0. Environment preamble for single-cell runs
+--------------------------------------------------------------------------------
+export REQUIRE_NOVELTY_CHECK=false      # novelty check embeds with a transformer
+export USE_LITERATURE_CONTEXT=false     # no arxiv/pubmed/s2 round trips
+export KOSMOS_STALL_REPORT_SECONDS=300  # dump every thread's stack if it stalls
+export KOSMOS_TORCH_THREADS=4           # keep BLAS/MKL from oversubscribing
+
+
+--------------------------------------------------------------------------------
+1. Data inspection / fetching helpers (no training)
+--------------------------------------------------------------------------------
+# what a reference holds, with sizes, before downloading anything
+.venv/bin/python -m datafetcher list-files geo://GSE194122
+.venv/bin/python -m datafetcher list-files geo://GSE84133
+.venv/bin/python -m datafetcher list-files hf://cfy2yue/perturbseq_normalized
+
+# download one artifact and, for single-cell, the derived one-row-per-cell table
+.venv/bin/python -m datafetcher fetch "geo://GSE84133#suppl/GSE84133_RAW.tar"
+.venv/bin/python -m datafetcher fetch \
+  "hf://cfy2yue/perturbseq_normalized#scPeturb/model_ready/chempert/mcfarland2020__mixseq__bicr31__trametinib_timecourse__3h.h5ad"
+# re-fetching a file already on disk rebuilds its `-table.csv` from the staged
+# bytes (no download) -- that is how a stale converted table is refreshed
+.venv/bin/python -m datafetcher fetch \
+  "hf://cfy2yue/perturbseq_normalized#scPeturb/model_ready/chempert/aissa2021__pc9_xenograft__72h.h5ad"
+
+# what is already staged (reuse means these are not downloaded again)
+.venv/bin/python -m datafetcher list
+.venv/bin/python -m datafetcher ledger -n 20
+
+# read a finished run
+.venv/bin/python scripts/show_run.py artifacts/runs/<name>/run
+
+
+--------------------------------------------------------------------------------
+2. BMMC cell type -- GSE194122 (the first full single-cell run)
+--------------------------------------------------------------------------------
+.venv/bin/python run.py \
+  "Can the cell type of a bone-marrow mononuclear cell be predicted from its gene-expression profile, and do unlabeled cells measured by a different assay of the same tissue improve the prediction?" \
+  --domain biology \
+  --intent "single-cell RNA-seq of bone-marrow mononuclear cells from GSE194122 (openproblems BMMC); the processed per-assay .h5ad.gz supplementary files, one row per cell with genes as columns and a cell_type column" \
+  --hint cell_type --hint celltype \
+  --fetch-limit 2 --supp-limit 2 \
+  --max-download-mb 4000 --max-bytes 3200000000 \
+  --min-shared-fraction 0.05 \
+  --max-epochs 3 --patience 2 \
+  --out artifacts/runs/bmmc-full
+# -> 1 gold (cite, 14,088 columns) + 1 supplementary (multiome), 12,073 shared,
+#    mode=ppi, test acc 0.704 -> 0.694 (the augmentation did not help here)
+
+
+--------------------------------------------------------------------------------
+3. BMMC -- training half only, from a plan file the pipeline already wrote
+--------------------------------------------------------------------------------
+PPI_OUTPUT_DIR=artifacts/runs/bmmc/run \
+.venv/bin/python -m kosmos.cli.main run \
+  "Can the cell type of a bone-marrow mononuclear cell be predicted from its gene-expression profile, and do unlabeled cells measured by a different assay of the same tissue improve the prediction?" \
+  --domain biology --max-iterations 1 --budget 3.0 \
+  --data-plan artifacts/runs/bmmc/plan.json --yes
+
+
+--------------------------------------------------------------------------------
+4. Islet cell type -- GSE84133: plan only (no training)
+--------------------------------------------------------------------------------
+.venv/bin/python run.py \
+  "Can the cell type of a pancreatic islet cell be predicted from its gene expression, and do unlabeled cells from another donor improve the prediction?" \
+  --domain biology \
+  --intent "single-cell RNA-seq of human pancreatic islets from GSE84133, one row per cell with gene count columns and an assigned_cluster/cell-type column; the supplementary per-donor CSV files are ideal" \
+  --hint assigned_cluster --hint cell_type --hint cluster \
+  --fetch-limit 2 --supp-limit 2 \
+  --max-download-mb 400 --archive-members 12 \
+  --max-epochs 12 --patience 4 \
+  --plan-only \
+  --out artifacts/runs/islet-check
+# -> gold = human1 (1,937 cells x 20,125 genes), supp = human2/3/4 (all 20,125
+#    columns shared); the two mouse samples are refused (cross-species guard)
+
+
+--------------------------------------------------------------------------------
+5. Islet -- train from that plan (per-source single-cell preprocessing)
+--------------------------------------------------------------------------------
+PPI_OUTPUT_DIR=artifacts/runs/islet-sc/run \
+.venv/bin/python -m kosmos.cli.main run \
+  "Can the cell type of a pancreatic islet cell be predicted from its gene expression, and do unlabeled cells from another donor improve the prediction?" \
+  --domain biology --max-iterations 1 --budget 3.0 \
+  --data-plan artifacts/runs/islet-check/plan.json --yes
+# -> mode=ppi, 2,000-gene panel (2000 HVG per source, ranked across sources),
+#    6,632 external cells; run/preprocessing.md + run/figures/ (6 panels)
+
+
+--------------------------------------------------------------------------------
+6. Islet rare cell types -- full pipeline, a different scientific question
+--------------------------------------------------------------------------------
+.venv/bin/python run.py \
+  "Are rare pancreatic islet cell types predicted as accurately as common ones from single-cell expression, and do unlabeled cells from other donors improve the rare-type predictions?" \
+  --domain biology \
+  --intent "single-cell RNA-seq of human pancreatic islets from GSE84133, one row per cell with gene count columns and an assigned_cluster/cell-type column; the per-donor CSV files (human1..human4) are ideal" \
+  --hint assigned_cluster --hint cell_type --hint cluster \
+  --fetch-limit 2 --supp-limit 3 \
+  --max-download-mb 400 --archive-members 12 \
+  --min-shared-fraction 0.05 \
+  --max-epochs 3 --patience 2 \
+  --out artifacts/runs/islet-rare
+# -> test acc 0.9871 -> 0.9897, balanced 0.8905 -> 0.8940; per-class table shows
+#    the rare types (mast n=1, schwann n=1, epsilon n=2, ...)
+
+
+--------------------------------------------------------------------------------
+7. BMMC technical batch (site/donor) instead of cell type -- signed loss
+--------------------------------------------------------------------------------
+.venv/bin/python run.py \
+  "Can the technical batch (sequencing site and donor) of a bone-marrow mononuclear cell be predicted from its gene-expression profile, and do unlabeled cells measured by another assay improve the prediction?" \
+  --domain biology \
+  --intent "single-cell RNA-seq of bone-marrow mononuclear cells from GSE194122; one row per cell with gene count columns and a technical batch/donor column ('batch', values like s1d1) from the .h5ad obs" \
+  --hint batch --hint donor --hint donor_id --hint sample_id \
+  --fetch-limit 2 --supp-limit 2 \
+  --max-download-mb 4000 --max-bytes 3200000000 \
+  --min-shared-fraction 0.05 \
+  --loss signed --lambda 0.5 \
+  --max-epochs 4 --patience 2 \
+  --out artifacts/runs/bmmc-batch
+
+
+--------------------------------------------------------------------------------
+8. Perturbation (drug) -- NEW data, McFarland MIX-seq via the CellClip release
+--------------------------------------------------------------------------------
+# label column: obs['compound_1'] (drug), also obs['condition']; cell line: obs['cell_context']
+.venv/bin/python run.py \
+  "Can the drug a cancer cell was treated with be predicted from its transcriptome, and do unlabeled cells from another cell line improve the prediction?" \
+  --domain biology \
+  --intent "model-ready perturb-seq h5ad tables from the McFarland 2020 MIX-seq screens (CellClip release, hf://cfy2yue/perturbseq_normalized#scPeturb/model_ready/chempert/...): one row per cell with gene counts, the drug in obs['compound_1'] (or obs['condition']), and the cell line in obs['cell_context']; each experiment file is 7-25 MB" \
+  --hint compound_1 --hint condition --hint compound_2 \
+  --exclude-col cell_id --exclude-col batch_id \
+  --fetch-limit 3 --supp-limit 3 \
+  --max-download-mb 800 --max-bytes 400000000 \
+  --min-shared-fraction 0.2 \
+  --loss signed --lambda 0.5 \
+  --max-epochs 4 --patience 2 \
+  --out artifacts/runs/perturbation-drug
+
+
+--------------------------------------------------------------------------------
+9. Checks we run after changing code
+--------------------------------------------------------------------------------
+.venv/bin/python -m pytest -o addopts="" tests/datafetcher tests/unit/discovery \
+  tests/unit/ppi tests/unit/evidence tests/unit/execution/test_executor.py \
+  tests/unit/cli/test_data_plan.py tests/unit/cli/test_auto_task_run_helpers.py \
+  -q -p no:logging
+.venv/bin/python -m ruff check datafetcher kosmos/ppi scripts/auto_task_run.py run.py
+
+
+--------------------------------------------------------------------------------
+10. Loss / preprocessing switches (for reference)
+--------------------------------------------------------------------------------
+# loss:      --loss plain | signed | gold-plus-synthetic | gradient-gated
+#            (env PPI_LOSS_MODE; the env value uses underscores)
+#             signed              = PPI correction (has the negative term), the config default
+#             plain               = pseudo-label distillation (needs soft targets, joint schedule)
+#             gold-plus-synthetic = L_G + lambda*L_S, the naive baseline the gate replaces
+#             gradient-gated      = g_G + lambda_t*g_S, lambda_t = max(0, cos(g_G,g_S))
+#                                   * min(1, kappa*||g_G|| / ||g_S||)
+# lambda:    --lambda 0.5                   (env PPI_LAMBDA)
+# gate:      --gate-kappa 1.0 --gate-scope batch|sample --gate-gamma 1.0 --gate-lambda 1.0
+#            (env PPI_GATE_KAPPA / PPI_GATE_SCOPE / PPI_GATE_GAMMA / PPI_GATE_LAMBDA;
+#             the gate's own knobs live in ppi_summary.json -> training.gate and in
+#             training_log.jsonl per epoch: cosine, weight, active fraction, grad norms)
+# pseudo:    --pseudo-mode cross_fit|in_sample|pretrained
+# single cell preprocessing (per source):
+#   PPI_SINGLE_CELL_PREPROCESS=auto|on|off       PPI_SINGLE_CELL_TOP_GENES=2000
+#   PPI_SINGLE_CELL_TARGET_SUM=10000             PPI_SINGLE_CELL_MIN_CELLS=3
+#   PPI_SINGLE_CELL_FIGURES=true
+# gating:    --min-shared-features 2 --min-shared-fraction 0.5
+#            KOSMOS_ALLOW_CROSS_SPECIES=1  (only with a real ortholog mapping)
+
+# the stress test: corrupt the synthetic labels, hold everything else fixed
+.venv/bin/python scripts/gradient_gate_stress.py --out artifacts/runs/gate-stress
+#   -> report.md, results.json (per-epoch gate diagnostics), figures/gate_stress.png
+# the same thing through the training entry point, without the full pipeline:
+.venv/bin/python -m kosmos.ppi.train --synthetic \
+  --config /tmp/gate-config.json --output-dir /tmp/gate-entry

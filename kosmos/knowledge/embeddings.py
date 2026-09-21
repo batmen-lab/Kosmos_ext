@@ -178,6 +178,37 @@ class PaperEmbedder:
             # Return zero vectors on error
             return np.zeros((len(papers), self.embedding_dim), dtype=np.float32)
 
+    def embed_texts(
+        self,
+        texts: List[str],
+        *,
+        batch_size: int = 32,
+    ) -> np.ndarray:
+        """Embed several strings in one call.
+
+        One `encode()` per string is how a novelty check turns into minutes of
+        CPU: sentence-transformers batches internally, and a transformer forward
+        costs far more per call than per row. A dozen comparisons used to be two
+        dozen forwards.
+        """
+        if not texts:
+            return np.zeros((0, self.embedding_dim), dtype=np.float32)
+        if self.model is None:
+            logger.warning("Embedding model not available. Returning zero vectors.")
+            return np.zeros((len(texts), self.embedding_dim), dtype=np.float32)
+        try:
+            return np.asarray(
+                self.model.encode(
+                    list(texts),
+                    batch_size=batch_size,
+                    convert_to_numpy=True,
+                    show_progress_bar=False,
+                )
+            )
+        except Exception as e:  # noqa: BLE001 - a caller can fall back
+            logger.error(f"Error embedding texts: {e}")
+            return np.zeros((len(texts), self.embedding_dim), dtype=np.float32)
+
     def embed_query(self, query: str) -> np.ndarray:
         """
         Generate embedding for a search query.

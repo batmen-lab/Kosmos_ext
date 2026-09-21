@@ -13,8 +13,10 @@ import sys
 import time
 import logging
 import asyncio
+import json
 import os
-from typing import Optional
+from dataclasses import dataclass
+from typing import List, Optional
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -49,6 +51,108 @@ from kosmos.core.stage_tracker import get_stage_tracker
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class ResolvedPlan:
+    """A data plan, read into the values a run needs."""
+
+    target_column: Optional[str]
+    #: classification | regression -- what kind of label `target_column` is.
+    task_type: str
+    #: The exact feature columns the run trains on. The plan writes the primary
+    #: gold's own list here, which is what lets a table with a few unusable
+    #: columns still be used.
+    feature_columns: Optional[List[str]]
+    #: Per supplementary table: its column name -> the gold's, for columns that
+    #: name the same measurement in a different spelling. The plan matched them.
+    supplementary_renames: dict
+    feature_prefixes: Optional[List[str]]
+    exclude_columns: Optional[List[str]]
+    sample_id_column: Optional[str]
+    labeled_paths: List[str]
+    supplementary_paths: List[str]
+    summary_lines: List[str]
+
+
+def resolve_data_plan(
+    plan_path: Path,
+    *,
+    target_column: Optional[str] = None,
+    feature_prefixes: Optional[List[str]] = None,
+    exclude_columns: Optional[List[str]] = None,
+    sample_id_column: Optional[str] = None,
+    extra_supplementary: Optional[List[str]] = None,
+) -> ResolvedPlan:
+    """Read a `datafetcher plan` file. Explicit arguments win over the file.
+
+    Kosmos does not import the fetcher: the plan is a JSON contract, and this
+    function is the only place its shape is known. A plan with no gold table is
+    refused rather than run -- a run with nothing labeled would quietly become
+    "train on pseudo-labels", which is the one thing this design rules out.
+    """
+    plan = json.loads(Path(plan_path).read_text(encoding="utf-8"))
+    plan_task = plan.get("task") or {}
+    gold = [entry["path"] for entry in plan.get("gold", []) if entry.get("path")]
+    supplementary = [
+        entry["path"] for entry in plan.get("supplementary", []) if entry.get("path")
+    ]
+    if not gold:
+        raise ValueError(
+            f"{plan_path} has no gold tables, so there is nothing to train on. "
+            f"Run `python -m datafetcher roles` on the candidates to see why, "
+            f"then rebuild the plan."
+        )
+    merged_supplementary = list(
+        dict.fromkeys(list(extra_supplementary or []) + supplementary)
+    )
+    prefixes = list(feature_prefixes or plan_task.get("feature_prefixes") or [])
+    excludes = list(exclude_columns or plan_task.get("exclude_columns") or [])
+    features = list(plan_task.get("feature_columns") or [])
+    renames = {
+        str(entry["path"]): dict(entry.get("column_renames") or {})
+        for entry in plan.get("supplementary", [])
+        if entry.get("column_renames")
+    }
+    resolved_target = target_column or plan_task.get("target_column")
+    gold_features = list(((plan.get("gold") or [{}])[0]).get("features") or [])
+    feature_line = (
+        f"  features      : {len(features)} column(s) "
+        f"{features[:8]}{' ...' if len(features) > 8 else ''}"
+        if features
+        else f"  features      : prefixes={prefixes} exclude={excludes}"
+    )
+    if features and len(features) < len(gold_features):
+        # Both arms train on this narrower list: it is the intersection with the
+        # evidence, and saying so is what keeps the two-arm comparison readable.
+        feature_line += (
+            f" [dim](the intersection with the evidence; the gold has "
+            f"{len(gold_features)})[/dim]"
+        )
+    lines = [
+        f"  target column : [cyan]{resolved_target}[/cyan] "
+        f"(source: {plan_task.get('target_source')}, "
+        f"confidence: {plan_task.get('target_confidence')})",
+        feature_line,
+        f"  labeled       : {len(gold)} table(s)",
+        *[f"      {path}" for path in gold],
+        f"  supplementary : {len(merged_supplementary)} table(s)",
+        *[f"      {path}" for path in merged_supplementary],
+    ]
+    if plan.get("unusable"):
+        lines.append(f"  unusable      : {len(plan['unusable'])} table(s) excluded")
+    return ResolvedPlan(
+        target_column=resolved_target,
+        task_type=str(plan_task.get("task_type") or "classification"),
+        feature_columns=features or None,
+        supplementary_renames=renames,
+        feature_prefixes=prefixes,
+        exclude_columns=excludes,
+        sample_id_column=sample_id_column or plan_task.get("sample_id_column"),
+        labeled_paths=gold,
+        supplementary_paths=merged_supplementary,
+        summary_lines=lines,
+    )
+
+
 def run_research(
     question: Optional[str] = typer.Argument(None, help="Research question to investigate"),
     domain: Optional[str] = typer.Option(None, "--domain", "-d", help="Research domain (biology, neuroscience, materials, etc.)"),
@@ -58,7 +162,50 @@ def run_research(
     external_data_path: Optional[Path] = typer.Option(
         None,
         "--external-data-path",
-        help="Optional unlabeled external CSV used as PPI evidence (PPILoss path)",
+        help="Optional unlabeled CSV used as PPI supplementary evidence",
+    ),
+    task_target_column: Optional[str] = typer.Option(
+        None,
+        "--task-target-column",
+        help="Label column to predict. Declaring it turns the run into a training task",
+    ),
+    task_type: Optional[str] = typer.Option(
+        None,
+        "--task-type",
+        help=(
+            "classification or regression. A plan carries its own; this overrides it"
+        ),
+    ),
+    task_feature_prefix: Optional[List[str]] = typer.Option(
+        None,
+        "--task-feature-prefix",
+        help="Keep feature columns starting with this (repeatable, e.g. ENSG)",
+    ),
+    task_exclude_column: Optional[List[str]] = typer.Option(
+        None,
+        "--task-exclude-column",
+        help="Never a feature: identifiers, metadata, other labels (repeatable)",
+    ),
+    task_sample_id_column: Optional[str] = typer.Option(
+        None,
+        "--task-sample-id-column",
+        help="Column holding per-row identifiers (default: <table>:<row>)",
+    ),
+    task_test_path: Optional[Path] = typer.Option(
+        None,
+        "--task-test-path",
+        help="Labeled table to use as the final test set instead of a random slice",
+    ),
+    data_plan: Optional[Path] = typer.Option(
+        None,
+        "--data-plan",
+        help="Plan JSON from `python -m datafetcher plan`: supplies the task, the "
+        "labeled tables and the supplementary tables",
+    ),
+    assume_yes: bool = typer.Option(
+        False,
+        "--yes",
+        help="Do not ask before running a task read from a plan file",
     ),
     no_cache: bool = typer.Option(False, "--no-cache", help="Disable caching"),
     interactive: bool = typer.Option(False, "--interactive", help="Use interactive mode"),
@@ -122,6 +269,73 @@ def run_research(
     if external_data_path and not external_data_path.exists():
         print_error(f"External data file not found: {external_data_path}")
         raise typer.Exit(1)
+    if task_test_path and not task_test_path.exists():
+        print_error(f"Test data file not found: {task_test_path}")
+        raise typer.Exit(1)
+    if data_plan and not data_plan.exists():
+        print_error(f"Data plan not found: {data_plan}")
+        raise typer.Exit(1)
+
+    # A plan supplies the task and the tables. Explicit flags still win, so a
+    # plan can be corrected on the command line without editing the file.
+    task_labeled_paths: List[str] = []
+    task_supplementary_paths: List[str] = list(
+        [str(external_data_path.resolve())] if external_data_path else []
+    )
+    # `--task-feature-prefix` / `--exclude-column` still apply when there is no
+    # plan; a plan's own feature list replaces them.
+    plan_feature_columns: List[str] = []
+    plan_supplementary_renames: dict = {}
+    if data_plan:
+        try:
+            resolved = resolve_data_plan(
+                data_plan,
+                target_column=task_target_column,
+                feature_prefixes=task_feature_prefix,
+                exclude_columns=task_exclude_column,
+                sample_id_column=task_sample_id_column,
+                extra_supplementary=task_supplementary_paths,
+            )
+        except ValueError as e:
+            print_error(str(e))
+            raise typer.Exit(1) from e
+        task_target_column = resolved.target_column
+        # The plan says what kind of label it found; a caller can still override.
+        task_type = task_type or resolved.task_type
+        plan_feature_columns = resolved.feature_columns
+        plan_supplementary_renames = resolved.supplementary_renames
+        task_feature_prefix = resolved.feature_prefixes
+        task_exclude_column = resolved.exclude_columns
+        task_sample_id_column = resolved.sample_id_column
+        task_labeled_paths = resolved.labeled_paths
+        task_supplementary_paths = resolved.supplementary_paths
+        if not data_path:
+            data_path = Path(resolved.labeled_paths[0])
+
+        # The confirmation gate. Nothing here is about data access: it is about
+        # the one decision that can be wrong -- which column is the label.
+        console.print()
+        console.print("[bold]Task from plan[/bold]")
+        for line in resolved.summary_lines:
+            console.print(line)
+        if not assume_yes:
+            if not sys.stdin.isatty():
+                print_error(
+                    "a plan file needs confirmation before training; re-run with "
+                    "--yes to accept it non-interactively"
+                )
+                raise typer.Exit(1)
+            if not typer.confirm("Train on this task?", default=True):
+                console.print("[warning]Cancelled.[/warning]")
+                raise typer.Exit(0)
+
+    # The default has to be applied after the plan is read, or it overwrites the
+    # plan's own answer: a regression plan read as classification sends a
+    # continuous label through the class-based trainer, which refuses it as
+    # "classes absent from gold training" and leaves the run with no artifacts.
+    # Without a plan there is nobody to say otherwise, and classification is what
+    # every flag-based run has always been.
+    task_type = task_type or "classification"
 
     # Show starting message
     console.print()
@@ -195,9 +409,30 @@ def run_research(
 
             # Dataset path
             "data_path": str(data_path.resolve()) if data_path else None,
+            # Labeled tables to pool (from a plan); data_path stays the first
+            # one so every existing reader keeps working.
+            "task_labeled_paths": task_labeled_paths,
+            "ppi_supplementary_paths": task_supplementary_paths,
             "ppi_external_data_path": (
                 str(external_data_path.resolve()) if external_data_path else None
             ),
+            # Training task: the label column plus how to pick features. With
+            # this declared, the run trains a predictor (supervised, or
+            # PPI-augmented when supplementary data is supplied).
+            "task_target_column": task_target_column,
+            # classification | regression: the plan decided it (the model read
+            # the question and the rules checked the column), unless the caller
+            # overrode it on the command line.
+            "task_type": task_type,
+            "task_feature_prefixes": list(task_feature_prefix or []),
+            # The plan's own feature list: the primary gold's columns. Without
+            # it the trainer would take every column that is not the target,
+            # including the free-text ones the plan decided to leave out.
+            "task_feature_columns": list(plan_feature_columns or []),
+            "ppi_supplementary_renames": dict(plan_supplementary_renames or {}),
+            "task_exclude_columns": list(task_exclude_column or []),
+            "task_sample_id_column": task_sample_id_column,
+            "ppi_test_path": str(task_test_path.resolve()) if task_test_path else None,
             "ppi_output_dir": os.getenv("PPI_OUTPUT_DIR"),
             "ppi_seed": int(os.getenv("PPI_SEED", "42")),
             "ppi_external_per_donor": int(os.getenv("PPI_EXTERNAL_PER_DONOR", "5000")),
@@ -210,6 +445,15 @@ def run_research(
             "ppi_stage1_epochs": int(os.getenv("PPI_STAGE1_EPOCHS", "4")),
             "ppi_stage2_epochs": int(os.getenv("PPI_STAGE2_EPOCHS", "1")),
             "ppi_pseudo_mode": os.getenv("PPI_PSEUDO_MODE", "cross_fit"),
+            "ppi_pseudo_targets": os.getenv("PPI_PSEUDO_TARGETS", "hard"),
+            "ppi_loss_mode": os.getenv("PPI_LOSS_MODE", "signed"),
+            "ppi_loss_ramp_epochs": int(os.getenv("PPI_LOSS_RAMP_EPOCHS", "0")),
+            "ppi_lambda": float(os.getenv("PPI_LAMBDA", "1")),
+            # The gradient gate's own knobs (loss_mode="gradient_gated").
+            "ppi_gate_kappa": float(os.getenv("PPI_GATE_KAPPA", "1.0")),
+            "ppi_gate_scope": os.getenv("PPI_GATE_SCOPE", "batch"),
+            "ppi_gate_gamma": float(os.getenv("PPI_GATE_GAMMA", "1.0")),
+            "ppi_gate_lambda": float(os.getenv("PPI_GATE_LAMBDA", "1.0")),
             "ppi_train_donor": os.getenv("PPI_TRAIN_DONOR", "13272"),
 
             # Interactive mode settings

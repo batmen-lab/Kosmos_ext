@@ -9,6 +9,7 @@ from typing import List, Optional, Dict, Any, Set
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 from collections import defaultdict
 import logging
+import os
 
 from kosmos.literature.base_client import PaperMetadata, PaperSource
 from kosmos.literature.arxiv_client import ArxivClient
@@ -49,6 +50,22 @@ class UnifiedLiteratureSearch:
             pubmed_email: Optional email for PubMed
         """
         self.clients: Dict[PaperSource, Any] = {}
+
+        # `KOSMOS_LITERATURE_SOURCES=arxiv,pubmed` drops a source for the whole
+        # run. Semantic Scholar's unauthenticated API answers 429 readily, and a
+        # rate limit on a source that only adds context should not cost minutes.
+        wanted = {
+            name.strip().lower()
+            for name in (os.getenv("KOSMOS_LITERATURE_SOURCES") or "").split(",")
+            if name.strip()
+        }
+        if wanted:
+            arxiv_enabled = "arxiv" in wanted
+            semantic_scholar_enabled = bool(
+                {"semantic_scholar", "semanticscholar", "s2"} & wanted
+            )
+            pubmed_enabled = "pubmed" in wanted
+            logger.info(f"Literature sources restricted to {sorted(wanted)}")
 
         if arxiv_enabled:
             self.clients[PaperSource.ARXIV] = ArxivClient()

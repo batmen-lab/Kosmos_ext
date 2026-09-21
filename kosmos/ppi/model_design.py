@@ -151,9 +151,31 @@ def design_ppi_model(
     n_classes: int,
     client: Any,
     seed: int = 42,
+    task_type: str = "classification",
 ) -> PPIModelDesign:
-    """Ask DeepSeek for a torch model factory and validate the PPI contract."""
-    prompt = f"""Design a small gradient-trained torch classification model for a
+    """Ask the model for a torch model factory and validate the PPI contract."""
+    regression = str(task_type) == "regression"
+    head = (
+        "regression model: it returns ONE value per row, trained with squared "
+        "error, and the PPI correction is applied to that same per-row error"
+        if regression
+        else "classification model: it returns class logits, trained with "
+        "cross-entropy, and the PPI correction is applied to that same per-row "
+        "loss"
+    )
+    target = (
+        "     The model must be a torch.nn.Module returning one value per row:\n"
+        "     shape (batch, 1) or (batch,). Squared error, no softmax."
+        if regression
+        else "     The model must be a torch.nn.Module returning logits "
+        "(batch, n_classes)."
+    )
+    outputs = (
+        f"n_outputs = {n_classes}"
+        if regression
+        else f"n_classes = {n_classes}"
+    )
+    prompt = f"""Design a small gradient-trained torch {head} for a
 cross-donor single-cell experiment that will be trained with a signed PPI loss
 correction (PPILoss two-stage: L_true + lambda*(L_external - m*L_pseudo_gold)).
 
@@ -165,14 +187,14 @@ Experiment protocol:
 
 Dataset:
 n_features = {n_features}
-n_classes = {n_classes}
+{outputs}
 seed = {seed}
 
 Rules:
 1. Return a complete python snippet defining ONLY:
    def model_factory(n_features, n_classes):
        ... return model
-   The model must be a torch.nn.Module returning logits (batch, n_classes).
+{target}
 2. Use ONLY imports from torch/torch.nn/numpy. No data loading, no fitting, no
    optimizer or loss definition inside the factory.
 3. Keep the model small enough for CPU training (prefer a linear head or a small
