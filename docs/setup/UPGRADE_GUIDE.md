@@ -81,7 +81,7 @@ The sandbox image needs rebuilding to include new dependencies:
 
 ```bash
 # Rebuild sandbox image
-docker build -t kosmos-sandbox:latest docker/sandbox/
+docker build -t kosmos-sandbox:latest dockerfiles/sandbox/
 
 # Verify build
 docker images | grep kosmos-sandbox
@@ -277,7 +277,7 @@ pip install -e . --upgrade --force-reinstall --no-cache-dir
 docker system prune -a
 
 # Rebuild from scratch
-docker build --no-cache -t kosmos-sandbox:latest docker/sandbox/
+docker build --no-cache -t kosmos-sandbox:latest dockerfiles/sandbox/
 ```
 
 ### Database Connection Issues
@@ -402,7 +402,7 @@ If you encounter issues during upgrade:
 
 ### Changed
 - pyproject.toml: 5 new dependencies
-- docker/sandbox/requirements.txt: Advanced analytics
+- dockerfiles/sandbox/requirements.txt: Advanced analytics
 - .gitignore: Analysis files excluded
 
 ### Dependencies

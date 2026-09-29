@@ -32,16 +32,32 @@ def test_the_next_free_suffix_is_taken(tmp_path):
     assert next_output_dir(tmp_path / "run") == tmp_path / "run-4"
 
 
-def test_run_py_points_the_training_at_a_free_directory(tmp_path, monkeypatch):
+def test_run_py_delegates_to_the_two_kosmos_interfaces(tmp_path):
+    """`run.py` is a shim now, not a third entry point.
+
+    It hands the run's own directory to `kosmos run`, which writes
+    `<PPI_OUTPUT_DIR>/run` itself and does the "that directory already holds a
+    run" check with `next_output_dir` (covered above) -- so the shim no longer
+    has to pick `run-2` here.
+    """
     import importlib.util
 
     spec = importlib.util.spec_from_file_location("run_entry", Path(__file__).resolve().parents[3] / "run.py")
     run_entry = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(run_entry)
-    args = run_entry.parse_args(["a question", "--out", str(tmp_path)])
-    (tmp_path / "run").mkdir()
-    (tmp_path / "run" / "summary.md").write_text("the first attempt")
 
+    args = run_entry.parse_args(["a question", "--out", str(tmp_path), "--hint", "cell_type"])
     env = run_entry.environment(args, tmp_path)
+    assert Path(env["PPI_OUTPUT_DIR"]) == tmp_path
 
-    assert Path(env["PPI_OUTPUT_DIR"]) == tmp_path / "run-2"
+    command = run_entry.cli_command(args)
+    assert command[1:4] == ["-m", "kosmos.cli.main", "run"]
+    assert command[command.index("--task") + 1] == "per_cell"
+    assert command[command.index("--hint") + 1] == "cell_type"
+
+    perturbation = run_entry.parse_args(
+        ["a question", "--task", "perturbation", "--gold-table", str(tmp_path / "g.csv")]
+    )
+    perturbation_command = run_entry.cli_command(perturbation)
+    assert perturbation_command[perturbation_command.index("--task") + 1] == "perturbation"
+    assert "--gold-table" in perturbation_command

@@ -84,6 +84,26 @@ def fetch(
             # Rebuild it from the bytes already on disk; the network is not
             # asked for anything, and the original file is untouched.
             rebuilt = _rebuild_derived(record, config)
+            # A record fetched before the archive sniffer existed holds the
+            # archive and nothing else. Reuse must complete it, or a screen
+            # downloaded as `6154020` stays a zip forever and stages no table.
+            if _archive_needs_completion(record):
+                # Re-extract from scratch for that archive: its previous members
+                # are dropped first so the record does not list them twice.
+                archives = {
+                    file.path
+                    for file in record.files
+                    if file.derived_from is None and _is_archive(result=record, file=file)
+                }
+                record.files = [
+                    file for file in record.files if file.derived_from not in archives
+                ]
+                _unpack_archives(
+                    record,
+                    max_bytes=config.max_bytes,
+                    max_members=config.archive_max_members,
+                )
+                rebuilt = True
             if rebuilt:
                 write_manifest(Path(record.directory), record)
                 record.notes.append(
@@ -236,6 +256,26 @@ def _archive_suffix(name: str) -> str | None:
     return None
 
 
+def _sniff_archive(path: Path) -> str | None:
+    """`zip` or `tar` from the first bytes, for a file whose name has no suffix.
+
+    A Dataverse download URL ends in a file id, so the staged file is called
+    `6154020` and nothing about its name says "this is a zip". A perturbation
+    screen arrives exactly that way; without this the screen is never unpacked
+    and never converted.
+    """
+    try:
+        with path.open("rb") as handle:
+            head = handle.read(512)
+    except OSError:
+        return None
+    if head[:4] == b"PK\x03\x04":
+        return ".zip"
+    if len(head) >= 262 and head[257:262] == b"ustar":
+        return ".tar"
+    return None
+
+
 def _unpack_archives(
     result: FetchResult,
     *,
@@ -260,12 +300,18 @@ def _unpack_archives(
 
     directory = Path(result.directory)
     for record in list(result.files):
-        suffix = _archive_suffix(record.path)
-        if suffix is None:
-            continue
         source = directory / record.path
         if not source.exists():
             continue
+        suffix = _archive_suffix(record.path)
+        if suffix is None:
+            suffix = _sniff_archive(source)
+            if suffix is None:
+                continue
+            result.note(
+                f"{record.path} has no archive suffix but its bytes are a "
+                f"{suffix.lstrip('.')} archive; unpacking it"
+            )
         if suffix == ".rar":
             result.note(
                 f"{record.path} is a RAR archive; this fetcher cannot unpack it "
@@ -370,6 +416,35 @@ def _guard_member(name: str, root: Path) -> None:
         raise FetchError(f"archive member {name!r} would be written outside {root}")
 
 
+def _is_archive(*, result: FetchResult, file: FileRecord) -> bool:
+    suffix = _archive_suffix(file.path)
+    path = Path(result.directory) / file.path
+    if suffix is None and path.exists():
+        suffix = _sniff_archive(path)
+    return bool(suffix) and suffix != ".rar"
+
+
+def _archive_needs_completion(result: FetchResult) -> bool:
+    """An archive whose contents are missing or were cut short by the caps.
+
+    Two cases: a fetch made before the sniffer existed (the archive was never
+    unpacked), and a fetch whose `--archive-members`/`--max-bytes` left files
+    inside. Both are completed on reuse when the caller now allows more -- which
+    is how a 2.2 GB screen gets out of a zip that was unpacked under a smaller
+    cap.
+    """
+    members = {file.derived_from for file in result.files if file.derived_from}
+    truncated = any("left inside the archive" in note for note in result.notes)
+    for file in result.files:
+        if file.derived_from is not None:
+            continue
+        if _is_archive(result=result, file=file) and (
+            file.path not in members or truncated
+        ):
+            return True
+    return False
+
+
 def _rebuild_derived(result: FetchResult, config: DataFetcherConfig) -> bool:
     """Re-convert this record's single-cell tables; say whether anything changed.
 
@@ -425,7 +500,11 @@ def _convert_single_cell(result: FetchResult, config: DataFetcherConfig) -> None
 
     directory = Path(result.directory)
     for record in list(result.files):
-        if record.derived_from is not None or not is_single_cell(record.path):
+        # Skip the converted tables themselves, not every derived file: a
+        # single-cell container that came *out of an archive* is a source too,
+        # and skipping it meant a screen staged as `.../perturb_processed.h5ad`
+        # inside a zip was never converted.
+        if record.path.endswith("-table.csv") or not is_single_cell(record.path):
             continue
         path = directory / record.path
         if not path.exists():

@@ -196,6 +196,75 @@ def run_research(
         "--task-test-path",
         help="Labeled table to use as the final test set instead of a random slice",
     ),
+    task_backend: Optional[str] = typer.Option(
+        None,
+        "--task",
+        help=(
+            "Which single-cell backend: auto | per_cell | perturbation. "
+            "per_cell is the column task (classification/regression); "
+            "perturbation is control + perturbed gene(s) -> delta expression. "
+            "auto (default) lets the question's wording decide."
+        ),
+    ),
+    condition_column: Optional[str] = typer.Option(
+        None,
+        "--condition-column",
+        help="perturbation: the column that holds the perturbation identity",
+    ),
+    control_label: Optional[List[str]] = typer.Option(
+        None,
+        "--control-label",
+        help="perturbation: a value that means 'nothing perturbed' (repeatable)",
+    ),
+    split_mode: Optional[str] = typer.Option(
+        None,
+        "--split-mode",
+        help="perturbation: mixed | unseen_single | unseen_combination",
+    ),
+    go_graph: Optional[Path] = typer.Option(
+        None,
+        "--go-graph",
+        help="perturbation: GO similarity edge list (source,target,importance)",
+    ),
+    eta: Optional[float] = typer.Option(
+        None,
+        "--eta",
+        help="perturbation: how far the auxiliary graph may move the state "
+        "(H_A = H_C + eta * H_S)",
+    ),
+    max_epochs: Optional[int] = typer.Option(
+        None, "--max-epochs", help="Training epochs for the chosen backend"
+    ),
+    patience: Optional[int] = typer.Option(
+        None, "--patience", help="Early-stopping patience for the chosen backend"
+    ),
+    seed: Optional[int] = typer.Option(
+        None, "--seed", help="Random seed for the run"
+    ),
+    gold_table: Optional[Path] = typer.Option(
+        None, "--gold-table", help="perturbation: a converted screen table to use as the gold (skips staging)"
+    ),
+    supp_table: Optional[List[Path]] = typer.Option(
+        None, "--supp-table", help="perturbation: a converted table to use as supplementary evidence (repeatable)"
+    ),
+    fetch_limit: Optional[int] = typer.Option(
+        None, "--fetch-limit", help="datasets the fetcher may download at most (no-plan runs)"
+    ),
+    supp_limit: Optional[int] = typer.Option(
+        None, "--supp-limit", help="supplementary tables the evidence round may download"
+    ),
+    task_intent: Optional[str] = typer.Option(
+        None, "--intent", help="a term the retrieval step should consider (no-plan runs)"
+    ),
+    task_hint: Optional[List[str]] = typer.Option(
+        None, "--hint", help="a name the label or condition might have (repeatable)"
+    ),
+    max_bytes: Optional[int] = typer.Option(
+        None, "--max-bytes", help="size cap per downloaded dataset, in bytes"
+    ),
+    loss: Optional[str] = typer.Option(
+        None, "--loss", help="objective override: plain | signed | gold-plus-synthetic | gradient-gated"
+    ),
     data_plan: Optional[Path] = typer.Option(
         None,
         "--data-plan",
@@ -274,6 +343,51 @@ def run_research(
         raise typer.Exit(1)
     if data_plan and not data_plan.exists():
         print_error(f"Data plan not found: {data_plan}")
+        raise typer.Exit(1)
+
+    for option_name, table in (("--gold-table", gold_table), ("--supp-table", None)):
+        if table is not None and not table.exists():
+            print_error(f"{option_name} not found: {table}")
+            raise typer.Exit(1)
+    for table in supp_table or []:
+        if not table.exists():
+            print_error(f"--supp-table not found: {table}")
+            raise typer.Exit(1)
+    if loss and loss.replace("-", "_") not in {
+        "plain",
+        "signed",
+        "gold_plus_synthetic",
+        "gradient_gated",
+    }:
+        print_error(
+            f"Unknown --loss {loss!r}; use plain, signed, gold-plus-synthetic or gradient-gated"
+        )
+        raise typer.Exit(1)
+    if task_backend:
+        if task_backend.strip().lower().replace("-", "_") not in {
+            "auto",
+            "per_cell",
+            "percell",
+            "simple",
+            "perturbation",
+            "perturbation_response",
+        }:
+            print_error(
+                f"Unknown --task {task_backend!r}; use auto, per_cell or perturbation"
+            )
+            raise typer.Exit(1)
+    if split_mode and split_mode not in {
+        "mixed",
+        "unseen_single",
+        "unseen_combination",
+    }:
+        print_error(
+            f"Unknown --split-mode {split_mode!r}; use mixed, unseen_single or "
+            f"unseen_combination"
+        )
+        raise typer.Exit(1)
+    if go_graph and not go_graph.exists():
+        print_error(f"GO graph not found: {go_graph}")
         raise typer.Exit(1)
 
     # A plan supplies the task and the tables. Explicit flags still win, so a
@@ -420,6 +534,10 @@ def run_research(
             # this declared, the run trains a predictor (supervised, or
             # PPI-augmented when supplementary data is supplied).
             "task_target_column": task_target_column,
+            # Which single-cell backend answers this question. `None` (or
+            # "auto") lets the question decide; anything else pins it, so a
+            # perturbation run is reproducible without the wording mattering.
+            "task_backend": task_backend,
             # classification | regression: the plan decided it (the model read
             # the question and the rules checked the column), unless the caller
             # overrode it on the command line.
@@ -434,12 +552,38 @@ def run_research(
             "task_sample_id_column": task_sample_id_column,
             "ppi_test_path": str(task_test_path.resolve()) if task_test_path else None,
             "ppi_output_dir": os.getenv("PPI_OUTPUT_DIR"),
-            "ppi_seed": int(os.getenv("PPI_SEED", "42")),
+            "ppi_seed": int(
+                seed if seed is not None else os.getenv("PPI_SEED", "42")
+            ),
             "ppi_external_per_donor": int(os.getenv("PPI_EXTERNAL_PER_DONOR", "5000")),
             "ppi_max_external_samples": int(os.getenv("PPI_MAX_EXTERNAL_SAMPLES", "20000")),
             "ppi_external_weight_budget": float(os.getenv("PPI_EXTERNAL_WEIGHT_BUDGET", "0.5")),
-            "ppi_max_epochs": int(os.getenv("PPI_MAX_EPOCHS", "20")),
-            "ppi_patience": int(os.getenv("PPI_PATIENCE", "5")),
+            "ppi_max_epochs": int(
+                max_epochs if max_epochs is not None else os.getenv("PPI_MAX_EPOCHS", "20")
+            ),
+            "ppi_patience": int(
+                patience if patience is not None else os.getenv("PPI_PATIENCE", "5")
+            ),
+            # The perturbation backend's own knobs. The condition column
+            # and control vocabulary are how "one dataset, control vs
+            # perturbed" is expressed; the rest is the graph gate.
+            "ppi_condition_column": condition_column,
+            "ppi_control_labels": list(control_label or []),
+            "ppi_split_mode": str(split_mode or os.getenv("PPI_SPLIT_MODE", "mixed")),
+            "ppi_go_graph": str(go_graph) if go_graph else os.getenv("PPI_GO_GRAPH"),
+            "ppi_eta": float(eta if eta is not None else os.getenv("PPI_ETA", "1.0")),
+            "ppi_go_k": int(os.getenv("PPI_GO_K", "20")),
+            "ppi_coexpress_threshold": float(
+                os.getenv("PPI_COEXPRESS_THRESHOLD", "0.4")
+            ),
+            "ppi_coexpress_k": int(os.getenv("PPI_COEXPRESS_K", "20")),
+            "ppi_test_fraction": float(os.getenv("PPI_TEST_FRACTION", "0.2")),
+            "ppi_validation_fraction": float(
+                os.getenv("PPI_VALIDATION_FRACTION", "0.1")
+            ),
+            "ppi_min_cells_per_perturbation": int(
+                os.getenv("PPI_MIN_CELLS_PER_PERTURBATION", "2")
+            ),
             "ppi_cross_fit_folds": int(os.getenv("PPI_CROSS_FIT_FOLDS", "3")),
             "ppi_model_design": os.getenv("PPI_MODEL_DESIGN", "deepseek"),
             "ppi_stage1_epochs": int(os.getenv("PPI_STAGE1_EPOCHS", "4")),
@@ -454,7 +598,48 @@ def run_research(
             "ppi_gate_scope": os.getenv("PPI_GATE_SCOPE", "batch"),
             "ppi_gate_gamma": float(os.getenv("PPI_GATE_GAMMA", "1.0")),
             "ppi_gate_lambda": float(os.getenv("PPI_GATE_LAMBDA", "1.0")),
+            # The single-cell recipe. Without these the flow could only ever
+            # auto-detect, so `PPI_SINGLE_CELL_PREPROCESS=on|off` was documented
+            # and ignored: a caller who knows their table is a count matrix (or
+            # knows it is not) had no way to say so.
+            "ppi_single_cell_preprocess": os.getenv("PPI_SINGLE_CELL_PREPROCESS", "auto"),
+            "ppi_single_cell_top_genes": int(
+                os.getenv("PPI_SINGLE_CELL_TOP_GENES", "2000")
+            ),
+            "ppi_single_cell_target_sum": float(
+                os.getenv("PPI_SINGLE_CELL_TARGET_SUM", "10000")
+            ),
+            "ppi_single_cell_min_cells": int(
+                os.getenv("PPI_SINGLE_CELL_MIN_CELLS", "3")
+            ),
+            "ppi_single_cell_figures": os.getenv("PPI_SINGLE_CELL_FIGURES", "true").lower()
+            not in {"0", "false", "no"},
             "ppi_train_donor": os.getenv("PPI_TRAIN_DONOR", "13272"),
+
+            # The discovery loop's data path: when a question arrives with no
+            # data plan, fetch real data for it instead of letting the code
+            # generator invent some. `fallback` keeps the old path as a backstop.
+            "discovery_data_tasks": os.getenv("KOSMOS_DISCOVERY_DATA_TASKS", "fallback"),
+            "task_intent": (
+                task_intent if task_intent is not None else os.getenv("KOSMOS_TASK_INTENT", "")
+            ),
+            "task_hints": (
+                list(task_hint)
+                if task_hint
+                else [h for h in os.getenv("KOSMOS_TASK_HINTS", "").split(",") if h.strip()]
+            ),
+            "fetch_limit": int(
+                fetch_limit if fetch_limit is not None else os.getenv("KOSMOS_FETCH_LIMIT", "2")
+            ),
+            "supp_limit": int(
+                supp_limit if supp_limit is not None else os.getenv("KOSMOS_SUPP_LIMIT", "3")
+            ),
+            # Empty means "let the question decide" -- the data-task path uses
+            # the task kind's own objective unless the caller names one.
+            "task_loss_mode": (loss.replace("-", "_") if loss else None),
+            "data_max_bytes": max_bytes,
+            "ppi_gold_table": str(gold_table) if gold_table else None,
+            "ppi_supplementary_tables": [str(t) for t in (supp_table or [])],
 
             # Interactive mode settings
             "auto_model_selection": auto_model_selection,
@@ -583,6 +768,20 @@ async def run_with_progress_async(
 
     # Run with live display
     with Live(progress, console=console, refresh_per_second=4):
+        # The middle of a long run, on the record: a heartbeat through this same
+        # console (so it appears above the spinner) plus `runcheck.jsonl` beside
+        # the run's artifacts. Configurable with KOSMOS_RUNCHECK_SECONDS.
+        from kosmos.core import runcheck
+
+        runcheck_path = (
+            # Beside the run, never inside it: the training picks its own
+            # subdirectory and refuses one that already holds files, so a record
+            # written into `run/` would push the results into `run-2/`.
+            Path(os.environ["PPI_OUTPUT_DIR"]).parent / "runcheck.jsonl"
+            if os.environ.get("PPI_OUTPUT_DIR")
+            else Path("artifacts/runcheck") / f"run-{int(time.time())}.jsonl"
+        )
+        checker = runcheck.start(path=runcheck_path, console=console)
         try:
             # Start research (async)
             await director.execute({"action": "start_research"})
@@ -626,6 +825,10 @@ async def run_with_progress_async(
 
                 # Update iteration progress
                 progress.update(iteration_task, completed=iteration + 1)
+                checker.state(
+                    phase=str(status.get("workflow_state", "working")),
+                    iteration=iteration + 1,
+                )
 
                 # Update phase-specific progress based on workflow state
                 from kosmos.core.workflow import WorkflowState
@@ -681,6 +884,10 @@ async def run_with_progress_async(
                 await asyncio.sleep(0.05)
 
             logger.info(f"Research loop completed after {iteration} iterations")
+            checker.stop(
+                detail=f"loop completed after {iteration} iteration(s); "
+                f"record {runcheck_path}"
+            )
 
             # Mark all tasks as complete
             progress.update(hypothesis_task, completed=100)

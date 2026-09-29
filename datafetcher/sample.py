@@ -21,7 +21,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .profile import binary_table_sample, profile_table
+from .profile import binary_table_sample, is_gzip, profile_table
 from .store import MANIFEST_NAME
 
 DEFAULT_ROWS = 5
@@ -82,7 +82,7 @@ def raw_head(
     that say what a row *is* (an id, a label) visible at the far end.
     """
     path = Path(path)
-    opener = gzip.open if path.suffix.lower() == ".gz" else open
+    opener = gzip.open if is_gzip(path) else open
     lines: list[str] = []
     used = 0
     try:

@@ -5,6 +5,7 @@ Executes generated Python code safely with output capture, error handling, and r
 Supports both direct execution and Docker-based sandboxed execution.
 """
 
+import os
 import sys
 from kosmos.utils.compat import model_to_dict
 import io
@@ -27,6 +28,27 @@ logger = logging.getLogger(__name__)
 # raises `AttributeError: module 'docker' has no attribute 'errors'`, and every
 # experiment fails while the research loop still reports success. Requiring the
 # attribute makes the documented graceful fallback actually happen.
+def _docker_daemon_status() -> tuple[bool, str]:
+    """Can a container actually be started, and if not, why not?
+
+    Import success is not availability: the client package can be installed and
+    the daemon still unreachable (a socket this account cannot open, no daemon,
+    a rootless socket in another namespace). Probing here is what turns a
+    silently unsandboxed run into a recorded fact.
+    """
+    if not SANDBOX_AVAILABLE:
+        return False, (
+            "the docker client package is not importable (install `docker`, and "
+            "make sure no directory in the repository shadows it)"
+        )
+    try:
+        client = _docker_client.from_env()
+        client.ping()
+        return True, f"docker daemon reachable ({client.version().get('Version', 'unknown')})"
+    except Exception as e:  # noqa: BLE001 - every failure here is "not available"
+        return False, f"{type(e).__name__}: {str(e)[:160]}"
+
+
 try:
     import docker as _docker_client
     from kosmos.execution.sandbox import DockerSandbox, SandboxExecutionResult
@@ -139,7 +161,11 @@ class ExecutionResult:
         error_type: Optional[str] = None,
         execution_time: float = 0.0,
         profile_result: Optional[Any] = None,  # ProfileResult from kosmos.core.profiling
-        data_source: Optional[str] = None  # 'file' or 'synthetic'
+        data_source: Optional[str] = None,  # 'file', 'synthetic', 'data_task'
+        #: Whether this ran in a container, and if not, why not. A result that
+        #: ran in-process must say so: "the code ran" and "the code ran isolated"
+        #: are different claims about the same numbers.
+        sandbox_status: Optional[Dict[str, Any]] = None,
     ):
         self.success = success
         self.return_value = return_value
@@ -150,6 +176,7 @@ class ExecutionResult:
         self.execution_time = execution_time
         self.profile_result = profile_result
         self.data_source = data_source
+        self.sandbox_status = sandbox_status
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -162,6 +189,7 @@ class ExecutionResult:
             'error_type': self.error_type,
             'execution_time': self.execution_time,
             'data_source': self.data_source,
+            'sandbox_status': self.sandbox_status,
         }
 
         # Include profile data if available
@@ -228,16 +256,63 @@ class CodeExecutor:
 
         # Initialize sandbox if requested (F-17: graceful fallback)
         self.sandbox = None
+        #: Whether execution is isolated, and the reason when it is not. Every
+        #: result carries this, because "the numbers came out" and "the numbers
+        #: came out of a container" are different claims.
+        self.sandbox_status: Dict[str, Any] = {
+            "requested": bool(self.use_sandbox),
+            "active": False,
+            "reason": "sandboxing was not requested",
+        }
         if self.use_sandbox:
-            if not SANDBOX_AVAILABLE:
+            available, reason = _docker_daemon_status()
+            if not available:
+                # `KOSMOS_REQUIRE_SANDBOX=1` turns the fallback into a refusal:
+                # a deployment that promised isolation must not quietly lose it.
+                strict = os.environ.get("KOSMOS_REQUIRE_SANDBOX", "").strip().lower() in {
+                    "1",
+                    "true",
+                    "yes",
+                    "on",
+                }
+                if strict:
+                    raise RuntimeError(
+                        "sandboxed execution was required "
+                        "(KOSMOS_REQUIRE_SANDBOX) but is unavailable: " + reason
+                    )
                 logger.warning(
-                    "Docker sandbox requested but not available. "
-                    "Falling back to restricted builtins execution."
+                    "Docker sandbox requested but unavailable (%s). Falling back "
+                    "to in-process execution; results say so in `sandbox_status`.",
+                    reason,
                 )
                 self.use_sandbox = False
+                self.sandbox_status["reason"] = reason
             else:
-                self.sandbox = DockerSandbox(**self.sandbox_config)
-                logger.info("Docker sandbox initialized for code execution")
+                try:
+                    self.sandbox = DockerSandbox(**self.sandbox_config)
+                except Exception as e:  # noqa: BLE001 - a bad image is "not available"
+                    reason = f"{type(e).__name__}: {str(e)[:160]}"
+                    strict = os.environ.get("KOSMOS_REQUIRE_SANDBOX", "").strip().lower() in {
+                        "1",
+                        "true",
+                        "yes",
+                        "on",
+                    }
+                    if strict:
+                        raise RuntimeError(
+                            "sandboxed execution was required "
+                            "(KOSMOS_REQUIRE_SANDBOX) but is unavailable: " + reason
+                        ) from e
+                    logger.warning(
+                        "Docker sandbox could not start (%s). Falling back to "
+                        "in-process execution; results say so in `sandbox_status`.",
+                        reason,
+                    )
+                    self.use_sandbox = False
+                    self.sandbox_status["reason"] = reason
+                else:
+                    self.sandbox_status.update({"active": True, "reason": reason})
+                    logger.info("Docker sandbox initialized for code execution")
 
         # Initialize R executor for R language support (Issue #69)
         self.r_executor = None
@@ -379,6 +454,7 @@ class CodeExecutor:
                     time.sleep(delay)
                 else:
                     return ExecutionResult(
+                sandbox_status=dict(self.sandbox_status),
                         success=False,
                         error=str(e),
                         error_type=error_type
@@ -403,6 +479,7 @@ class CodeExecutor:
         """
         if not R_EXECUTOR_AVAILABLE or self.r_executor is None:
             return ExecutionResult(
+                sandbox_status=dict(self.sandbox_status),
                 success=False,
                 error="R execution not available. Install R and the r_executor module.",
                 error_type="RNotAvailable"
@@ -444,6 +521,7 @@ class CodeExecutor:
         """
         if not R_EXECUTOR_AVAILABLE or self.r_executor is None:
             return ExecutionResult(
+                sandbox_status=dict(self.sandbox_status),
                 success=False,
                 error="R execution not available. Install R and the r_executor module.",
                 error_type="RNotAvailable"
@@ -533,6 +611,7 @@ class CodeExecutor:
             data_source = exec_locals.get('_data_source')
 
             return ExecutionResult(
+                sandbox_status=dict(self.sandbox_status),
                 success=True,
                 return_value=return_value,
                 stdout=stdout_capture.getvalue(),
@@ -559,6 +638,7 @@ class CodeExecutor:
             logger.error(f"Code execution failed: {e}\n{error_traceback}")
 
             return ExecutionResult(
+                sandbox_status=dict(self.sandbox_status),
                 success=False,
                 stdout=stdout_capture.getvalue(),
                 stderr=stderr_capture.getvalue() + "\n" + error_traceback,

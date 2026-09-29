@@ -494,11 +494,26 @@ def _numeric_like(series: pd.Series) -> bool:
     return int(parsed.notna().sum()) == present
 
 
+def is_gzip(path: str | Path) -> bool:
+    """Is this file actually gzip, whatever its name says?
+
+    A name is not evidence. The plan stage's header normalisation writes plain
+    text beside a `.gz` source, and GEO serves some `.gz` files uncompressed;
+    deciding by suffix made `gzip.open` raise, and a single mis-named candidate
+    took down the whole plan. The magic bytes are the fact.
+    """
+    try:
+        with Path(path).open("rb") as handle:
+            return handle.read(2) == b"\x1f\x8b"
+    except OSError:
+        return False
+
+
 def _count_rows(path: Path) -> int | None:
     size = path.stat().st_size
     if size > MAX_COUNT_BYTES:
         return None
-    opener = gzip.open if path.suffix.lower() == ".gz" else open
+    opener = gzip.open if is_gzip(path) else open
     try:
         with opener(path, "rt", encoding="utf-8", errors="replace") as handle:
             return sum(1 for line in handle if line.strip()) - 1  # minus the header
@@ -592,10 +607,22 @@ def profile_table(
             sample_rows=sample_rows,
             count_rows=count_rows,
         )
-    raw_head = path.open("rb").read(64 * 1024) if path.suffix.lower() != ".gz" else b""
-    if path.suffix.lower() == ".gz":
-        with gzip.open(path, "rb") as handle:
+    compressed = is_gzip(path)
+    try:
+        opener = gzip.open if compressed else open
+        with opener(path, "rb") as handle:
             raw_head = handle.read(64 * 1024)
+    except OSError as e:
+        # A binary blob (or a corrupted archive) is not a delimited table; that
+        # is a profile result, not a reason to abort the plan.
+        return TableProfile(
+            path=str(path),
+            delimiter=",",
+            file_bytes=path.stat().st_size,
+            sampled_rows=0,
+            columns=[],
+            notes=[f"not readable: {type(e).__name__}: {e}"],
+        )
     delimiter = _delimiter_for(path, raw_head)
     hinted_columns = _hinted_columns(raw_head, delimiter)
     wide = hinted_columns > WIDE_TABLE_COLUMNS
@@ -606,6 +633,9 @@ def profile_table(
             nrows=min(sample_rows, WIDE_TABLE_ROWS) if wide else sample_rows,
             low_memory=False,
             on_bad_lines="skip",
+            # pandas also infers compression from the name; a mis-named plain
+            # table must not be handed to the gzip reader here either.
+            compression="gzip" if compressed else None,
         )
     except (UnicodeDecodeError, pd.errors.ParserError, OSError, ValueError) as e:
         # A zip, an archive, a parquet, a binary blob: whatever it is, it is not

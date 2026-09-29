@@ -164,6 +164,12 @@ class SingleCellSelection:
     seed: int = 42
     #: Genes to keep whatever their variance (a marker panel, when one is given).
     required_genes: tuple[str, ...] = ()
+    #: When set, variance selection chooses only among these genes. Use it to
+    #: select *after* intersecting with the other sources instead of before:
+    #: taking the gold's own top-N and intersecting afterwards threw away most of
+    #: the panel (4,000 -> 784 in a real run) because the two screens do not
+    #: measure the same gene set.
+    candidate_genes: tuple[str, ...] = ()
     notes: list[str] = field(default_factory=list)
     #: Filled in by the reader: what the file held, what the table kept.
     facts: SingleCellFacts | None = None
@@ -299,12 +305,27 @@ def _metadata_columns(
 
 
 def _var_names(handle) -> np.ndarray:
+    """Gene names, preferring the field a file uses to carry symbols.
+
+    `feature_name` (10x), then `gene_name` (the field GEARS and many
+    perturbation screens write), then the index, then whatever the only column
+    is. The order matters: for a screen the index is often an Ensembl id while
+    the perturbation labels use symbols, and a panel of ids cannot be matched
+    against `condition`.
+    """
     var = handle["var"]
-    if "feature_name" in var:
-        return np.asarray([_decode(value) for value in var["feature_name"][:]], dtype=object)
-    if "_index" in var:
-        return np.asarray([_decode(value) for value in var["_index"][:]], dtype=object)
-    return np.asarray([_decode(value) for value in var[list(var.keys())[0]][:]], dtype=object)
+    # `_h5_column` decodes a column whatever layout wrote it: a plain dataset of
+    # bytes, or AnnData's categorical (codes here, levels in `__categories`).
+    # Reading the codes directly is how a panel of gene *symbols* became
+    # "3444, 3462, 4248": the screen's `var['gene_name']` is categorical, and a
+    # panel of integer codes cannot be matched against `condition`.
+    for name in ("feature_name", "gene_name", "_index"):
+        if name in var:
+            return np.asarray([str(value) for value in _h5_column(var, name)], dtype=object)
+    first = list(var.keys())
+    if not first:
+        return np.asarray([], dtype=object)
+    return np.asarray([str(value) for value in _h5_column(var, first[0])], dtype=object)
 
 
 def _x_shape(handle) -> tuple[int, int]:
@@ -436,6 +457,17 @@ def _read_h5ad_file(path: Path, original: Path, selection: SingleCellSelection) 
         if "highly_variable" in handle["var"]:
             highly_variable = np.asarray(handle["var"]["highly_variable"][:], dtype=bool)
             candidates = candidates[highly_variable]
+        if selection.candidate_genes:
+            wanted = {str(gene) for gene in selection.candidate_genes}
+            candidates = np.asarray(
+                [index for index in candidates if str(names[index]) in wanted], dtype=int
+            )
+            if "highly_variable" in handle["var"] and len(candidates) == 0:
+                # the file flagged genes that the candidate set does not contain
+                candidates = np.asarray(
+                    [index for index in range(n_genes) if str(names[index]) in wanted],
+                    dtype=int,
+                )
         if selection.max_genes and len(candidates) > selection.max_genes:
             variance = _gene_variance(handle, candidates, selection.scan_cells, selection.seed)
             order = np.argsort(-variance)

@@ -173,10 +173,22 @@ PPI_OUTPUT_DIR=artifacts/runs/islet-sc/run \
 #             the gate's own knobs live in ppi_summary.json -> training.gate and in
 #             training_log.jsonl per epoch: cosine, weight, active fraction, grad norms)
 # pseudo:    --pseudo-mode cross_fit|in_sample|pretrained
-# single cell preprocessing (per source):
-#   PPI_SINGLE_CELL_PREPROCESS=auto|on|off       PPI_SINGLE_CELL_TOP_GENES=2000
-#   PPI_SINGLE_CELL_TARGET_SUM=10000             PPI_SINGLE_CELL_MIN_CELLS=3
-#   PPI_SINGLE_CELL_FIGURES=true
+# single cell preprocessing (per source): counts -> HVG -> normalize -> log1p
+#   -> per-gene z-score -> negatives clipped to 0, nothing pooled across sources.
+#   It is a single-cell recipe, so it is only applied in the single-cell setting:
+#     --single-cell auto  (default) applies it to a wide panel (500+ columns) that
+#         is non-negative, >=50% zeros and >=99% whole numbers -- a per-cell count
+#         matrix -- or to any table converted from .h5ad/.h5mu/.mtx (provenance);
+#     --single-cell on|off says so explicitly and overrides the test.
+#   Which recipe ran, and why, is printed at the start of training, written into
+#   run/summary.md (`features: standard encoder ...` vs `single-cell
+#   preprocessing, per source: 2000 HVGs ... -- <why>`), and recorded in
+#   run/ppi_summary.json under `preprocessing` + `inputs.preprocessing.why`.
+#   knobs: --single-cell-top-genes 2000 --single-cell-target-sum 10000
+#          --single-cell-min-cells 3 --no-single-cell-figures
+#   env:   PPI_SINGLE_CELL_PREPROCESS=auto|on|off   PPI_SINGLE_CELL_TOP_GENES=2000
+#          PPI_SINGLE_CELL_TARGET_SUM=10000         PPI_SINGLE_CELL_MIN_CELLS=3
+#          PPI_SINGLE_CELL_FIGURES=true
 # gating:    --min-shared-features 2 --min-shared-fraction 0.5
 #            KOSMOS_ALLOW_CROSS_SPECIES=1  (only with a real ortholog mapping)
 
@@ -186,3 +198,57 @@ PPI_OUTPUT_DIR=artifacts/runs/islet-sc/run \
 # the same thing through the training entry point, without the full pipeline:
 .venv/bin/python -m kosmos.ppi.train --synthetic \
   --config /tmp/gate-config.json --output-dir /tmp/gate-entry
+
+
+--------------------------------------------------------------------------------
+11. Discovery loop with real data (the integrated path)
+--------------------------------------------------------------------------------
+# A question with NO data plan used to run LLM-written code against synthetic
+# data. It now fetches real data for the hypothesis, trains with the objective
+# the question asks for, and reports metrics:
+#
+#   inference  question ("is X associated with Y?") -> signed PPI correction
+#   prediction question ("how well can X be predicted?") -> gradient-gated loss
+#   every task asks the fetcher for supplementary tables; whether they are used
+#   is the loss's decision, not the retriever's
+#
+.venv/bin/python -m kosmos.cli.main run \
+  "Can the cell type of a pancreatic islet cell be predicted from expression, and do unlabeled cells from another donor improve the prediction?" \
+  --domain biology --max-iterations 1
+#   -> artifacts/ppi/discovery-<id>/plan.json, run/summary.md, run/metrics.json,
+#      run/figures/metrics_overview.png (per-class recall, training curve,
+#      confusion matrix), and a printed "# metrics:" block
+#
+# switches (env, read by the CLI):
+#   KOSMOS_DISCOVERY_DATA_TASKS=fallback|on|off   (default fallback: the data path
+#       is used, and a question the fetcher cannot ground falls back to the old
+#       code path with the failure recorded in the experiment's result)
+#   KOSMOS_TASK_INTENT="..."                      free-text intent for retrieval
+#   KOSMOS_TASK_HINTS="cell_type,compound_1"      label column hints
+#   KOSMOS_FETCH_LIMIT=2 KOSMOS_SUPP_LIMIT=3      download caps for the round
+#
+# the building blocks, callable without the loop:
+#   from kosmos.ppi.discovery_bridge import run_data_task
+#   from kosmos.ppi.task_ontology import classify_task
+
+# The single-cell domain (first-class, not a corner of biology):
+#   .venv/bin/python -m kosmos.cli.main run "<single-cell question>" --domain single_cell
+#   registered in ENABLED_DOMAINS (config.py default + .env), with the
+#   single_cell_analysis skill bundle (scanpy/anndata/scvi/...).
+#   The data backend judges the observation unit before retrieving:
+#     per-cell wording ("cells", "cell type", "donor", "scRNA-seq", "h5ad", ...)
+#       -> the single-cell pipeline
+#     an explicitly bulk assay with no per-cell word, or a patient-level
+#       question under --domain biology -> `stage="skipped"`, the loop keeps its
+#       own (code) path
+#   conventions live in kosmos/domains/single_cell/ontology.py: label/id columns,
+#   file formats, the preprocessing recipe, and how a task is evaluated
+
+# Mid-run visibility (so a long silent run is not a mystery):
+#   every KOSMOS_RUNCHECK_SECONDS (default 30) the run prints, through the same
+#   console as the progress display and appends to <out>/runcheck.jsonl:
+#     ⏱ 1m00s · executing · iteration 1 · preprocessing GSM..._human1 (20s in step)
+#   events: start | state (phase/iteration changes) | heartbeat | stop
+#   stage names come from kosmos.core.diagnostics.stage(), so the heartbeat says
+#   which named step is running, not just "still running"
+#   tail -f artifacts/runs/<name>/runcheck.jsonl    # from another shell

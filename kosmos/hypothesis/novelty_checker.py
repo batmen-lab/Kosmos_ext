@@ -146,7 +146,17 @@ class NoveltyChecker:
                 hypothesis, similar_hypotheses, deadline=started + budget
             )
 
-        max_similarity = max(max_paper_similarity, max_hypothesis_similarity)
+        # Novelty is a judgement about *prior art*, and prior art is the
+        # literature. A match to a hypothesis this system stored earlier is its
+        # own memory: reported below (similar_hypotheses / the log line), but not
+        # scored. Scoring it is what deadlocked re-runs of a question.
+        if max_hypothesis_similarity:
+            logger.info(
+                "novelty: best stored-hypothesis similarity %.3f (advisory; "
+                "novelty is scored on literature only)",
+                max_hypothesis_similarity,
+            )
+        max_similarity = max_paper_similarity
 
         # Step 4: Detect prior art (near-duplicates)
         prior_art_detected = max_similarity >= self.similarity_threshold
@@ -316,6 +326,16 @@ class NoveltyChecker:
                 for db_hyp in db_hypotheses:
                     # Skip self if it's already in DB
                     if hypothesis.id and db_hyp.id == hypothesis.id:
+                        continue
+                    # Skip hypotheses answering the *same question* -- including
+                    # the ones an earlier run of it stored. Comparing a question
+                    # to its own past answers is not a prior-art judgement, and
+                    # it is what made a re-run regenerate forever: every fresh
+                    # hypothesis matched the stored ones and was filtered away.
+                    if (
+                        hypothesis.research_question
+                        and db_hyp.research_question == hypothesis.research_question
+                    ):
                         continue
 
                     hyp = Hypothesis(

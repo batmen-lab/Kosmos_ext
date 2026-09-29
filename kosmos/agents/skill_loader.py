@@ -95,7 +95,10 @@ class SkillLoader:
         "neuroscience": ["neuroscience", "imaging_analysis"],
         "clinical": ["clinical_research"],
         "genomics": ["genomics_analysis"],
-        "single_cell": ["single_cell_analysis"],
+        # The observation unit, not the field: this is what the data pipeline
+        # here (h5ad ingestion, per-source HVG selection, PPI) is built for, so
+        # it gets the single-cell bundle plus the genomics and ML ones it uses.
+        "single_cell": ["single_cell_analysis", "genomics_analysis", "machine_learning"],
         "drug_discovery": ["drug_discovery"],
         "proteomics": ["proteomics"],
         "imaging": ["imaging_analysis"],

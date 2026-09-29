@@ -30,8 +30,16 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-#: A table with this many features whose values are non-negative is counts.
+#: A count panel is wide: 500 columns is far above any survey table's feature
+#: list and far below a real gene panel.
 COUNTS_MIN_FEATURES = 500
+#: A per-cell count matrix is mostly zeros (85-98% is typical); a bulk matrix of
+#: the same genes is dense next to it. This is what tells the two apart when the
+#: caller did not say which one they have.
+COUNTS_MIN_ZEROS = 0.5
+#: Raw counts are whole numbers. A matrix that is mostly *not* is already
+#: normalized (log-CPM, z-scores), and normalizing it again is not the recipe.
+COUNTS_MIN_INTEGER = 0.99
 
 
 @dataclass(frozen=True)
@@ -146,28 +154,84 @@ class PreparedSource:
             object.__setattr__(self, "selection", list(self.genes))
 
 
-def looks_like_counts(frame: pd.DataFrame, feature_names: list[str]) -> bool:
-    """Non-negative, integer-valued, and wide: a single-cell count matrix.
+def counts_verdict(
+    frame: pd.DataFrame,
+    feature_names: list[str],
+    *,
+    from_single_cell_file: bool = False,
+) -> tuple[bool, str]:
+    """Is this a per-cell count matrix, and why (or why not)?
 
-    A survey table with 20 measurement columns is not one; a matrix with 20,000
-    mostly-zero integer columns is. The check is mechanical because it has to
-    run before anything expensive, and a false negative only means the standard
-    encoder is used instead (which is what every other task gets).
+    The recipe this gates -- HVG selection, library-size normalisation, log1p,
+    a per-gene z-score, negatives clipped to zero -- is a single-cell recipe.
+    Running it on anything else silently changes what the numbers mean: HVG
+    selection on a 40-column clinical table keeps nothing, and library-size
+    normalisation of a measurement table divides real units by a sum that means
+    nothing. So the test is strict and it says what it saw, in the run's log and
+    in the report:
+
+      * a table converted from a single-cell container (`.h5ad`, `.mtx`) *is*
+        single-cell data whatever its values, because that is what the file is;
+      * otherwise the values have to look like a per-cell count matrix: a wide
+        panel (500+ columns), nothing negative, at least half of it exactly zero
+        (a bulk matrix is dense next to a per-cell one), and count-like rather
+        than already-processed.
+
+    A false negative is the safe direction: the standard encoder is what every
+    other table gets.
     """
     if len(feature_names) < COUNTS_MIN_FEATURES:
-        return False
+        return False, (
+            f"{len(feature_names):,} feature column(s), fewer than the "
+            f"{COUNTS_MIN_FEATURES} a count panel needs"
+        )
     sample = frame[feature_names[: min(len(feature_names), 200)]]
     # Only the numeric columns decide: a per-cell table carries its barcodes and
     # its labels next to the genes, and asking pandas to make floats of a
     # barcode raises before anything can be judged.
     numeric = sample.select_dtypes(include="number")
     if numeric.shape[1] == 0:
-        return False
+        return False, "none of the feature columns is numeric"
     values = numeric.to_numpy(dtype=np.float64, na_value=np.nan, copy=False)
     finite = values[np.isfinite(values)]
-    if finite.size == 0 or finite.min() < 0:
-        return False
-    return bool(np.all(finite == np.floor(finite)))
+    if finite.size == 0:
+        return False, "every sampled feature value is missing"
+    if finite.min() < 0:
+        return False, (
+            f"the smallest sampled value is {finite.min():g}: counts are never "
+            f"negative, so this is a measurement or a z-score"
+        )
+    zeros = float((finite == 0).mean())
+    integer = float((finite == np.floor(finite)).mean())
+    detail = (
+        f"a {len(feature_names):,}-column panel that is {zeros:.0%} zeros and "
+        f"{integer:.0%} integer-valued"
+    )
+    if from_single_cell_file:
+        return True, f"{detail}, converted from a single-cell file"
+    if zeros < COUNTS_MIN_ZEROS:
+        return False, (
+            f"{detail}: too dense for a per-cell count matrix "
+            f"(fewer than {COUNTS_MIN_ZEROS:.0%} zeros)"
+        )
+    if integer < COUNTS_MIN_INTEGER:
+        return False, (
+            f"{detail}: already processed rather than raw counts "
+            f"(fewer than {COUNTS_MIN_INTEGER:.0%} integers)"
+        )
+    return True, detail
+
+
+def looks_like_counts(
+    frame: pd.DataFrame,
+    feature_names: list[str],
+    *,
+    from_single_cell_file: bool = False,
+) -> bool:
+    """The strict test alone, for callers that do not need the reason."""
+    return counts_verdict(
+        frame, feature_names, from_single_cell_file=from_single_cell_file
+    )[0]
 
 
 def prepare_source(
@@ -219,6 +283,26 @@ def prepare_source(
     counts_per_cell = counts.sum(axis=1)
     median_counts = float(np.median(counts_per_cell)) if counts.size else 0.0
     sparsity_raw = float((counts == 0).mean()) if counts.size else 1.0
+    # Already-processed input is not raw counts, and the recipe assumes counts:
+    # it scales each cell to `target_sum` and takes log1p. Saying so here is the
+    # difference between "the run applied the recipe" and "the run applied the
+    # recipe to numbers that were already normalised", which a reader of the
+    # preprocessing report has to be able to tell apart.
+    integer_fraction = (
+        float((counts == np.floor(counts)).mean()) if counts.size else 0.0
+    )
+    if integer_fraction < COUNTS_MIN_INTEGER:
+        notes.append(
+            f"this source is not raw counts ({integer_fraction:.0%} of its values "
+            f"are whole numbers): the recipe is applied to it as given, so the "
+            f"library-size step and log1p act on already-processed values"
+        )
+        logger.warning(
+            "%s: only %.0f%% of the values are integers; the single-cell recipe "
+            "assumes raw counts",
+            name,
+            integer_fraction * 100,
+        )
     detected = (counts > 0).sum(axis=0)
     keep_detected = detected >= config.min_cells
     dropped_rare = int((~keep_detected).sum())
@@ -465,6 +549,23 @@ def describe(
         for i in range(len(sources))
     }
     all_shared = set.intersection(*selected) if selected else set()
+    # How much agreement each *panel* gene actually has. The pairwise overlap
+    # above is about the sources' own selections; this is about the panel that
+    # training used, and the two are different numbers on purpose: the panel is
+    # built from what every source measured, then ranked by how many sources
+    # selected it, so it can hold genes that one source ranked and three did not.
+    measured_everywhere = (
+        set.intersection(*[set(source.all_genes) for source in sources])
+        if sources
+        else set()
+    )
+    votes = {
+        gene: sum(1 for selection in selected if gene in selection) for gene in panel
+    }
+    vote_histogram = {
+        str(count): sum(1 for value in votes.values() if value == count)
+        for count in range(len(sources), 0, -1)
+    }
     return {
         "recipe": [
             "counts",
@@ -477,13 +578,18 @@ def describe(
         "parameters": config.to_dict(),
         "panel_size": len(panel),
         "genes_selected_by_every_source": len(all_shared),
+        "genes_measured_by_every_source": len(measured_everywhere),
+        "panel_vote_histogram": vote_histogram,
         "sources": stats,
         "pairwise_selection_overlap": overlap,
         "notes": [
             "the recipe is applied to each source separately, so a donor's depth "
             "or a platform's scale never leaks into another source",
-            f"the trained panel is the {len(panel):,} gene(s) those sources "
-            f"selected in common, ranked across sources",
+            f"the trained panel holds {len(panel):,} gene(s) that every source "
+            f"*measured*, ranked by how many sources selected each one: "
+            f"{vote_histogram.get(str(len(sources)), 0):,} of them were selected "
+            f"by all {len(sources)} source(s), the rest by fewer "
+            f"(see `panel_vote_histogram`)",
             "a gene only some sources selected is still eligible when every "
             "source measured it; a gene written in another organism's style "
             "(mouse `Pisd` vs human `PISD`) is excluded as evidence entirely",
@@ -532,9 +638,23 @@ def write_report(
         )
     lines += [
         "",
-        f"**Trained panel:** {account['panel_size']:,} gene(s) selected by every "
-        f"source (of which {account['genes_selected_by_every_source']:,} are in "
-        f"every source's own selection).",
+        f"**Trained panel:** {account['panel_size']:,} gene(s) **measured by every "
+        f"source** (out of {account['genes_measured_by_every_source']:,} such "
+        f"gene(s)), ranked by how many sources selected each one as highly "
+        f"variable. {account['genes_selected_by_every_source']:,} of the "
+        f"{account['panel_size']:,} were in *every* source's own HVG selection; "
+        f"the rest were selected by fewer sources and are still usable because "
+        f"every source measured them.",
+        "",
+        "| selected by | panel genes |",
+        "|---|---|",
+        *[
+            f"| {count} of {len(sources)} source(s) | {genes:,} |"
+            for count, genes in (
+                (int(key), value)
+                for key, value in account.get("panel_vote_histogram", {}).items()
+            )
+        ],
         "",
         "## How much the sources agree",
         "",
@@ -680,7 +800,9 @@ def write_figures(
 
     # 5. How much the sources' own selections agree -- the panel is built from
     #    this, and a reader should be able to see how thin the agreement is.
-    fig, ax = plt.subplots(figsize=(1.2 + 1.1 * len(sources), 4.2))
+    fig, (ax, votes_ax) = plt.subplots(
+        1, 2, figsize=(1.2 + 1.1 * len(sources) + 4.0, 4.2), width_ratios=[1.0, 0.55]
+    )
     matrix = np.zeros((len(sources), len(sources)), dtype=float)
     for i, first in enumerate(sources):
         for j, second in enumerate(sources):
@@ -699,6 +821,25 @@ def write_figures(
             )
     ax.set_title("share of each source's selected genes found in the other")
     fig.colorbar(image, ax=ax, shrink=0.8)
+    # The panel itself, by how many sources selected each gene. The heatmap above
+    # is about the sources' own lists; this is about what training used, and a
+    # panel cut to 2,000 genes over four sources is mostly *not* unanimous.
+    selections = [set(source.selection or source.genes) for source in sources]
+    # `genes` is the aligned panel on every source (alignment cuts them all to
+    # the same list), which is the thing this panel is about.
+    panel_genes = list(sources[0].genes) if sources else []
+    votes = [
+        sum(1 for selection in selections if gene in selection) for gene in panel_genes
+    ]
+    counts = list(range(1, len(sources) + 1))
+    sizes = [votes.count(count) for count in counts]
+    votes_ax.bar([str(count) for count in counts], sizes, color="#3b6ea5")
+    for index, size in enumerate(sizes):
+        votes_ax.text(index, size, f"{size:,}", ha="center", va="bottom", fontsize=8)
+    votes_ax.set_xlabel("sources that selected the gene")
+    votes_ax.set_ylabel("panel genes")
+    votes_ax.set_title(f"the {len(panel_genes):,}-gene panel, by agreement")
+    votes_ax.grid(axis="y", alpha=0.3)
     fig.tight_layout()
     written.append(_save(fig, out / "fig05_gene_overlap.png"))
 

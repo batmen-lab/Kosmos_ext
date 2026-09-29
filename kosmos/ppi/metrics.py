@@ -74,3 +74,62 @@ def regression_metrics(y, prediction):
         correlation = float(np.corrcoef(y, prediction)[0, 1])
     result["pearson"] = correlation if np.isfinite(correlation) else None
     return result
+
+
+def recall_by_class(y, prediction, classes) -> dict[str, float]:
+    """Per-class recall, skipping classes the split does not contain."""
+    y = np.asarray(y)
+    prediction = np.asarray(prediction)
+    recalls: dict[str, float] = {}
+    for label in np.asarray(classes):
+        mask = y == label
+        if mask.any():
+            recalls[str(label)] = float(np.mean(prediction[mask] == label))
+    return recalls
+
+
+def bootstrap_interval(
+    y,
+    probability,
+    classes,
+    *,
+    metric: str = "balanced_accuracy",
+    n_boot: int = 500,
+    alpha: float = 0.05,
+    seed: int = 42,
+) -> tuple[float, float] | None:
+    """A percentile interval for a held-out metric, by resampling rows.
+
+    An *inference* answer is an estimate plus an uncertainty, and one number on
+    one split is neither: with a few hundred validation rows the difference
+    between two runs is routinely inside the resampling noise. The interval is
+    over the rows of the split the model was scored on, so it says how much of
+    the number is sampling; seed-to-seed variance is a different, larger
+    quantity and is not what this reports.
+
+    Returns None when the interval is undefined: too few rows, fewer than two
+    classes present, or a resample on which the metric cannot be computed.
+    """
+    y = np.asarray(y)
+    probability = np.asarray(probability, dtype=float)
+    classes = np.asarray(classes)
+    if len(y) < 2 or len(classes) < 2 or probability.ndim != 2:
+        return None
+    prediction = classes[probability.argmax(1)]
+    rng = np.random.default_rng(seed)
+    values: list[float] = []
+    for _ in range(max(2, int(n_boot))):
+        rows = rng.integers(0, len(y), len(y))
+        sample_y, sample_prediction = y[rows], prediction[rows]
+        present = np.unique(sample_y)
+        if len(present) < 2:
+            continue
+        if metric == "balanced_accuracy":
+            recalls = recall_by_class(sample_y, sample_prediction, present)
+            values.append(float(np.mean(list(recalls.values()))))
+        else:
+            values.append(float(np.mean(sample_prediction == sample_y)))
+    if len(values) < 2:
+        return None
+    low, high = np.quantile(values, [alpha / 2.0, 1.0 - alpha / 2.0])
+    return float(low), float(high)

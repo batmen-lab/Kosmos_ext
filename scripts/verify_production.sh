@@ -108,7 +108,7 @@ if command -v docker &> /dev/null; then
     if docker images | grep -q "kosmos-sandbox"; then
         pass "Sandbox image exists"
     else
-        warn "Sandbox image not built (run: cd docker/sandbox && docker build -t kosmos-sandbox:latest .)"
+        warn "Sandbox image not built (run: cd dockerfiles/sandbox && docker build -t kosmos-sandbox:latest .)"
     fi
 else
     warn "Docker not installed (needed for sandboxed execution)"

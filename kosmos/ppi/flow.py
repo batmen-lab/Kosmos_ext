@@ -342,29 +342,54 @@ def pool_labeled(
     return dataset
 
 
-def _single_cell_requested(config, paths, task) -> bool:
-    """Is this a single-cell task? Explicitly, or by what the table looks like.
+def single_cell_decision(config, paths, task) -> tuple[bool, str]:
+    """Single-cell preprocessing: yes or no, and the reason in words.
 
-    `auto` reads the labeled table's head: hundreds of feature columns, all of
-    them non-negative integers. That is a count matrix, and running it through
-    the standard encoder (median imputation and a z-score per column, on raw
-    counts) is not the same analysis as the one a single-cell practitioner
-    would run.
+    The recipe behind this switch -- HVG selection, library-size normalisation,
+    log1p, a per-gene z-score, negatives clipped to zero -- is a single-cell
+    recipe. It must not reach a clinical table or a bulk matrix just because
+    those are wide, so the decision is explicit (`--single-cell on|off`) or
+    mechanical and strict (`auto`), and either way it is recorded: the run's
+    report says which encoder the numbers went through and why.
     """
-    mode = getattr(config, "single_cell_preprocess", "auto")
+    mode = str(getattr(config, "single_cell_preprocess", "auto") or "auto")
     if mode == "on":
-        return True
+        return True, "single-cell preprocessing was requested (single_cell_preprocess=on)"
     if mode == "off":
-        return False
-    from .singlecell import looks_like_counts
+        return False, "single-cell preprocessing is off (single_cell_preprocess=off)"
+    from .singlecell import counts_verdict
 
     try:
         frame = read_delimited(paths[0], nrows=200)
     except Exception as e:  # noqa: BLE001 - a probe, not a decision
         logger.debug("single-cell probe could not read %s (%s)", paths[0], e)
-        return False
+        return False, f"the labeled table could not be read to probe it ({e})"
     features = task.feature_names(frame.columns)
-    return looks_like_counts(frame, features)
+    verdict, why = counts_verdict(
+        frame, features, from_single_cell_file=converted_from_single_cell(paths[0])
+    )
+    return verdict, why
+
+
+def converted_from_single_cell(path) -> bool:
+    """Was this table written by converting an `.h5ad`/`.mtx` file?
+
+    The fetcher names a derived table `<source>-table.csv`, so the source's own
+    suffix is still in the name. That is provenance, not a guess about values: a
+    processed single-cell matrix is no longer integer counts, and it is still
+    single-cell data.
+    """
+    name = Path(str(path)).name.lower()
+    if not name.endswith("-table.csv"):
+        return False
+    return name[: -len("-table.csv")].endswith(
+        (".h5ad", ".h5ad.gz", ".h5mu", ".h5mu.gz", ".mtx", ".mtx.gz")
+    )
+
+
+def _single_cell_requested(config, paths, task) -> bool:
+    """The decision alone, for callers that only need the boolean."""
+    return single_cell_decision(config, paths, task)[0]
 
 
 def check_task_against_data(frame: pd.DataFrame, task: TaskSpec) -> str:
@@ -428,6 +453,7 @@ def _run_single_cell_training(
     pseudo_labeler=None,
     model_factory=None,
     model_design=None,
+    recipe_reason: str = "",
 ) -> dict:
     """Train a single-cell task on separately preprocessed sources.
 
@@ -575,6 +601,7 @@ def _run_single_cell_training(
             "test_path": str(test_path) if test_path else None,
             "preprocessing": {
                 "kind": "single_cell",
+                "why": recipe_reason,
                 "per_source": single_cell.to_dict(),
                 "panel": panel,
                 "sources": [
@@ -753,6 +780,13 @@ def run_experiment(
         "mode": "ppi" if supplementary else "supervised",
         # The files this run consumed, so the summary is readable on its own.
         "inputs": inputs or {},
+        # Which feature recipe ran, said the same way on both paths: a reader of
+        # `ppi_summary.json` must not have to infer it from a missing key.
+        "preprocessing": (
+            "single_cell_per_source"
+            if (inputs or {}).get("preprocessing", {}).get("kind") == "single_cell"
+            else "standard_encoder"
+        ),
         "task": {
             "target_column": task.target_column,
             "task_type": task.task_type,
@@ -873,7 +907,17 @@ def run_training(
     paths = list(labeled_paths) or ([labeled_path] if labeled_path else [])
     if not paths:
         raise ValueError("no labeled data given: pass labeled_path or labeled_paths")
-    if _single_cell_requested(config, paths, task):
+    single_cell, recipe_reason = single_cell_decision(config, paths, task)
+    # Which recipe the numbers go through is a property of the run, not a
+    # detail: HVG selection and log-normalisation on a clinical table would
+    # change what every reported metric means. It is logged here and written
+    # into the summary either way.
+    logger.info(
+        "features: %s (%s)",
+        "single-cell preprocessing per source" if single_cell else "standard encoder",
+        recipe_reason,
+    )
+    if single_cell:
         return _run_single_cell_training(
             paths=paths,
             task=task,
@@ -887,6 +931,7 @@ def run_training(
             pseudo_labeler=pseudo_labeler,
             model_factory=model_factory,
             model_design=model_design,
+            recipe_reason=recipe_reason,
         )
     # Each of these reads a file: for a single-cell table that is a gigabyte and
     # minutes of work, which is exactly the step a "stuck" run is usually in.
@@ -943,6 +988,9 @@ def run_training(
             # What the model actually saw, column by column: a run whose
             # provenance is a list of paths is not reproducible.
             "encoding": encoder.to_dict(),
+            # And which recipe those columns went through, with the reason: the
+            # single-cell recipe is not applied to a table that is not one.
+            "preprocessing": {"kind": "standard", "why": recipe_reason},
         },
         config=config,
         pseudo_labeler=pseudo_labeler,

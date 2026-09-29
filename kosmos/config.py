@@ -208,7 +208,7 @@ class ResearchConfig(BaseSettings):
         alias="MAX_RESEARCH_ITERATIONS"
     )
     enabled_domains: Annotated[List[str], NoDecode, BeforeValidator(parse_comma_separated)] = Field(
-        default=["biology", "physics", "chemistry", "neuroscience"],
+        default=["biology", "single_cell", "physics", "chemistry", "neuroscience"],
         description="Enabled scientific domains",
         alias="ENABLED_DOMAINS"
     )

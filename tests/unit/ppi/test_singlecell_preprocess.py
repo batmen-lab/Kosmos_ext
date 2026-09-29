@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from types import SimpleNamespace
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -9,13 +12,17 @@ import pytest
 from kosmos.ppi.singlecell import (
     SingleCellConfig,
     align_sources,
+    counts_verdict,
+    describe,
     looks_like_counts,
     prepare_source,
     write_figures,
+    write_report,
 )
 
 
 def counts_frame(cells: int = 60, genes: int = 40, seed: int = 0, offset: int = 0):
+    """A count matrix for the recipe tests: whole numbers, some variable genes."""
     rng = np.random.default_rng(seed)
     data = rng.poisson(3.0, size=(cells, genes)).astype(np.int64)
     data[:5, :2] += 50  # a couple of highly variable genes
@@ -25,13 +32,65 @@ def counts_frame(cells: int = 60, genes: int = 40, seed: int = 0, offset: int = 
     return frame
 
 
+def sparse_counts_frame(cells: int = 200, genes: int = 600, seed: int = 0):
+    """What a per-cell matrix actually looks like: mostly zeros.
+
+    The predicate is gated on that: a bulk matrix of the same genes is dense
+    next to a single-cell one, and the two need different recipes.
+    """
+    rng = np.random.default_rng(seed)
+    data = rng.poisson(0.3, size=(cells, genes)).astype(np.int64)
+    data[:5, :2] += 20
+    return pd.DataFrame(data, columns=[f"G{i}" for i in range(genes)])
+
+
 def test_counts_are_recognised_and_a_survey_table_is_not():
-    frame = counts_frame(genes=600)
+    frame = sparse_counts_frame()
     features = [c for c in frame.columns if c.startswith("G")]
     assert looks_like_counts(frame, features)
     # Few features, or negative values: not a count matrix.
     assert not looks_like_counts(frame, features[:10])
     assert not looks_like_counts(frame.assign(G0=-1.0), features)
+
+
+def test_a_bulk_count_matrix_is_not_given_the_single_cell_recipe():
+    """Same genes, same integers, denser: that is a bulk matrix, not cells.
+
+    Running HVG selection and library-size normalisation on a bulk table would
+    quietly change what every number in the run means. Sparsity is what tells
+    the two apart when the caller did not say which one they have.
+    """
+    rng = np.random.default_rng(0)
+    bulk = pd.DataFrame(
+        rng.poisson(20.0, size=(40, 600)).astype(np.int64),
+        columns=[f"G{i}" for i in range(600)],
+    )
+    bulk["sample_id"] = [f"s{i}" for i in range(40)]
+    features = [c for c in bulk.columns if c.startswith("G")]
+
+    verdict, why = counts_verdict(bulk, features)
+
+    assert verdict is False
+    assert "too dense" in why
+
+
+def test_an_already_processed_matrix_needs_provenance_not_a_guess():
+    """A log-normalised single-cell matrix is not integer counts any more.
+
+    It is still single-cell data -- and the file it was converted from says so.
+    Without that provenance the safe answer is the standard encoder, because
+    normalising twice is not the recipe either.
+    """
+    frame = sparse_counts_frame()
+    features = [c for c in frame.columns if c.startswith("G")]
+    processed = frame.copy()
+    processed[features] = np.log1p(processed[features] / 10.0)
+
+    assert counts_verdict(processed, features)[0] is False
+    assert "already processed" in counts_verdict(processed, features)[1]
+    verdict, why = counts_verdict(processed, features, from_single_cell_file=True)
+    assert verdict is True
+    assert "converted from a single-cell file" in why
 
 
 def test_a_barcode_column_does_not_confuse_the_check_or_the_recipe():
@@ -40,7 +99,7 @@ def test_a_barcode_column_does_not_confuse_the_check_or_the_recipe():
     Asking pandas for floats of `GATGACGGAC-GGTGGGAT` raised before anything was
     judged -- the run died at the door with "could not convert string to float".
     """
-    frame = counts_frame(genes=600)
+    frame = sparse_counts_frame()
     frame["barcode"] = [f"GATGACGGAC-GGTGGGA{i:02d}" for i in range(len(frame))]
     names = [c for c in frame.columns if c.startswith("G")] + ["barcode"]
 
@@ -53,6 +112,38 @@ def test_a_barcode_column_does_not_confuse_the_check_or_the_recipe():
     assert "barcode" not in source.all_genes
     assert source.stats.genes_non_numeric == 1
     assert any("hold text" in note for note in source.notes)
+
+
+def test_the_run_says_which_recipe_it_used_and_why(tmp_path):
+    """The decision is explicit, logged, and written into the summary.
+
+    `auto` must not put a clinical or bulk table through HVG selection and
+    library-size normalisation, and a reader has to be able to tell from the
+    report which of the two recipes the numbers went through.
+    """
+    from kosmos.ppi.flow import converted_from_single_cell, single_cell_decision
+    from kosmos.ppi.task_spec import TaskSpec
+
+    task = TaskSpec(target_column="label")
+    sparse = tmp_path / "cells.csv.gz"
+    sparse_counts_frame().assign(label=["t0", "t1"] * 100).to_csv(sparse, index=False)
+    bulk = tmp_path / "bulk.csv"
+    pd.DataFrame(
+        np.random.default_rng(0).poisson(20.0, size=(40, 600)).astype(np.int64),
+        columns=[f"G{i}" for i in range(600)],
+    ).assign(label=["t0", "t1"] * 20).to_csv(bulk, index=False)
+
+    verdict, why = single_cell_decision(SimpleNamespace(single_cell_preprocess="auto"), [str(sparse)], task)
+    assert verdict is True and "zeros" in why
+    verdict, why = single_cell_decision(SimpleNamespace(single_cell_preprocess="auto"), [str(bulk)], task)
+    assert verdict is False and "too dense" in why
+    # An explicit request wins over the guess, in both directions.
+    assert single_cell_decision(SimpleNamespace(single_cell_preprocess="on"), [str(bulk)], task)[0]
+    assert not single_cell_decision(SimpleNamespace(single_cell_preprocess="off"), [str(sparse)], task)[0]
+    # Provenance: a table converted from a single-cell container is one.
+    assert converted_from_single_cell("data/x/aissa2021.h5ad-table.csv")
+    assert converted_from_single_cell("data/x/matrix.mtx.gz-table.csv")
+    assert not converted_from_single_cell("data/x/GSM2230757_human1_umifm_counts.csv.gz")
 
 
 def test_the_recipe_runs_in_order_and_clips_negatives():
@@ -75,6 +166,45 @@ def test_the_recipe_runs_in_order_and_clips_negatives():
     logged = np.log1p(raw / totals * 1e4)
     expected = np.clip((logged - logged.mean()) / logged.std(), 0.0, None)
     assert np.allclose(source.matrix[:, 0], expected, atol=1e-6)
+
+
+def test_the_panel_is_measured_everywhere_but_not_selected_by_everyone(tmp_path):
+    """The overlap heatmap and the panel answer different questions.
+
+    Per-source HVG selection is noisy: four independent top-200 lists over the
+    same 600 genes agree on far fewer than 200. The panel is therefore built
+    from what every source *measured* and ranked by how many sources selected
+    each gene -- and the report has to say so, because the pairwise heatmap on
+    its own reads as "the panel should have been 200 shared genes".
+    """
+    config = SingleCellConfig(n_top_genes=200)
+    features = [f"G{i}" for i in range(600)]
+    sources = [
+        prepare_source(
+            sparse_counts_frame(seed=index), features, name=f"donor{index}", config=config
+        )
+        for index in range(4)
+    ]
+
+    panel, aligned = align_sources(
+        sources, max_genes=config.n_top_genes, target_sum=config.target_sum
+    )
+    account = describe(aligned, panel, config)
+
+    assert account["panel_size"] == len(panel) == 200
+    assert account["genes_measured_by_every_source"] >= 200
+    histogram = account["panel_vote_histogram"]
+    assert sum(histogram.values()) == 200  # every panel gene is accounted for
+    assert max(int(key) for key in histogram) == 4  # never more votes than sources
+    assert int(histogram.get("4", 0)) < 200  # a panel cut from noisy selection
+
+    markdown, record = write_report(aligned, panel, tmp_path / "run", config=config)
+    text = markdown.read_text()
+    assert "measured by every" in text
+    # The vote table is what makes the heatmap interpretable.
+    assert "| selected by | panel genes |" in text
+    assert f"| 4 of 4 source(s) | {account['panel_vote_histogram'].get('4', 0):,} |" in text
+    assert json.loads(record.read_text())["panel_vote_histogram"] == histogram
 
 
 def test_standardization_is_per_source_not_pooled():

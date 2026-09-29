@@ -300,22 +300,41 @@ class HypothesisGeneratorAgent(BaseAgent):
         # prior art calls three APIs, none of which a training run needs), and it
         # is filtered only when `require_novelty_check` is on.
         if validated_hypotheses and self.require_novelty_check:
+            pre_novelty = list(validated_hypotheses)
             try:
                 from kosmos.hypothesis.novelty_checker import NoveltyChecker
                 checker = NoveltyChecker(similarity_threshold=1.0 - self.min_novelty_score)
                 novel = []
-                for hyp in validated_hypotheses:
+                for hyp in pre_novelty:
                     try:
                         report = checker.check_novelty(hyp)
                         hyp.novelty_score = report.novelty_score
                         if report.novelty_score < self.min_novelty_score:
-                            logger.info("Filtered low-novelty hypothesis (%.2f): %s",
-                                        report.novelty_score, hyp.statement[:60])
+                            logger.warning(
+                                "Novelty %.2f below %.2f, filtered: %s",
+                                report.novelty_score,
+                                self.min_novelty_score,
+                                hyp.statement[:60],
+                            )
                         else:
                             novel.append(hyp)
                     except Exception as e:
                         logger.warning("Novelty check failed, keeping hypothesis: %s", e)
                         novel.append(hyp)  # Fail open
+                if not novel and pre_novelty:
+                    # A filter that removes every hypothesis is an infinite
+                    # regeneration loop: the director sees an empty pool and asks
+                    # again. The score is advisory, so keep the best-scoring one
+                    # rather than returning nothing.
+                    novel = sorted(
+                        pre_novelty, key=lambda h: h.novelty_score or 0.0, reverse=True
+                    )[:1]
+                    logger.warning(
+                        "Novelty filtering removed all %d hypothesis(es); keeping the "
+                        "best-scoring one (novelty %.2f) so the run can proceed",
+                        len(pre_novelty),
+                        novel[0].novelty_score or 0.0,
+                    )
                 validated_hypotheses = novel
                 logger.info(f"After novelty scoring: {len(validated_hypotheses)} hypotheses")
             except ImportError:
@@ -474,12 +493,17 @@ No explanation needed."""
         }
 
         try:
-            # Call Claude with structured output
+            # Call the model with structured output. The template's system
+            # prompt carries the JSON example and the length guidance -- without
+            # it the model never saw the format it was being asked to match,
+            # which is how statements ran to 700 characters and responses were
+            # cut off. max_tokens is raised because a verbose model overran 4000.
             response = self.llm_client.generate_structured(
                 prompt=prompt,
                 schema=schema,
-                max_tokens=4000,
-                temperature=0.7  # Slightly higher for creativity
+                system=HYPOTHESIS_GENERATOR.system_prompt,
+                max_tokens=8000,
+                temperature=0.7,  # Slightly higher for creativity
             )
 
             # Parse response into Hypothesis objects

@@ -390,7 +390,13 @@ class TestExecuteProtocolCode:
 class TestSandboxIntegration:
     """Tests for sandbox integration (mocked)."""
 
-    @patch('kosmos.execution.executor.SANDBOX_AVAILABLE', True)
+    # Availability now means "a container can be started", not "the client
+    # package imports": the probe is stubbed here so the test does not depend on
+    # whether this machine has a reachable Docker daemon.
+    @patch(
+        'kosmos.execution.executor._docker_daemon_status',
+        lambda: (True, "daemon reachable (test)"),
+    )
     @patch('kosmos.execution.executor.DockerSandbox')
     def test_executor_uses_sandbox_when_enabled(self, mock_sandbox_class):
         """Test executor uses sandbox when use_sandbox=True."""
@@ -401,6 +407,7 @@ class TestSandboxIntegration:
 
         assert executor.sandbox is not None
         assert executor.use_sandbox is True
+        assert executor.sandbox_status["active"] is True
 
     @patch('kosmos.execution.executor.SANDBOX_AVAILABLE', False)
     def test_executor_graceful_fallback_when_sandbox_unavailable(self):
@@ -441,3 +448,72 @@ class TestSandboxAvailabilityDetection:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+# --- sandbox status: an unsandboxed run must say so ------------------------
+
+def test_an_unavailable_sandbox_is_recorded_not_hidden():
+    """The daemon is unreachable here; the result has to admit it.
+
+    The failure this prevents: `import docker` succeeds, `DockerSandbox()` dies
+    on the socket, and the executor silently runs generated code in its own
+    process while the run reports success.
+    """
+    from kosmos.execution import executor as module
+
+    original = module._docker_daemon_status
+    module._docker_daemon_status = lambda: (False, "PermissionError: denied")
+    try:
+        engine = module.CodeExecutor(use_sandbox=True)
+        assert engine.use_sandbox is False
+        assert engine.sandbox_status["active"] is False
+        assert "denied" in engine.sandbox_status["reason"]
+        result = engine.execute("print('ran')")
+        assert result.success is True
+        assert result.sandbox_status["active"] is False
+        assert "denied" in result.sandbox_status["reason"]
+        assert result.to_dict()["sandbox_status"]["active"] is False
+    finally:
+        module._docker_daemon_status = original
+
+
+def test_requiring_a_sandbox_refuses_instead_of_falling_back(monkeypatch):
+    from kosmos.execution import executor as module
+
+    original = module._docker_daemon_status
+    module._docker_daemon_status = lambda: (False, "no daemon")
+    monkeypatch.setenv("KOSMOS_REQUIRE_SANDBOX", "1")
+    try:
+        with pytest.raises(RuntimeError, match="required"):
+            module.CodeExecutor(use_sandbox=True)
+    finally:
+        module._docker_daemon_status = original
+
+
+def test_a_sandbox_that_started_is_reported_as_active():
+    from kosmos.execution import executor as module
+
+    original = module._docker_daemon_status
+    module._docker_daemon_status = lambda: (True, "daemon reachable")
+    started = {}
+
+    class FakeSandbox:
+        def __init__(self, **kwargs):
+            started.update(kwargs)
+
+        def execute(self, *args, **kwargs):  # pragma: no cover - not reached
+            raise AssertionError
+
+        def cleanup(self):  # pragma: no cover - not reached
+            return None
+
+    original_class = module.DockerSandbox
+    module.DockerSandbox = FakeSandbox
+    try:
+        engine = module.CodeExecutor(use_sandbox=True)
+        assert engine.use_sandbox is True
+        assert engine.sandbox_status["active"] is True
+        assert "daemon reachable" in engine.sandbox_status["reason"]
+    finally:
+        module.DockerSandbox = original_class
+        module._docker_daemon_status = original

@@ -187,6 +187,7 @@ def render_markdown(summary: dict, directory: str | Path, *, top: int = 10) -> s
             f"{settings.get('target_sum'):g} -> log1p -> per-gene z-score -> "
             f"negatives clipped to 0; shared panel: "
             f"{len(preprocessing.get('panel') or []):,} gene(s)"
+            + (f" — {preprocessing['why']}" if preprocessing.get("why") else "")
         )
         for source in preprocessing.get("sources") or []:
             detail = (
@@ -206,6 +207,15 @@ def render_markdown(summary: dict, directory: str | Path, *, top: int = 10) -> s
                 f"- **what was done to each gene:** "
                 f"[preprocessing.md]({Path(preprocessing['report']).name})"
             )
+    elif preprocessing.get("kind") == "standard":
+        # The default recipe, said out loud: a reader has to be able to tell an
+        # HVG/log-normalised run from a median-imputed, per-column z-scored one.
+        lines.append(
+            "- **features: standard encoder** (median imputation, per-column "
+            "z-score, block-wise fill for wide tables); single-cell "
+            "preprocessing was not applied"
+            + (f" — {preprocessing['why']}" if preprocessing.get("why") else "")
+        )
     available = supplementary.get("available_rows") or {}
     if available:
         lines.append(
@@ -244,6 +254,13 @@ def render_markdown(summary: dict, directory: str | Path, *, top: int = 10) -> s
     if figures:
         lines += ["", "## Figures", ""]
         for path in figures:
+            name = Path(path).name
+            lines.append(f"- [`{name}`](figures/{name})")
+
+    metric_figures = summary.get("metric_figures") or []
+    if metric_figures:
+        lines += ["", "## Figures", ""]
+        for path in metric_figures:
             name = Path(path).name
             lines.append(f"- [`{name}`](figures/{name})")
 
@@ -412,3 +429,121 @@ def write_markdown(summary: dict, directory: str | Path, *, top: int = 10) -> Pa
     path = Path(directory) / "summary.md"
     path.write_text(render_markdown(summary, directory, top=top), encoding="utf-8")
     return path
+
+
+def write_metrics_figures(summary: dict, directory: str | Path) -> list[Path]:
+    """Draw the metrics a run produced, from the files it already wrote.
+
+    Three panels, because a single accuracy hides all three answers:
+
+      * **per-class recall**, baseline against the corrected model, so it is
+        visible which classes the supplementary evidence helped and which it
+        hurt;
+      * **the training curve** of both arms on the metric the run selected on,
+        with the selected epoch marked;
+      * **the confusion matrix** of the corrected model on the validation rows,
+        row-normalised so it reads as recall per class.
+
+    Returns [] when the inputs are missing or matplotlib is unavailable: a
+    figure is a convenience, not the result.
+    """
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import numpy as np
+    except Exception:  # noqa: BLE001 - plotting is optional
+        return []
+    from .metrics import recall_by_class
+
+    out = Path(directory)
+    predictions = out / "validation_predictions.npz"
+    if not predictions.exists():
+        return []
+    classes = list((summary.get("task") or {}).get("classes") or [])
+    if not classes:
+        return []
+    try:
+        with np.load(predictions, allow_pickle=False) as data:
+            y_true = np.asarray(data["y_true"])
+            baseline_probability = np.asarray(data["baseline_probability"])
+            ppi_probability = np.asarray(data["ppi_probability"])
+    except Exception:  # noqa: BLE001 - a missing file is not a failure
+        return []
+    classes_array = np.asarray(classes)
+    baseline_prediction = classes_array[baseline_probability.argmax(1)]
+    model_prediction = classes_array[ppi_probability.argmax(1)]
+    recall_baseline = recall_by_class(y_true, baseline_prediction, classes_array)
+    recall_model = recall_by_class(y_true, model_prediction, classes_array)
+
+    figure, axes = plt.subplots(1, 3, figsize=(16, 4.4))
+    # 1. per-class recall, rarest classes first: that is where a correction shows
+    support = {str(label): int(np.sum(y_true == label)) for label in classes_array}
+    ordered = sorted(
+        recall_model, key=lambda label: (support.get(label, 0), label)
+    )[:15]
+    positions = np.arange(len(ordered))
+    axes[0].barh(
+        positions - 0.2, [recall_baseline.get(c, 0.0) for c in ordered],
+        height=0.4, label="gold-only",
+    )
+    axes[0].barh(
+        positions + 0.2, [recall_model.get(c, 0.0) for c in ordered],
+        height=0.4, label="with evidence",
+    )
+    axes[0].set_yticks(positions, [f"{c} (n={support.get(c, 0)})" for c in ordered], fontsize=7)
+    axes[0].set_xlabel("recall")
+    axes[0].set_title("per-class recall (validation)")
+    axes[0].legend(fontsize=8)
+    axes[0].grid(axis="x", alpha=0.3)
+
+    # 2. the training curve of both arms
+    log_path = out / "training_log.jsonl"
+    metric_name = str((summary.get("task") or {}).get("evaluation_metric") or "balanced_accuracy")
+    if log_path.exists():
+        import json
+
+        rows = [json.loads(line) for line in log_path.read_text().splitlines() if line.strip()]
+        for arm in ("baseline", "ppi"):
+            arm_rows = [row for row in rows if row.get("arm") == arm]
+            values = [
+                (row.get("validation") or {}).get(metric_name) for row in arm_rows
+            ]
+            epochs = [row.get("epoch") for row in arm_rows]
+            axes[1].plot(epochs, values, marker="o", label=arm)
+            finite = [
+            (v, e) for v, e in zip(values, epochs, strict=False) if v is not None
+        ]
+            if finite:
+                best = max(finite)
+                axes[1].scatter([best[1]], [best[0]], zorder=5, s=40, facecolor="none")
+        axes[1].set_xlabel("epoch")
+        axes[1].set_ylabel(metric_name)
+        axes[1].set_title(f"selection metric per epoch ({metric_name})")
+        axes[1].legend(fontsize=8)
+        axes[1].grid(alpha=0.3)
+
+    # 3. confusion matrix of the corrected model, row-normalised
+    index = {label: position for position, label in enumerate(classes_array)}
+    matrix = np.zeros((len(classes_array), len(classes_array)), dtype=float)
+    for truth, predicted in zip(y_true, model_prediction, strict=False):
+        if truth in index and predicted in index:
+            matrix[index[truth], index[predicted]] += 1
+    totals = matrix.sum(axis=1, keepdims=True)
+    normalised = np.divide(matrix, np.where(totals == 0, 1, totals))
+    image = axes[2].imshow(normalised, cmap="viridis", vmin=0, vmax=1)
+    axes[2].set_xticks(range(len(classes_array)), classes_array, rotation=90, fontsize=6)
+    axes[2].set_yticks(range(len(classes_array)), classes_array, fontsize=6)
+    axes[2].set_xlabel("predicted")
+    axes[2].set_ylabel("true")
+    axes[2].set_title("confusion matrix, row-normalised")
+    figure.colorbar(image, ax=axes[2], shrink=0.8)
+
+    figure.tight_layout()
+    target_dir = out / "figures"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / "metrics_overview.png"
+    figure.savefig(target, dpi=150)
+    plt.close(figure)
+    return [target]

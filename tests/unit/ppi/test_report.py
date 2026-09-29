@@ -7,6 +7,33 @@ import numpy as np
 from kosmos.ppi.report import gate_table, render_markdown, write_markdown
 
 
+def test_the_summary_says_which_feature_recipe_ran():
+    """HVG + log-normalisation must be visible as such, and absent when it did not run."""
+    standard = summary()
+    standard["inputs"]["preprocessing"] = {
+        "kind": "standard",
+        "why": "a 1,501-column panel that is 87% zeros and 87% integer-valued: "
+        "already processed rather than raw counts",
+    }
+    rendered = render_markdown(standard, ".")
+    assert "standard encoder" in rendered
+    assert "single-cell preprocessing was not applied" in rendered
+    assert "already processed rather than raw counts" in rendered
+
+    single = summary()
+    single["inputs"]["preprocessing"] = {
+        "kind": "single_cell",
+        "why": "a 20,125-column panel that is 88% zeros and 100% integer-valued",
+        "per_source": {"n_top_genes": 2000, "target_sum": 10000},
+        "panel": ["G1", "G2"],
+        "sources": [],
+    }
+    rendered = render_markdown(single, ".")
+    assert "single-cell preprocessing, per source" in rendered
+    assert "2000 HVGs" in rendered
+    assert "a 20,125-column panel" in rendered
+
+
 def test_the_gate_gets_its_own_table_in_the_summary():
     """A gated run reports what the gate did, epoch by epoch."""
     payload = summary()

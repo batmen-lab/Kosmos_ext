@@ -207,3 +207,9 @@ vgcore.*
 .codex/
 .agents/
 *.egg-info/
+
+# The GEARS GO graph (355 MB, Harvard Dataverse file 6934319) and any other
+# reference graph: staged data, re-downloadable, not history.
+data/perturbation/reference/
+data/
+/data/

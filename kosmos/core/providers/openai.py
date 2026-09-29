@@ -159,6 +159,7 @@ class OpenAIProvider(LLMProvider):
         max_tokens: int = 4096,
         temperature: float = 0.7,
         stop_sequences: Optional[List[str]] = None,
+        response_format: Optional[Dict[str, Any]] = None,
         **kwargs
     ) -> LLMResponse:
         """
@@ -205,6 +206,12 @@ class OpenAIProvider(LLMProvider):
 
             if stop_sequences:
                 api_args["stop"] = stop_sequences
+
+            # Structured calls ask the endpoint to constrain decoding to JSON
+            # (`{"type": "json_object"}`). Only added when asked for, so a plain
+            # generate() is unchanged.
+            if response_format:
+                api_args["response_format"] = response_format
 
             # Pre-call logging
             if log_llm:
@@ -473,28 +480,67 @@ class OpenAIProvider(LLMProvider):
             ProviderAPIError: If generation or parsing fails
         """
         try:
-            # Add JSON instruction to system prompt
+            # Add JSON instruction to system prompt. The wording is explicit
+            # about the two things the model otherwise does: wraps the object in
+            # markdown, and writes prose around it.
             json_system = (system or "") + "\n\nYou must respond with valid JSON matching this schema:\n" + json.dumps(schema, indent=2)
-            json_system += "\n\nIMPORTANT: Return ONLY valid JSON, no additional text or explanations."
-
-            # Generate response
-            response = self.generate(
-                prompt=prompt,
-                system=json_system,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                **kwargs
+            json_system += (
+                "\n\nIMPORTANT: Return ONLY valid JSON, no additional text or "
+                "explanations. Return a single minified JSON object: no markdown "
+                "fences, no commentary before or after it."
             )
 
-            response_text = response.content
+            # Ask the endpoint's own JSON mode to constrain decoding, where the
+            # provider supports it. This is the part that removes the malformed
+            # responses at the source instead of repairing them afterwards.
+            use_json_mode = (
+                self.provider_type in ("openai", "compatible")
+                and os.getenv("KOSMOS_STRUCTURED_JSON_MODE", "1").strip().lower()
+                not in ("0", "false", "no", "off")
+            )
+            try:
+                response = self.generate(
+                    prompt=prompt,
+                    system=json_system,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    response_format={"type": "json_object"} if use_json_mode else None,
+                    **kwargs
+                )
+            except ProviderAPIError:
+                if not use_json_mode:
+                    raise
+                # Some OpenAI-compatible endpoints reject response_format. Fall
+                # back to the instruction-only request rather than failing.
+                logger.warning(
+                    "Structured call with response_format failed; retrying "
+                    "without JSON mode"
+                )
+                response = self.generate(
+                    prompt=prompt,
+                    system=json_system,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    **kwargs
+                )
+
+            response_text = response.content or ""
 
             # Parse JSON with robust fallback strategies
             try:
                 return parse_json_response(response_text, schema=schema)
 
             except JSONParseError as e:
-                logger.error(f"Failed to parse JSON after {e.attempts} attempts")
-                logger.error(f"Response text: {response_text[:500]}")
+                # The whole response and why generation stopped: `length` means
+                # it was cut off, `stop` means the model finished with malformed
+                # JSON. Logging only the first 500 characters hid both.
+                logger.error(
+                    "Failed to parse JSON after %d attempts (finish_reason=%s, %d chars)",
+                    e.attempts,
+                    getattr(response, "finish_reason", None),
+                    len(response_text),
+                )
+                logger.error("Response text: %s", response_text[:8000])
 
                 # Provide helpful guidance for local model issues
                 if self.provider_type == 'local':

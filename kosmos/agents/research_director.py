@@ -1557,6 +1557,160 @@ class ResearchDirectorAgent(BaseAgent):
                 error_details={"untested_hypotheses": len(self.research_plan.get_untested_hypotheses())}
             )
 
+    def discovery_data_tasks_enabled(self) -> bool:
+        """Should this run answer the question with real data, or with code?
+
+        `data_tasks` means "use the fetcher" for every question that has no data
+        plan (`on` raises if the fetch fails; `fallback` keeps the old code path
+        as a backstop). `code` is the previous behaviour. The default is
+        `fallback`: the integration is on, and a question the fetcher cannot
+        ground still runs the way it used to -- visibly, with the failure in the
+        experiment's result.
+        """
+        mode = str(
+            self.config.get(
+                "discovery_data_tasks",
+                os.environ.get("KOSMOS_DISCOVERY_DATA_TASKS", "fallback"),
+            )
+        ).lower()
+        if mode in {"off", "code", "false", "0"}:
+            return False
+        try:
+            from kosmos.ppi.discovery_bridge import AUTO_TASK_RUN
+
+            return AUTO_TASK_RUN.exists()
+        except Exception:  # noqa: BLE001 - no bridge, no data tasks
+            return False
+
+    async def _execute_data_task(self, protocol):
+        """Fetch real data for this hypothesis and train on it.
+
+        Returns the same `ExecutionResult` shape the code path returns, so
+        everything downstream (metrics extraction, storage, reporting) works
+        unchanged. On failure the outcome is recorded rather than raised away:
+        a question with no data behind it is a finding about the question.
+        """
+        import time as _time
+
+        from kosmos.execution.executor import ExecutionResult
+        from kosmos.ppi.discovery_bridge import run_data_task
+
+        # The protocol is rebuilt from the stored JSON, which does not always
+        # carry an `id` (the id lives on the DB row, not inside the protocol
+        # dict). Slicing it raised `TypeError: 'NoneType' object is not
+        # subscriptable` and the experiment never ran, so fall back through the
+        # names that might hold it.
+        identifier = str(
+            getattr(protocol, "id", None)
+            or getattr(protocol, "protocol_id", None)
+            or "task"
+        )
+        out_dir = Path(
+            self.config.get("ppi_output_dir")
+            or f"artifacts/ppi/discovery-{identifier[:8]}-{int(_time.time())}"
+        )
+        extra = " ".join(
+            part for part in (protocol.name, protocol.description or "") if part
+        )
+        outcome = run_data_task(
+            question=self.research_question,
+            extra_text=extra,
+            out_dir=out_dir,
+            domain=str(self.domain or "biology"),
+            intent=str(self.config.get("task_intent") or ""),
+            hints=tuple(self.config.get("task_hints") or ()),
+            fetch_limit=int(self.config.get("fetch_limit", 2)),
+            supp_limit=int(self.config.get("supp_limit", 3)),
+            client=self._llm_client_for_tasks(),
+            # Which single-cell backend, and the knobs it needs. `task_backend`
+            # is the caller's explicit choice; unset means the question decides.
+            # Passing these here is what makes `kosmos run --task perturbation`
+            # actually reach the perturbation trainer instead of its defaults.
+            backend=self.config.get("task_backend"),
+            max_epochs=int(self.config.get("ppi_max_epochs", 20)),
+            patience=int(self.config.get("ppi_patience", 5)),
+            seed=int(self.config.get("ppi_seed", 42)),
+            condition_column=self.config.get("ppi_condition_column"),
+            control_labels=tuple(self.config.get("ppi_control_labels") or ()),
+            split_mode=str(self.config.get("ppi_split_mode", "mixed")),
+            test_fraction=float(self.config.get("ppi_test_fraction", 0.2)),
+            validation_fraction=float(self.config.get("ppi_validation_fraction", 0.1)),
+            min_cells_per_perturbation=int(
+                self.config.get("ppi_min_cells_per_perturbation", 2)
+            ),
+            go_graph=self.config.get("ppi_go_graph"),
+            go_k=int(self.config.get("ppi_go_k", 20)),
+            coexpress_threshold=float(
+                self.config.get("ppi_coexpress_threshold", 0.4)
+            ),
+            coexpress_k=int(self.config.get("ppi_coexpress_k", 20)),
+            eta=float(self.config.get("ppi_eta", 1.0)),
+            gate_kappa=float(self.config.get("ppi_gate_kappa", 1.0)),
+            # The objective can be pinned by the caller (`--loss`); unset leaves
+            # the question's classification to choose it.
+            loss_mode=self.config.get("task_loss_mode"),
+            max_bytes=self.config.get("data_max_bytes"),
+            # perturbation only: caller-supplied tables bypass the registry
+            gold_table=self.config.get("ppi_gold_table"),
+            supplementary_tables=tuple(self.config.get("ppi_supplementary_tables") or ()),
+        )
+        if outcome.ok:
+            return ExecutionResult(
+                success=True,
+                return_value=outcome.as_return_value(),
+                stdout="",
+                data_source="data_task",
+            )
+        first_line = outcome.error.splitlines()[0] if outcome.error else "no reason given"
+        if outcome.stage == "skipped":
+            # The pre-judgment said this question is not answered with fetched
+            # data. The code path is the right path for it, so say so and let
+            # the caller take it, rather than recording a failure that is not one.
+            logger.info(
+                "not a data question for this experiment (%s); using code "
+                "generation",
+                first_line,
+            )
+            return None
+        mode = str(
+            self.config.get(
+                "discovery_data_tasks",
+                os.environ.get("KOSMOS_DISCOVERY_DATA_TASKS", "fallback"),
+            )
+        ).lower()
+        if mode in {"fallback", "auto"}:
+            logger.warning(
+                "data task failed at the %s stage (%s); falling back to code "
+                "generation for this experiment",
+                outcome.stage,
+                first_line,
+            )
+            return None
+        # `on` was asked for, so a question that could not be grounded is
+        # reported as the failure it is instead of being quietly re-run as code.
+        logger.error(
+            "data task failed at the %s stage (%s); KOSMOS_DISCOVERY_DATA_TASKS=%s "
+            "so the code path is not used",
+            outcome.stage,
+            first_line,
+            mode,
+        )
+        return ExecutionResult(
+            success=True,
+            return_value=outcome.as_return_value(),
+            stdout="",
+            data_source="data_task_failed",
+        )
+
+    def _llm_client_for_tasks(self):
+        """The client the task classifier may use, or None when there is none."""
+        try:
+            from kosmos.core.llm import get_client
+
+            return get_client()
+        except Exception:  # noqa: BLE001 - the classifier works without one
+            return None
+
     async def _handle_execute_experiment_action(self, protocol_id: str):
         """
         Handle EXECUTE_EXPERIMENT action by running code generation + execution directly.
@@ -1813,6 +1967,15 @@ class ResearchDirectorAgent(BaseAgent):
                     stdout="",
                     data_source="ppi",
                 )
+            elif self.discovery_data_tasks_enabled() and (
+                data_task := await self._execute_data_task(protocol)
+            ) is not None:
+                # A data question with no data plan: fetch real data for it,
+                # train with the objective the question asks for, and report
+                # metrics. The fetcher is asked for supplementary tables as well
+                # -- every task tries, and whether they are used is the loss's
+                # decision.
+                exec_result = data_task
             else:
                 # Standard code execution path.
                 code = self._code_generator.generate(protocol)
@@ -1843,7 +2006,31 @@ class ResearchDirectorAgent(BaseAgent):
                     k: v for k, v in return_value.items()
                     if k in ("t_statistic", "p_value", "effect_size",
                              "mean_difference", "significance_label",
-                             "correlation", "r_squared")
+                             "correlation", "r_squared",
+                             # A data task's metrics: before this, a training
+                             # experiment stored no numbers at all, so its
+                             # result reported nothing.
+                             "accuracy", "balanced_accuracy", "macro_f1",
+                             "baseline", "delta", "ci_low", "ci_high",
+                             "metric", "value", "kind", "loss_mode", "backend",
+                             "n_gold", "n_supplementary",
+                             # Perturbation-response metrics: a response vector
+                             # is scored on MSE/Pearson, not accuracy, and the
+                             # run's headline is the gated arm against the base.
+                             "mse", "mse_deg", "pearson", "spearman",
+                             "direction_accuracy", "top_k_overlap",
+                             "base_mse_deg", "ungated_mse_deg", "gated_mse_deg",
+                             "base_pearson", "gated_pearson", "gated_spearman",
+                             "gated_direction_accuracy", "gated_top_k_overlap",
+                             "n_perturbations_test", "data_source", "staging",
+                             # Graph-free MLP baselines (mlp_base / mlp_augmented).
+                             "mlp_base_mse_deg", "mlp_augmented_mse_deg",
+                             "mlp_base_pearson", "mlp_augmented_pearson",
+                             "mlp_delta_mse_deg", "gated_minus_mlp_base_mse_deg",
+                             # Which kind of perturbation the data provides
+                             # and whether it matches what was asked.
+                             "modality_requested", "modality_provided",
+                             "modality_verdict")
                 }
             else:
                 p_value = None
@@ -2748,13 +2935,16 @@ Provide a structured, actionable plan in 2-3 paragraphs.
 
         current_state = self.workflow.current_state
 
-        # Action counter for infinite loop prevention (Issue #51)
-        self._actions_this_iteration += 1
+        # Action counter for infinite loop prevention (Issue #51). Lazily
+        # initialised so a director that did not run `__init__` (a test, a
+        # restored object) still counts instead of raising.
+        self._actions_this_iteration = getattr(self, "_actions_this_iteration", 0) + 1
 
-        if self._actions_this_iteration > MAX_ACTIONS_PER_ITERATION:
+        max_actions = self._max_actions_per_iteration()
+        if self._actions_this_iteration > max_actions:
             logger.error(
                 "[LOOP-GUARD] Exceeded %d actions in iteration %d - forcing convergence",
-                MAX_ACTIONS_PER_ITERATION,
+                max_actions,
                 self.research_plan.iteration_count
             )
             return NextAction.CONVERGE
@@ -2771,7 +2961,7 @@ Provide a structured, actionable plan in 2-3 paragraphs.
             len(self.research_plan.experiment_queue),
             len(self.research_plan.results),
             self._actions_this_iteration,
-            MAX_ACTIONS_PER_ITERATION
+            max_actions
         )
 
         # Check convergence first
@@ -2862,7 +3052,7 @@ Provide a structured, actionable plan in 2-3 paragraphs.
             action.value,
             self.research_plan.iteration_count,
             action_count,
-            MAX_ACTIONS_PER_ITERATION
+            self._max_actions_per_iteration()
         )
 
         tracker = get_stage_tracker()
@@ -3031,6 +3221,22 @@ Provide a structured, actionable plan in 2-3 paragraphs.
 
         else:
             logger.warning(f"Unknown action: {action}")
+
+    def _max_actions_per_iteration(self) -> int:
+        """The per-cycle action budget, overridable for slow or verbose runs.
+
+        The budget exists to stop an infinite loop, not to cut a working run
+        short: a hypothesis-generation step that is slow or retrying can spend
+        the whole default before an experiment is ever designed, and the run
+        then "converges" with no artifacts. `KOSMOS_MAX_ACTIONS_PER_ITERATION`
+        raises it for a real (non-smoke) run.
+        """
+        raw = os.environ.get("KOSMOS_MAX_ACTIONS_PER_ITERATION")
+        try:
+            value = int(raw) if raw is not None else MAX_ACTIONS_PER_ITERATION
+        except (TypeError, ValueError):
+            value = MAX_ACTIONS_PER_ITERATION
+        return max(1, value)
 
     def _should_check_convergence(self) -> bool:
         """

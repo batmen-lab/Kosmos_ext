@@ -1558,6 +1558,10 @@ def write_with_header(path: str, names: list[str], target: Path) -> bool:
     if len(names) != width or len(set(names)) != width or any(not n.strip() for n in names):
         return False
     target.parent.mkdir(parents=True, exist_ok=True)
+    # This writes plain text, so a `.gz` name would be a lie -- and a downstream
+    # `gzip.open` on it aborted the whole plan. Keep the honest extension.
+    if target.name.lower().endswith(".gz"):
+        target = target.with_name(target.name[:-3])
     with target.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(names)
