@@ -208,7 +208,7 @@ class Result(Base):
     confidence_interval = Column(JSON, nullable=True)
 
     # Visualization
-    figures = Column(JSON, nullable=True)  # Paths to generated figures
+    figures = Column(JSON, nullable=True)  # [{'path': <host path>, 'caption': <str|None>}]
 
     # Timestamps
     created_at = Column(UTCDateTime, default=lambda: datetime.now(timezone.utc))

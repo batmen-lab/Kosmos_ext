@@ -34,7 +34,8 @@ class SandboxExecutionResult:
         execution_time: float = 0.0,
         exit_code: Optional[int] = None,
         timeout_occurred: bool = False,
-        resource_stats: Optional[Dict[str, Any]] = None
+        resource_stats: Optional[Dict[str, Any]] = None,
+        output_files: Optional[List[str]] = None
     ):
         self.success = success
         self.return_value = return_value
@@ -46,6 +47,10 @@ class SandboxExecutionResult:
         self.exit_code = exit_code
         self.timeout_occurred = timeout_occurred
         self.resource_stats = resource_stats or {}
+        # Host paths of files the run left in /workspace/output and that were
+        # copied out before the temp dir was destroyed. Empty unless the caller
+        # asked for collection.
+        self.output_files = list(output_files or [])
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -59,8 +64,83 @@ class SandboxExecutionResult:
             'execution_time': self.execution_time,
             'exit_code': self.exit_code,
             'timeout_occurred': self.timeout_occurred,
-            'resource_stats': self.resource_stats
+            'resource_stats': self.resource_stats,
+            'output_files': self.output_files
         }
+
+
+# Files a run may hand back. Deliberately narrow: this copies out of a
+# sandbox, so the whitelist is the contract, not a convenience.
+FIGURE_EXTENSIONS = frozenset({".png", ".svg", ".pdf", ".html"})
+_MAX_COLLECTED_FILES = 24
+_MAX_COLLECTED_BYTES = 10 * 1024 * 1024
+_MAX_COLLECTED_TOTAL = 100 * 1024 * 1024
+
+
+def _collect_output_files(source_dir: Path, dest_dir: str) -> List[str]:
+    """Copy whitelisted files out of the container's output mount.
+
+    Called BEFORE the temp directory is destroyed, which is the whole point:
+    the mount has always been read-write, but `finally: shutil.rmtree(temp_dir)`
+    deleted everything written to it, so a run that drew a figure still
+    produced none. Nothing here may raise -- a figure that cannot be copied is
+    worth a log line and nothing more.
+
+    Top level only, no symlinks, no recursion: a sandbox escape that plants a
+    symlink to /etc/passwd must not be able to copy it onto the host.
+    """
+    collected: List[str] = []
+    dest = Path(dest_dir)
+    made_dest = False
+    try:
+        total = 0
+        for entry in sorted(source_dir.iterdir(), key=lambda p: p.name):
+            if len(collected) >= _MAX_COLLECTED_FILES:
+                logger.warning(
+                    f"Output collection stopped at {_MAX_COLLECTED_FILES} files; "
+                    f"the rest were left behind"
+                )
+                break
+            if entry.is_symlink() or not entry.is_file():
+                continue
+            if entry.suffix.lower() not in FIGURE_EXTENSIONS:
+                continue
+            try:
+                size = entry.stat().st_size
+            except OSError:
+                continue
+            if size == 0 or size > _MAX_COLLECTED_BYTES:
+                if size:
+                    logger.warning(f"Skipped oversized output file {entry.name} ({size} bytes)")
+                continue
+            if total + size > _MAX_COLLECTED_TOTAL:
+                logger.warning("Output collection stopped at the total size cap")
+                break
+            # Per-file, not per-loop. With one try around the whole loop, a
+            # single uncopyable file (a permission error, a name the host
+            # filesystem rejects) ended collection entirely and every LATER
+            # figure was silently dropped -- the failure looked exactly like
+            # "the experiment drew nothing".
+            try:
+                if not made_dest:
+                    # Created only now that there is something to put in it,
+                    # so an experiment that drew nothing leaves no empty folder.
+                    dest.mkdir(parents=True, exist_ok=True)
+                    made_dest = True
+                target = dest / entry.name
+                n = 2
+                while target.exists():
+                    target = dest / f"{entry.stem}-{n}{entry.suffix}"
+                    n += 1
+                shutil.copy2(entry, target)
+            except (OSError, shutil.Error) as e:
+                logger.warning(f"Could not collect output file {entry.name}: {e}")
+                continue
+            collected.append(str(target))
+            total += size
+    except Exception as e:
+        logger.warning(f"Could not collect output files: {e}")
+    return collected
 
 
 class DockerSandbox:
@@ -184,7 +264,8 @@ class DockerSandbox:
         self,
         code: str,
         data_files: Optional[Dict[str, str]] = None,
-        environment: Optional[Dict[str, str]] = None
+        environment: Optional[Dict[str, str]] = None,
+        collect_to: Optional[str] = None
     ) -> SandboxExecutionResult:
         """
         Execute code in sandboxed Docker container.
@@ -218,12 +299,40 @@ class DockerSandbox:
             # Create output directory
             output_dir = Path(temp_dir) / "output"
             output_dir.mkdir(exist_ok=True)
+            # The container runs as a non-root user; without this the mount is
+            # owned by the host user and every savefig fails with EACCES --
+            # which surfaces as a bare OSError deep in matplotlib rather than
+            # as anything resembling a permissions problem.
+            #
+            # Only when something is actually being collected. Relaxing 0700 to
+            # 0755 and the mount to 0777 on EVERY execution widened the window
+            # for any other local user to read a run's staged data and code,
+            # including on runs with figures switched off that gain nothing
+            # from it. A run that collects nothing keeps mkdtemp's 0700.
+            # The modes themselves are unchanged: the container's uid is not
+            # knowable from here, and tightening them cannot be verified
+            # without a working Docker daemon. Gating them is the part that is
+            # provably right.
+            if collect_to:
+                try:
+                    os.chmod(temp_dir, 0o755)
+                    os.chmod(output_dir, 0o777)
+                except OSError as e:
+                    logger.warning(f"Could not relax permissions on the output mount: {e}")
 
             # Execute in container
             result = self._run_container(
                 temp_dir=temp_dir,
                 environment=environment or {}
             )
+
+            # Before the finally below destroys temp_dir.
+            if collect_to:
+                result.output_files = _collect_output_files(output_dir, collect_to)
+                if result.output_files:
+                    logger.info(
+                        f"Collected {len(result.output_files)} output file(s) to {collect_to}"
+                    )
 
             return result
 
@@ -271,6 +380,9 @@ class DockerSandbox:
         env = {
             'PYTHONUNBUFFERED': '1',
             'MPLBACKEND': 'Agg',
+            # Without a writable MPLCONFIGDIR matplotlib warns on every import
+            # and rebuilds its font cache each run.
+            'MPLCONFIGDIR': '/tmp/matplotlib',
             **environment
         }
 

@@ -10,11 +10,13 @@ import os
 from kosmos.utils.compat import model_to_dict
 import io
 import traceback
+import tempfile
+import shutil
 import signal
 import platform
 import concurrent.futures
 from contextlib import redirect_stdout, redirect_stderr
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import logging
 import time
 from datetime import datetime
@@ -111,6 +113,95 @@ def _make_restricted_import(allowed: set = _ALLOWED_MODULES):
     return _restricted_import
 
 
+# The one writable mount whose contents survive the container. Bound into
+# every generated script as `figure_dir`.
+SANDBOX_FIGURE_DIR = "/workspace/output"
+
+# Kept in step with kosmos.execution.sandbox.FIGURE_EXTENSIONS.
+_FIGURE_SUFFIXES = frozenset({".png", ".svg", ".pdf", ".html"})
+
+
+def _existing_figures(directory: Optional[str]) -> set:
+    """Figure files already in `directory`, so a run only claims what it drew."""
+    try:
+        if not directory or not os.path.isdir(directory):
+            return set()
+        return {
+            name for name in os.listdir(directory)
+            if os.path.splitext(name)[1].lower() in _FIGURE_SUFFIXES
+        }
+    except OSError:
+        return set()
+
+
+def _discard_temp_figure_dir(directory: Optional[str], is_temp: bool) -> None:
+    """Remove a scratch figure directory. Called from a `finally`, always.
+
+    It used to be removed only on the success path, so EVERY failing local
+    execution left an empty `kosmos-fig-XXXXXXXX` behind -- and since the
+    directory is created whether or not figures are enabled, a long run with
+    many failing experiments accumulated hundreds of them with nothing to
+    clean them up.
+    """
+    if not is_temp or not directory:
+        return
+    try:
+        shutil.rmtree(directory, ignore_errors=True)
+    except Exception as e:  # pragma: no cover - rmtree already swallows OSError
+        logger.warning(f"Could not remove the scratch figure directory: {e}")
+
+
+def _prune_empty_figure_dir(directory: Optional[str], is_temp: bool) -> None:
+    """Remove a CONFIGURED figure directory that nothing was written to.
+
+    The directory has to exist before the code runs, because the code saves
+    into it -- but an experiment that drew nothing must not leave a folder
+    beside the user's report. Only ever removes an EMPTY directory, and its
+    empty parent, so nothing that holds a file can be lost.
+    """
+    if is_temp or not directory:
+        return
+    try:
+        if os.path.isdir(directory) and not os.listdir(directory):
+            os.rmdir(directory)
+            parent = os.path.dirname(directory)
+            if parent and os.path.isdir(parent) and not os.listdir(parent):
+                os.rmdir(parent)
+    except OSError:
+        # A directory that will not go is a directory with something in it.
+        pass
+
+
+def _collect_local_figures(directory: Optional[str], before: set, is_temp: bool) -> List[str]:
+    """Figures written during a LOCAL (non-sandbox) run.
+
+    A temp directory yields nothing: without a configured figures directory
+    there is nowhere durable to put them, and a path into a deleted temp dir
+    in the report would be worse than no figure at all.
+    """
+    try:
+        if is_temp or not directory or not os.path.isdir(directory):
+            return []
+        fresh = sorted(
+            os.path.join(directory, name)
+            for name in os.listdir(directory)
+            if name not in before
+            and os.path.splitext(name)[1].lower() in _FIGURE_SUFFIXES
+            and os.path.isfile(os.path.join(directory, name))
+        )
+        return fresh
+    except OSError as e:
+        logger.warning(f"Could not collect local figures: {e}")
+        return []
+
+
+def _pair_figures(paths: Any) -> List[Dict[str, Any]]:
+    """Collected file paths -> the {path, caption} records the DB stores."""
+    if not isinstance(paths, (list, tuple)):
+        return []
+    return [{"path": str(p), "caption": None} for p in paths if p]
+
+
 class ExecutionResult:
     """Result of code execution."""
 
@@ -124,7 +215,8 @@ class ExecutionResult:
         error_type: Optional[str] = None,
         execution_time: float = 0.0,
         profile_result: Optional[Any] = None,  # ProfileResult from kosmos.core.profiling
-        data_source: Optional[str] = None  # 'file' or 'synthetic'
+        data_source: Optional[str] = None,  # 'file' or 'synthetic'
+        figures: Optional[List[Dict[str, Any]]] = None
     ):
         self.success = success
         self.return_value = return_value
@@ -135,6 +227,9 @@ class ExecutionResult:
         self.execution_time = execution_time
         self.profile_result = profile_result
         self.data_source = data_source
+        # [{'path': <host path>, 'caption': <str|None>}] for figures the run
+        # wrote into the sandbox's output mount and that were copied out.
+        self.figures = list(figures or [])
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -147,6 +242,7 @@ class ExecutionResult:
             'error_type': self.error_type,
             'execution_time': self.execution_time,
             'data_source': self.data_source,
+            'figures': self.figures
         }
 
         # Include profile data if available
@@ -209,21 +305,28 @@ def _build_sandbox_shim() -> str:
     Injects the REAL, self-contained kosmos analysis helpers by embedding their
     source (kosmos/execution/data_analysis.py -> DataAnalyzer/DataCleaner,
     kosmos/execution/ml_experiments.py -> MLAnalyzer) so experiments produce
-    genuine results. Any other kosmos.* import (e.g. PublicationVisualizer, which
-    has kosmos deps we don't bundle) falls back to the never-crash stub. The
+    genuine results, and kosmos/analysis/visualization.py -> PublicationVisualizer
+    so figures are really drawn. Any OTHER kosmos.* import falls back to the
+    never-crash stub, which now announces itself on stderr. The
     kosmos package isn't installed in the isolated sandbox, hence the injection.
     """
     _dir = os.path.dirname(os.path.abspath(__file__))
     real = {}
-    for modname, fname in (
+    for modname, relpath in (
         ("kosmos.execution.data_analysis", "data_analysis.py"),
         ("kosmos.execution.ml_experiments", "ml_experiments.py"),
+        # Bundled since its kosmos.models import moved under TYPE_CHECKING.
+        # Until then this module raised ImportError inside the sandbox and fell
+        # back to the never-crash stub, so every plt call the generated code
+        # made through it silently did nothing -- the reason runs that plainly
+        # tried to draw figures produced none.
+        ("kosmos.analysis.visualization", os.path.join("..", "analysis", "visualization.py")),
     ):
         try:
-            with open(os.path.join(_dir, fname), "r") as fh:
+            with open(os.path.join(_dir, relpath), "r") as fh:
                 real[modname] = fh.read()
         except Exception as e:  # pragma: no cover - best effort
-            logger.warning("Could not read sandbox helper %s: %s", fname, e)
+            logger.warning("Could not read sandbox helper %s: %s", relpath, e)
 
     parts = [_SANDBOX_SHIM_STATIC, "_REAL_KOSMOS_SRC = {"]
     for modname, src in real.items():
@@ -237,7 +340,10 @@ def _build_sandbox_shim() -> str:
         "        exec(compile(_rsrc, _rn.replace('.', '/') + '.py', 'exec'), _rm.__dict__)\n"
         "        _pp, _, _leaf = _rn.rpartition('.')\n"
         "        if _pp in _sys.modules: setattr(_sys.modules[_pp], _leaf, _rm)\n"
-        "    except Exception:\n"
+        "    except Exception as _re:\n"
+        # Say WHICH module fell back and why. A silent stub is how a whole
+        # category of output (figures) went missing for months.
+        "        print('KOSMOS_SHIM_FALLBACK:', _rn, repr(_re), file=_sys.stderr)\n"
         "        _mkstub(_rn)\n"
         "# --- end shim ---"
     )
@@ -337,6 +443,8 @@ class CodeExecutor:
         self.profiling_mode = profiling_mode
         self.test_determinism = test_determinism
         self.execution_timeout = execution_timeout
+        # Set per experiment by the director; None disables figure collection.
+        self.figure_dir: Optional[str] = None
 
         # Initialize retry strategy for self-correcting execution (Issue #54)
         self.retry_strategy = RetryStrategy(max_retries=max_retries, base_delay=retry_delay)
@@ -699,6 +807,17 @@ class CodeExecutor:
         exec_globals = self._prepare_globals()
         exec_locals = local_vars.copy() if local_vars else {}
 
+        # Bind the figure destination on THIS path too. It was bound only on
+        # the sandbox branch, so on any Docker-less install every generated
+        # experiment died with `NameError: name 'figure_dir' is not defined`
+        # -- on the very code the new prompt instructs the model to write, and
+        # with the name whitelisted in the generator's undefined-name check so
+        # nothing caught it earlier.
+        local_fig_dir, _fig_is_temp = self._local_figure_dir()
+        exec_globals["figure_dir"] = local_fig_dir
+        exec_globals["figure_path"] = os.path.join(local_fig_dir, "figure.png")
+        _fig_before = _existing_figures(local_fig_dir)
+
         # Capture stdout and stderr
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()
@@ -723,8 +842,12 @@ class CodeExecutor:
             return_value = exec_locals.get('results', exec_locals.get('result'))
             data_source = exec_locals.get('_data_source')
 
+            _figs = _pair_figures(
+                _collect_local_figures(local_fig_dir, _fig_before, _fig_is_temp)
+            )
             return ExecutionResult(
                 success=True,
+                figures=_figs,
                 return_value=return_value,
                 stdout=stdout_capture.getvalue(),
                 stderr=stderr_capture.getvalue(),
@@ -758,6 +881,15 @@ class CodeExecutor:
                 execution_time=execution_time,
                 profile_result=profile_result
             )
+
+        finally:
+            # Every exit path: success, exception, timeout, and the retry that
+            # follows. Cleaning up only on success leaked one empty scratch
+            # directory per FAILED execution -- and the directory is created
+            # whether or not figures are enabled, so a long run with many
+            # failing experiments accumulated hundreds of them.
+            _discard_temp_figure_dir(local_fig_dir, _fig_is_temp)
+            _prune_empty_figure_dir(local_fig_dir, _fig_is_temp)
 
     def _execute_in_sandbox(
         self,
@@ -817,6 +949,17 @@ class CodeExecutor:
             primary = f"/workspace/data/{os.path.basename(host_paths[0])}"
             code = f"data_path = {primary!r}\n{code}"
 
+        # Bind the figure destination BEFORE the shim goes on top, so the
+        # generated code can `plt.savefig(f"{figure_dir}/x.png")` without
+        # knowing anything about the container's layout. /workspace/output is
+        # the one writable mount whose contents are copied out; /tmp is a
+        # tmpfs that is discarded when the container exits, which is where
+        # every figure went until now.
+        code = (
+            f"figure_dir = {SANDBOX_FIGURE_DIR!r}\n"
+            f"figure_path = {SANDBOX_FIGURE_DIR + '/figure.png'!r}\n"
+        ) + code
+
         # Prepend the kosmos-stub shim so generated `from kosmos.* import ...`
         # lines resolve inside the sandbox (kosmos pkg isn't installed there).
         code = _build_sandbox_shim() + "\n" + code
@@ -826,7 +969,11 @@ class CodeExecutor:
         code = code + "\n" + _SANDBOX_RESULT_CAPTURE
 
         # Execute in sandbox
-        sandbox_result = self.sandbox.execute(code, data_files=data_files if data_files else None)
+        sandbox_result = self.sandbox.execute(
+            code,
+            data_files=data_files if data_files else None,
+            collect_to=self.figure_dir,
+        )
 
         # Convert SandboxExecutionResult to ExecutionResult
         return ExecutionResult(
@@ -836,8 +983,19 @@ class CodeExecutor:
             stderr=sandbox_result.stderr,
             error=sandbox_result.error,
             error_type=sandbox_result.error_type,
-            execution_time=sandbox_result.execution_time
+            execution_time=sandbox_result.execution_time,
+            figures=_pair_figures(getattr(sandbox_result, "output_files", None))
         )
+
+    def _local_figure_dir(self) -> "tuple":
+        """(directory, is_temp) for figures drawn by a local, unsandboxed run."""
+        try:
+            if self.figure_dir:
+                os.makedirs(self.figure_dir, exist_ok=True)
+                return self.figure_dir, False
+        except OSError as e:
+            logger.warning(f"Could not use the configured figure directory: {e}")
+        return tempfile.mkdtemp(prefix="kosmos-fig-"), True
 
     def _prepare_globals(self) -> Dict[str, Any]:
         """Prepare global namespace with restricted builtins (F-16)."""
@@ -1360,7 +1518,8 @@ def execute_protocol_code(
     data_path: Optional[str] = None,
     max_retries: int = 2,
     use_sandbox: bool = True,
-    sandbox_config: Optional[Dict[str, Any]] = None
+    sandbox_config: Optional[Dict[str, Any]] = None,
+    figure_dir: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Convenience function to execute protocol code with full pipeline.
@@ -1373,6 +1532,10 @@ def execute_protocol_code(
         max_retries: Maximum retry attempts
         use_sandbox: If True, execute in Docker sandbox (default: True)
         sandbox_config: Optional sandbox configuration
+        figure_dir: Where to keep figures the code draws. Without it this
+            path collected none at all -- it builds its own CodeExecutor, so
+            the caller's figure_dir never reached it and every figure from a
+            batch-executed experiment was discarded with the container.
 
     Returns:
         Dictionary with execution results
@@ -1426,6 +1589,7 @@ def execute_protocol_code(
         use_sandbox=use_sandbox,
         sandbox_config=sandbox_config or {}
     )
+    executor.figure_dir = figure_dir
 
     if data_path:
         result = executor.execute_with_data(code, data_path, retry_on_error=True)

@@ -11,7 +11,7 @@ Matches exact formatting standards from kosmos-figures repository:
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Optional, List, Tuple, Dict, Any, TYPE_CHECKING
 from pathlib import Path
 import logging
 
@@ -21,7 +21,13 @@ try:
 except ImportError:
     HAS_SCIPY = False
 
-from kosmos.models.result import ExperimentResult, StatisticalTestResult
+# Imported for typing only. This module is EXEC'd into the experiment sandbox,
+# where the kosmos package does not exist -- a runtime import of kosmos.models
+# there raises ImportError and the whole module falls back to a no-op stub,
+# which is why figures silently never appeared. `select_plot_types` is the only
+# host-side entry point and is the only thing that needs the real class.
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from kosmos.models.result import ExperimentResult
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +83,13 @@ class PublicationVisualizer:
         """Initialize visualizer with kosmos-figures formatting standards."""
         # Set publication standards from kosmos-figures
         plt.rcParams.update({
-            'font.family': 'Arial',
+            # sans-serif with a fallback chain rather than 'Arial' outright:
+            # the sandbox image ships no Arial, so every text object logged
+            # "Font family 'Arial' not found" -- hundreds of lines per figure,
+            # drowning the stderr an experiment is judged on. The figures
+            # always fell back to DejaVu anyway; this just names the fallback.
+            'font.family': 'sans-serif',
+            'font.sans-serif': ['Arial', 'Helvetica', 'DejaVu Sans', 'sans-serif'],
             'font.size': 10,
             'axes.labelsize': 12,
             'xtick.labelsize': 10,
@@ -194,7 +206,7 @@ class PublicationVisualizer:
         else:
             plt.close()
 
-        return output_path or "volcano_plot.png"
+        return output_path if output_path else ""
 
     def custom_heatmap(
         self,
@@ -279,7 +291,7 @@ class PublicationVisualizer:
         else:
             plt.close()
 
-        return output_path or "heatmap.png"
+        return output_path if output_path else ""
 
     def scatter_with_regression(
         self,
@@ -362,7 +374,7 @@ class PublicationVisualizer:
         else:
             plt.close()
 
-        return output_path or "scatter_regression.png"
+        return output_path if output_path else ""
 
     def log_log_plot(
         self,
@@ -430,7 +442,7 @@ class PublicationVisualizer:
         else:
             plt.close()
 
-        return output_path or "log_log_plot.png"
+        return output_path if output_path else ""
 
     # ========================================================================
     # ADDITIONAL STATISTICAL PLOTS
@@ -511,7 +523,89 @@ class PublicationVisualizer:
         else:
             plt.close()
 
-        return output_path or "box_plot.png"
+        return output_path if output_path else ""
+
+    def forest_plot(
+        self,
+        labels: List[str],
+        estimates: np.ndarray,
+        ci_low: np.ndarray,
+        ci_high: np.ndarray,
+        x_label: str = "Effect estimate",
+        title: str = "Forest Plot",
+        null_value: float = 0.0,
+        output_path: Optional[str] = None,
+        show_plot: bool = False
+    ) -> str:
+        """One row per estimate with its confidence interval.
+
+        The figure an MR or meta-analysis wants and the one this class did not
+        have: per-protein effects with CIs, a reference line at the null, and
+        the intervals that exclude it picked out. Added because the analyses
+        this agent actually runs -- instrumental-variable MR across proteins,
+        random-effects meta-analysis across cohorts -- produced exactly this
+        shape of result and had no way to draw it.
+
+        Args:
+            labels: one name per row (protein, cohort, cell type)
+            estimates: the point estimates
+            ci_low, ci_high: interval bounds, same length as estimates
+            null_value: where the reference line goes (0 for a difference,
+                1 for a ratio)
+            output_path: where to save; returns '' when not given
+
+        Returns:
+            The path written, or '' if nothing was saved.
+        """
+        estimates = np.asarray(estimates, dtype=float).ravel()
+        ci_low = np.asarray(ci_low, dtype=float).ravel()
+        ci_high = np.asarray(ci_high, dtype=float).ravel()
+        labels = [str(x) for x in labels]
+
+        if not (len(labels) == len(estimates) == len(ci_low) == len(ci_high)):
+            raise ValueError(
+                f"forest_plot needs equal lengths, got labels={len(labels)}, "
+                f"estimates={len(estimates)}, ci_low={len(ci_low)}, "
+                f"ci_high={len(ci_high)}"
+            )
+        if len(estimates) == 0:
+            raise ValueError("forest_plot needs at least one estimate")
+
+        # A forest plot of 400 rows is a black smear. Keep the largest
+        # absolute effects, which is what such a plot is read for.
+        if len(estimates) > 40:
+            order = np.argsort(-np.abs(estimates - null_value))[:40]
+            order = np.sort(order)
+            labels = [labels[i] for i in order]
+            estimates, ci_low, ci_high = estimates[order], ci_low[order], ci_high[order]
+            logger.warning("forest_plot truncated to the 40 largest effects")
+
+        fig, ax = plt.subplots(figsize=(8, max(3.0, 0.32 * len(estimates) + 1.2)))
+        y = np.arange(len(estimates))[::-1]
+        excludes_null = (ci_low > null_value) | (ci_high < null_value)
+        for yi, est, lo, hi, sig in zip(y, estimates, ci_low, ci_high, excludes_null):
+            colour = COLORS['red'] if sig else COLORS['gray']
+            ax.plot([lo, hi], [yi, yi], color=colour, linewidth=1.6, solid_capstyle='butt')
+            ax.plot([est], [yi], marker='s', markersize=6, color=colour, linestyle='none')
+
+        ax.axvline(null_value, color=COLORS['black'], linestyle='--', linewidth=1, alpha=0.7)
+        ax.set_yticks(y)
+        ax.set_yticklabels(labels)
+        ax.set_xlabel(x_label)
+        ax.set_title(title)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        ax.tick_params(axis='y', length=0)
+        plt.tight_layout()
+
+        if output_path:
+            plt.savefig(output_path, dpi=300, bbox_inches='tight')
+            logger.info(f"Saved forest plot to {output_path}")
+        if show_plot:
+            plt.show()
+        plt.close(fig)
+        return output_path if output_path else ""
 
     def violin_plot(
         self,
@@ -577,7 +671,7 @@ class PublicationVisualizer:
         else:
             plt.close()
 
-        return output_path or "violin_plot.png"
+        return output_path if output_path else ""
 
     def qq_plot(
         self,
@@ -638,13 +732,13 @@ class PublicationVisualizer:
         else:
             plt.close()
 
-        return output_path or "qq_plot.png"
+        return output_path if output_path else ""
 
     # ========================================================================
     # AUTOMATIC PLOT SELECTION
     # ========================================================================
 
-    def select_plot_types(self, result: ExperimentResult) -> List[Dict[str, Any]]:
+    def select_plot_types(self, result: "ExperimentResult") -> List[Dict[str, Any]]:
         """
         Automatically select appropriate plot types based on experiment result.
 

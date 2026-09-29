@@ -432,7 +432,23 @@ class ExperimentDesignerAgent(BaseAgent):
             max_duration_days=max_duration_days
         )
 
-        protocol = template.generate_protocol(params)
+        try:
+            protocol = template.generate_protocol(params)
+        except Exception as e:
+            # A template is a convenience, not a requirement: if it cannot
+            # produce a protocol for this hypothesis (a bug in the template, a
+            # custom variable it insists on, a schema drift), the run must not
+            # die here. Before this guard the exception propagated to the
+            # director, whose error recovery reset the workflow to hypothesis
+            # generation -- so every iteration regenerated hypotheses and none
+            # ever reached execution, with the cause visible only in the log.
+            logger.warning(
+                "Template %s failed for hypothesis %s (%s: %s); falling back to LLM design",
+                template.metadata.name, hypothesis.id, type(e).__name__, e,
+            )
+            return self._generate_with_claude(
+                hypothesis, experiment_type, max_cost_usd, max_duration_days
+            )
         protocol.template_name = template.metadata.name
         protocol.template_version = template.metadata.version
 

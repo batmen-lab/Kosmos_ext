@@ -250,6 +250,51 @@ class ResearchConfig(BaseSettings):
         description="Minimum novelty score for hypotheses",
         alias="MIN_NOVELTY_SCORE"
     )
+    num_hypotheses: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Hypotheses requested per generation round",
+        alias="NUM_HYPOTHESES"
+    )
+    max_variants_per_hypothesis: int = Field(
+        default=2,
+        ge=0,
+        le=10,
+        description=(
+            "Variants the refiner may spawn from one tested hypothesis over a "
+            "run; past this, new hypotheses are generated instead"
+        ),
+        alias="MAX_VARIANTS_PER_HYPOTHESIS"
+    )
+    relevance_check: bool = Field(
+        default=True,
+        description=(
+            "Judge once per run whether the staged data holds variables that "
+            "can address the research question, and carry the verdict into "
+            "hypothesis generation. Warns, never blocks; costs at most one "
+            "extra LLM call, and none at all when the question's terms already "
+            "appear in the data"
+        ),
+        alias="RELEVANCE_CHECK"
+    )
+    enable_figures: bool = Field(
+        default=True,
+        description=(
+            "Collect figures written by experiment code out of the sandbox and "
+            "render them in the run report"
+        ),
+        alias="ENABLE_FIGURES"
+    )
+    figures_dir: Optional[str] = Field(
+        default=None,
+        description=(
+            "Where collected figures are written. Empty means beside the "
+            "--output report, which is what makes the report's relative image "
+            "links resolve"
+        ),
+        alias="FIGURES_DIR"
+    )
     enable_autonomous_iteration: bool = Field(
         default=True,
         description="Enable autonomous research iteration",

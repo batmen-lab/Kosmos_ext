@@ -755,11 +755,44 @@ bx = pd.to_numeric(df[_bx], errors='coerce').values.astype(float)
 sx = pd.to_numeric(df[_sx], errors='coerce').values.astype(float)
 by = pd.to_numeric(df[_by], errors='coerce').values.astype(float)
 sy = pd.to_numeric(df[_sy], errors='coerce').values.astype(float)
-_ok = np.isfinite(bx) & np.isfinite(sx) & np.isfinite(by) & np.isfinite(sy) & (sy > 0) & (bx != 0)
+_ok = (np.isfinite(bx) & np.isfinite(sx) & np.isfinite(by) & np.isfinite(sy)
+       & (sy > 0) & (sx > 0) & (bx != 0))
 bx, sx, by, sy = bx[_ok], sx[_ok], by[_ok], sy[_ok]
+n_before_strength = int(len(bx))
+if n_before_strength < 1:
+    raise RuntimeError('No valid MR instruments after cleaning (need finite bx/sx/by/sy, sy>0, sx>0, bx!=0).')
+
+# --- Instrument strength: drop weak instruments before estimating ---
+# F = (bx/sx)^2 per instrument; F >= 10 is the conventional threshold.
+#
+# This is not tidying. A Wald ratio is by/bx, so an instrument whose exposure
+# effect is indistinguishable from zero divides by ~0 and returns an enormous
+# causal estimate that is an artefact of the denominator, not a finding. A run
+# on real cis-pQTL data produced a per-protein estimate of beta = -14000 this
+# way; it outranked every real signal, made the volcano plot unreadable, and
+# nothing in the pipeline marked it as suspect. Weak instruments also bias the
+# pooled IVW estimate toward the confounded observational association, which is
+# the specific thing MR exists to avoid.
+F_MIN = 10.0
+F_stat = (bx / sx) ** 2
+_strong = F_stat >= F_MIN
+n_strong = int(_strong.sum())
+n_weak = n_before_strength - n_strong
+
+if n_strong >= 1:
+    bx, sx, by, sy = bx[_strong], sx[_strong], by[_strong], sy[_strong]
+    F_kept = F_stat[_strong]
+    weak_instruments_only = False
+else:
+    # Every instrument is weak. Report the estimate rather than lose the
+    # experiment, but say so plainly: an IVW over weak instruments is not
+    # evidence, and a caller that cannot see the caveat will read it as one.
+    F_kept = F_stat
+    weak_instruments_only = True
+    print('WARNING: no instrument reaches F >= %.0f; the estimate below is '
+          'weak-instrument biased and should not be read as causal.' % F_MIN)
+
 n = int(len(bx))
-if n < 1:
-    raise RuntimeError('No valid MR instruments after cleaning (need finite bx/sx/by/sy, sy>0, bx!=0).')
 
 # --- Inverse-variance-weighted (IVW) MR, fixed effect ---
 w = 1.0 / (sy ** 2)
@@ -776,6 +809,12 @@ wald_ratios = [float(x) for x in wald]
 results = {
     'method': 'IVW Mendelian randomization (fixed-effect)',
     'n_instruments': n,
+    'instrument_filter': 'F >= %.1f' % F_MIN,
+    'n_instruments_before_strength_filter': n_before_strength,
+    'n_instruments_dropped_weak': n_weak,
+    'f_statistic_min': float(np.min(F_kept)),
+    'f_statistic_median': float(np.median(F_kept)),
+    'weak_instruments_only': bool(weak_instruments_only),
     'ivw_beta': ivw_beta,
     'ivw_se': ivw_se,
     'ivw_p_value': ivw_p,
@@ -810,7 +849,9 @@ if n >= 3:
         pass
 
 # --- Report ---
-print(f"MR (IVW): {n} instrument(s); columns exposure=({_bx},{_sx}) outcome=({_by},{_sy})")
+print(f"MR (IVW): {n} instrument(s) of {n_before_strength} after the F >= {F_MIN:.0f} filter "
+      f"({n_weak} weak dropped; median F = {float(np.median(F_kept)):.1f})")
+print(f"Columns: exposure=({_bx},{_sx}) outcome=({_by},{_sy})")
 print(f"IVW beta = {ivw_beta:.4f}  SE = {ivw_se:.4f}  p = {ivw_p:.3e}")
 print(f"Direction: {results['direction']}")
 if n == 1:
@@ -1062,10 +1103,28 @@ def _empty_frame_advice() -> str:
     )
 
 
-def _looks_truncated(error: Exception) -> bool:
-    """Did generation stop mid-statement?"""
+# A script this long that never assigns `results` did not FORGET to; it was
+# cut off before it got there. Short scripts really can just omit it, so the
+# length is what separates "ran out of room" from "wrote the wrong thing".
+_TRUNCATION_MIN_LINES = 40
+
+
+def _looks_truncated(error: Exception, code: Optional[str] = None) -> bool:
+    """Did generation stop mid-statement?
+
+    The bracket errors are unambiguous. The second test exists because the
+    observed failure did NOT produce one: a 400-line multi-dataset script was
+    rejected for assigning no `results`, which is not in the marker list, so
+    the retry was told to FIX its mistake -- and answered with a longer, more
+    careful script that hit the token wall mid-expression at line 381. The
+    whole cross-dataset analysis was lost to a retry aimed the wrong way.
+    """
     text = str(error).lower()
-    return any(marker in text for marker in _TRUNCATION_MARKERS)
+    if any(marker in text for marker in _TRUNCATION_MARKERS):
+        return True
+    if code and "assigns none of" in text:
+        return len(code.splitlines()) >= _TRUNCATION_MIN_LINES
+    return False
 
 
 _DATA_ACCESS_NAMES = frozenset({"data_path", "datasets", "__data_files__"})
@@ -1102,10 +1161,13 @@ def _reads_data(tree: ast.AST) -> bool:
 # time without appearing anywhere in the script.
 _INJECTED_NAMES = frozenset({
     "data_path", "datasets", "__data_files__", "__name__", "__file__", "__doc__",
-    # Supplied by the figure manager when an experiment saves a plot. The
-    # shipped templates guard it with `if 'figure_path' in dir():`, so it is
-    # legitimately used without ever being assigned in the script.
-    "figure_path",
+    # Bound by the executor's sandbox preamble (see SANDBOX_FIGURE_DIR in
+    # kosmos/execution/executor.py): `figure_dir` is the directory whose
+    # contents are copied back out of the container, `figure_path` a default
+    # file inside it. The shipped templates guard figure_path with
+    # `if 'figure_path' in dir():`, so both are legitimately used without ever
+    # being assigned in the script.
+    "figure_path", "figure_dir",
 })
 
 _UNDEFINED_MARKER = "calls undefined name"
@@ -1117,7 +1179,143 @@ _UNDEFINED_MARKER = "calls undefined name"
 # statsmodels, which IS installed. An import error kills the script on line 61
 # before any analysis runs, so naming the package set is cheap next to what it
 # prevents.
-SANDBOX_PACKAGES = "biopython, gseapy, h5py, jupyter_client, matplotlib, nbconvert, nbformat, networkx, numpy, openpyxl, pandas, plotly, pwlf, pyarrow, pydantic, python-dateutil, pytz, scikit-learn, scipy, seaborn, shap, statsmodels, sympy, xlrd"
+SANDBOX_PACKAGES = "anndata, biopython, gseapy, h5py, jupyter_client, matplotlib, nbconvert, nbformat, networkx, numpy, openpyxl, pandas, plotly, pwlf, pyarrow, pydeseq2, pydantic, python-dateutil, pytz, scikit-learn, scipy, seaborn, shap, statsmodels, sympy, xlrd"
+
+
+def _figure_text() -> str:
+    """Where figures must be saved, and which ones are worth drawing.
+
+    Two facts the model cannot infer and used to get wrong every time: the
+    destination (anything written outside `figure_dir` is discarded with the
+    container), and that `PublicationVisualizer` is genuinely importable here
+    -- it used to be a silent no-op stub, so code that called it produced
+    nothing and looked like it had worked.
+
+    The figure kinds named are the ones the Kosmos paper's own runs produced,
+    listed with the analysis each belongs to so the model picks a plot that
+    matches its result rather than defaulting to a bar chart.
+
+    The readability rules were added after a real run's figures were compared
+    against the paper's: the KINDS matched, the craft did not. An unbounded
+    axis, unlabelled points and uniform colour are what separated an
+    unreadable volcano from a publishable one.
+    """
+    return (
+        "FIGURES: `figure_dir` is already defined for you -- it is the ONLY "
+        "directory whose contents come back out of the container. A figure "
+        "written anywhere else (including /tmp or the working directory) is "
+        "discarded when the run ends. Save with "
+        "`plt.savefig(f\"{figure_dir}/descriptive_name.png\", dpi=150, "
+        "bbox_inches='tight')` and then `plt.close()`. Build the path with an "
+        "f-string; do not import os. Give each figure a DISTINCT descriptive "
+        "filename -- `figure.png` twice keeps only the second. Draw between "
+        "one and six figures: the ones that show the result, not one per "
+        "intermediate step.\n"
+        "Choose the kind that fits what you computed: VOLCANO PLOT for a "
+        "per-feature effect size against its p-value; GROUPED BOX PLOT (with "
+        "the points overlaid) for a value compared across groups; HEATMAP for "
+        "a matrix of effects or correlations; SCATTER WITH REGRESSION for a "
+        "correlation or dose-response; FOREST PLOT for per-estimate effects "
+        "with confidence intervals (per protein, per cohort, per cell type). "
+        "Label axes with the real variable names and units.\n"
+        # Added after comparing a real run's figures against the paper's. The
+        # kinds matched; the craft did not. One protein whose Wald ratio had a
+        # near-zero denominator came out at beta = -14000, which stretched the
+        # x-axis until all 171 points collapsed into a vertical line at zero.
+        # The figure was not wrong, it was unreadable -- and the artefact that
+        # ruined it was not a finding. The paper's equivalent volcano is
+        # legible because its axes are bounded and its key hits are named.
+        "MAKE THE FIGURE READABLE, which is a separate job from computing it:\n"
+        "  - BOUND THE AXES against outliers. One extreme point -- a ratio "
+        "with a near-zero denominator, a division blow-up -- will compress "
+        "every real point into a single line and the plot will look empty. "
+        "Clip to a sensible range (for example `np.nanpercentile(x, [1, 99])` "
+        "with a little padding) and say in the caption how many points fell "
+        "outside it. Never silently drop them.\n"
+        "  - NAME THE POINTS THAT MATTER. Annotate the top few hits by their "
+        "real identifier (gene, protein, cohort) with `plt.annotate`. An "
+        "unlabelled cloud cannot be read; a labelled one carries the finding.\n"
+        "  - COLOUR BY SIGNIFICANCE, not uniformly: the points that pass your "
+        "threshold in one colour and the rest in grey, with the threshold "
+        "drawn as a dashed line and a legend saying what it is.\n"
+        "  - If the analysis has a protein, gene or condition the question "
+        "ASKED ABOUT, make sure it is visible and labelled even when it is not "
+        "the top hit. A figure that hides the answer to the question has "
+        "failed whatever else it shows.\n"
+        "  - DO NOT LET LABELS OVERLAP. Six labels written on top of each "
+        "other are less readable than none. Offset them in alternating "
+        "directions, or label fewer points -- legibility decides how many, "
+        "not a fixed number.\n"
+        "  - A p-value that underflows to 0.0 becomes infinity on a -log10 "
+        "axis, so such points pile up in one place and their labels collide. "
+        "Floor them at the smallest representable value, and say in the "
+        "caption how many hit the floor: 'p < 1e-300' is the honest reading, "
+        "not a tie.\n"
+        "`from kosmos.analysis.visualization import PublicationVisualizer` "
+        "works inside this sandbox and gives you volcano_plot, "
+        "box_plot_with_points, custom_heatmap, scatter_with_regression, "
+        "log_log_plot, qq_plot, violin_plot and forest_plot, each taking "
+        "`output_path=`. Its array arguments must be numpy arrays, not lists "
+        "(`df[col].values` or `np.asarray(x)`). Plain matplotlib is equally "
+        "acceptable.\n"
+        "Record what you drew: add `results['figures'] = [{'path': <the path "
+        "you saved>, 'caption': <one sentence saying what it shows>}, ...]` so "
+        "each figure reaches the report with its caption.\n"
+    )
+
+
+def _mr_text(protocol) -> str:
+    """The instrument-strength rule, for protocols that are actually MR.
+
+    Conditional because an MR paragraph in every prompt is noise for the
+    experiments that are not MR, and prompt budget is what code generation
+    runs out of.
+
+    The rule exists because a run computed the diagnostic and ignored it. Its
+    own output read `F_stat_summary: median=1.21, n_below_10=138` -- 138 of
+    171 proteins instrumented below the conventional threshold -- and it went
+    on to report 169 of 171 as significant, which is weak-instrument bias
+    manufacturing significance rather than a finding. One protein's Wald ratio
+    reached beta = -14000 and outranked every real signal. The MR template
+    already filters; generated code is what wrote that analysis.
+    """
+    parts = [
+        getattr(protocol, "name", "") or "",
+        getattr(protocol, "description", "") or "",
+        getattr(protocol, "objective", "") or "",
+    ]
+    for step in getattr(protocol, "steps", []) or []:
+        parts += [getattr(step, "title", "") or "", getattr(step, "action", "") or "",
+                  getattr(step, "description", "") or ""]
+    hay = " ".join(parts).lower()
+    if not any(sig in hay for sig in ("mendelian", "ivw", "inverse-variance",
+                                      "inverse variance", "instrumental variable",
+                                      "wald ratio", "two-sample mr")):
+        return ""
+    return (
+        "INSTRUMENT STRENGTH (this is a Mendelian randomisation analysis): a "
+        "Wald ratio is beta_outcome / beta_exposure, so an instrument whose "
+        "exposure effect is indistinguishable from zero divides by ~0 and "
+        "returns an enormous causal estimate that is an artefact of the "
+        "denominator, not a finding. Weak instruments also bias the pooled "
+        "estimate toward the confounded observational association, which is "
+        "the one thing MR exists to avoid.\n"
+        "  - Compute the per-instrument F statistic, F = (beta_exposure / "
+        "se_exposure) ** 2, and DROP every instrument with F < 10 BEFORE "
+        "estimating anything. Do not merely report F alongside an unfiltered "
+        "estimate.\n"
+        "  - Report `n_instruments_before_strength_filter`, "
+        "`n_instruments_dropped_weak`, and the median F of those kept, so the "
+        "reader can see what went missing and why.\n"
+        "  - If NO instrument reaches F >= 10, still report the estimate, but "
+        "set `results['weak_instruments_only'] = True` and say in the summary "
+        "that it must not be read as causal. Losing the experiment is worse "
+        "than reporting it with the caveat; reporting it WITHOUT the caveat is "
+        "worse than both.\n"
+        "  - A causal estimate hundreds of times larger than the outcome's own "
+        "scale is a symptom of this, not a discovery. Check it before you "
+        "report it as the top hit.\n"
+    )
 
 
 def _environment_text() -> str:
@@ -1129,10 +1327,37 @@ def _environment_text() -> str:
         "multipletests), NOT in scipy.stats. There is no colocalization or "
         "Mendelian-randomization package -- implement those from the summary "
         "statistics directly with numpy/scipy. The container has NO network "
-        "access, so nothing can be downloaded or pip-installed at runtime. Its "
-        "FILESYSTEM IS READ-ONLY except /tmp: `df.to_csv('variant_set.csv')` "
-        "raises OSError [Errno 30] and kills the script. Keep intermediates in "
-        "memory; if you genuinely must write a file, write it under /tmp. The "
+        "access, so nothing can be downloaded or pip-installed at runtime. "
+        "gseapy.enrichr() and any gene-set/pathway library fetched from Enrichr, "
+        "MSigDB or a URL therefore raise a connection error -- do NOT call them. "
+        "For over-representation/enrichment, look for a gene-set table among the "
+        "provided data (a companion with columns like `gene_set, gene`); if one "
+        "is present, run the test OFFLINE yourself -- a hypergeometric/Fisher "
+        "test (scipy.stats.hypergeom / fisher_exact) per set against your DE gene "
+        "symbols, with statsmodels multipletests for FDR. If no such table is "
+        "provided, report that enrichment could not be run rather than reaching "
+        "for the network. "
+        # RNA-seq differential expression: use the real negative-binomial model,
+        # and never bury the per-gene answer in prose. A run reported the
+        # actomyosin panel (MYL9, MYL12B, ...) only inside a `target_gene_note`
+        # STRING with an all-NaN `padj` column, so the analyst was handed no
+        # number and scored the experiment untested.
+        "For RNA-seq differential expression use pydeseq2 "
+        "(pydeseq2.dds.DeseqDataSet + pydeseq2.ds.DeseqStats) on the raw integer "
+        "counts -- it is the DESeq2 negative-binomial model in Python and is "
+        "installed; do NOT substitute a Welch/Student t-test on the counts, which "
+        "ignores the mean-variance relationship. Return per-gene results as "
+        "NUMERIC fields (gene, log2FoldChange, pvalue, padj) in a table, not as a "
+        "sentence. If padj comes back ALL NaN (independent filtering or size-"
+        "factor failure on very few replicates), the DE test did not actually "
+        "run: report that explicitly and surface the raw pvalue/log2FoldChange -- "
+        "do not present NaN-adjusted genes as significant or non-significant. Its "
+        "FILESYSTEM IS READ-ONLY except /tmp and the figure directory: "
+        "`df.to_csv('variant_set.csv')` raises OSError [Errno 30] and kills "
+        "the script. Keep intermediates in memory; a genuine scratch file goes "
+        "under /tmp -- but /tmp is a tmpfs that is DISCARDED when the container "
+        "exits, so anything that must come back out goes in the figure "
+        "directory instead. See FIGURES below. The "
         "script is run as `python3 experiment.py` with NO command-line "
         "arguments and no environment variables: `sys.argv` has length 1, so "
         "an argv-based entrypoint always takes its else-branch. Do not write "
@@ -1528,45 +1753,13 @@ class ExperimentCodeGenerator:
                 # failure -- now raised as ValueError rather than returning None
                 # -- flew straight past the retry to the fallback, which is the
                 # exact case a second draw fixes.
-                try:
-                    code = self._generate_with_llm(
-                        protocol,
-                        datasets=self.datasets if len(self.datasets) > 1 else None,
-                        fix_hint=runtime_error,
-                    )
-                    # A fragment that opens no data is a failed generation, and
-                    # must fall back rather than execute.
-                    self._validate_generated(code)
-                except ValueError as first_error:
-                    # One retry for ANY rejection.
-                    #
-                    # This used to exclude "real" syntax errors on the reasoning
-                    # that they reproduce. That is wrong for a sampler: the
-                    # model does not systematically write unbalanced parens, and
-                    # `unmatched ')' at line 40` is a sampling accident a second
-                    # draw is unlikely to repeat. Excluding it cost a whole
-                    # multi-dataset MR, which fell back to a single-table
-                    # template and reported a correlation between chromosome
-                    # number and genomic position instead.
-                    #
-                    # The economics are lopsided in one direction: a retry costs
-                    # one call, and not retrying costs the entire cross-dataset
-                    # analysis the run exists to perform. So retry once,
-                    # whatever the rejection, and fall back only if the second
-                    # draw fails too.
-                    truncated = _looks_truncated(first_error)
-                    logger.warning(
-                        "Generated code rejected (%s); retrying once", first_error,
-                    )
-                    code = self._generate_with_llm(
-                        protocol,
-                        datasets=self.datasets if len(self.datasets) > 1 else None,
-                        brief=truncated,
-                        fix_hint=None if truncated else str(first_error),
-                    )
-                    self._validate_generated(code)
-                # A second failure of any kind falls through to the outer
-                # handler and the single-table fallback: one retry, not a loop.
+                code = self._generate_validated(
+                    protocol,
+                    datasets=self.datasets if len(self.datasets) > 1 else None,
+                    fix_hint=runtime_error,
+                )
+                # Exhausting the attempts falls through to the outer handler
+                # and the single-table fallback: bounded retries, not a loop.
                 self.last_generation["path"] = "multi_dataset_llm"
             except Exception as e:
                 self.last_generation["fallback_reason"] = (
@@ -1599,29 +1792,10 @@ class ExperimentCodeGenerator:
         if code is None and self.use_llm:
             logger.info("No template matched, using LLM generation")
             try:
-                try:
-                    code = self._generate_with_llm(protocol, fix_hint=runtime_error)
-                    self._validate_generated(code)
-                except ValueError as first_error:
-                    # One retry, showing the model WHY it was rejected -- the
-                    # same bargain the multi-dataset path already makes. This
-                    # branch used to fall straight to the basic template on any
-                    # rejection, so a single fixable defect (an argv entrypoint,
-                    # one invented analyzer method) cost the whole generated
-                    # analysis and replaced it with a summary. The rejection
-                    # text is the one thing that makes the second draw
-                    # different from the first; without it a retry is just
-                    # another sample.
-                    truncated = _looks_truncated(first_error)
-                    logger.warning(
-                        "Generated code rejected (%s); retrying once", first_error,
-                    )
-                    code = self._generate_with_llm(
-                        protocol,
-                        brief=truncated,
-                        fix_hint=None if truncated else str(first_error),
-                    )
-                    self._validate_generated(code)
+                # Same escalating retry as the multi-dataset path: a
+                # rejection that means "ran out of room" is answered with a
+                # shorter script, anything else with the reason.
+                code = self._generate_validated(protocol, fix_hint=runtime_error)
                 self.last_generation["path"] = "llm"
             except Exception as e:
                 logger.warning(
@@ -1788,6 +1962,76 @@ lines later.{context}"""
             return catch_all
         return None
 
+    def _generate_validated(
+        self,
+        protocol,
+        datasets=None,
+        fix_hint: Optional[str] = None,
+        max_attempts: int = 3,
+    ) -> str:
+        """Generate code and validate it, escalating when it looks truncated.
+
+        Replaces a single retry that could only ever aim once. The bargain the
+        old comment struck still holds -- a retry costs one call, and not
+        retrying costs the entire cross-dataset analysis the run exists to
+        perform -- but it was struck on the strength of the FIRST rejection, so
+        a truncation discovered on the SECOND draw had nowhere to go. That is
+        the observed failure: a long multi-dataset script was rejected for
+        assigning no `results`, the retry was told to fix its mistake, and it
+        answered with a longer, more careful script that ran out of room
+        mid-expression at line 381. The run lost the whole cross-dataset MR.
+
+        The escalation is the point. A rejection that looks like the model ran
+        out of room is answered with `brief`, which asks for a SHORTER script;
+        any other rejection is answered with the reason. Bounded at
+        `max_attempts`, which is the only thing that bounds it: once the
+        length limit is on it stays on, and a repeat truncation buys another
+        sample rather than a surrender.
+        """
+        brief = False
+        last_error: Optional[Exception] = None
+        for attempt in range(1, max_attempts + 1):
+            code = None
+            try:
+                # The generation call belongs INSIDE the retryable try, not
+                # before it: a provider failure (a read timeout, an empty
+                # completion) is raised here, and leaving it outside sends it
+                # straight past the retry to the fallback -- which is exactly
+                # the case a second draw fixes.
+                code = self._generate_with_llm(
+                    protocol,
+                    datasets=datasets,
+                    brief=brief,
+                    fix_hint=(
+                        fix_hint if (last_error is None and not brief)
+                        else None if brief else str(last_error)
+                    ),
+                )
+                self._validate_generated(code)
+                if attempt > 1:
+                    logger.info(
+                        "Code generation succeeded on attempt %d of %d",
+                        attempt, max_attempts,
+                    )
+                return code
+            except ValueError as error:
+                last_error = error
+                if attempt == max_attempts:
+                    raise
+                # Once asked for, the length limit STAYS on: a second
+                # truncation means the model is still overshooting, and a
+                # fresh sample under the same limit is exactly what the
+                # economics argue for -- one more call against losing the
+                # whole cross-dataset analysis. The attempt budget is what
+                # bounds this, not a rule that gives up at the second strike.
+                brief = brief or _looks_truncated(error, code)
+                logger.warning(
+                    "Generated code rejected on attempt %d/%d (%s); retrying %s",
+                    attempt, max_attempts, error,
+                    "with a length limit" if brief else "with the reason",
+                )
+        raise last_error  # pragma: no cover - the loop returns or raises
+
     def _generate_with_llm(
         self,
         protocol: ExperimentProtocol,
@@ -1888,6 +2132,8 @@ lines later.{context}"""
         data_access_text = self._data_access_instructions(datasets)
         analyzer_api = _analyzer_api_text()
         environment = _environment_text()
+        figures = _figure_text()
+        mr_rule = _mr_text(protocol)
 
         prompt = f"""Generate executable Python code for this experiment:
 
@@ -1908,6 +2154,8 @@ lines later.{context}"""
 
 Use these libraries: pandas, numpy, scipy.stats
 {environment}
+{figures}
+{mr_rule}
 {analyzer_api}
 Include comments explaining each section
 

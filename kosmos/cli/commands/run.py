@@ -51,6 +51,23 @@ from kosmos.core.stage_tracker import get_stage_tracker
 logger = logging.getLogger(__name__)
 
 
+def _figures_dir(output, configured) -> str:
+    """Where this run's figures go.
+
+    Beside the report by default (`<report>_figures/`), because the report
+    links to them with a RELATIVE path -- moving the report then moves its
+    figures with it, and opening it from anywhere still resolves them.
+    """
+    from pathlib import Path
+
+    if configured:
+        return str(Path(configured).expanduser().resolve())
+    if output:
+        out = Path(output)
+        return str((out.parent / f"{out.stem}_figures").resolve())
+    return str((Path.cwd() / "kosmos_figures").resolve())
+
+
 def _serialize_result(result) -> dict:
     """Turn a Result ORM row into the plain dict the report renderer expects.
 
@@ -74,6 +91,7 @@ def _serialize_result(result) -> dict:
         "id": getattr(result, "id", None),
         "data": _maybe_json(getattr(result, "data", None)),
         "statistical_tests": _maybe_json(getattr(result, "statistical_tests", None)),
+        "figures": _maybe_json(getattr(result, "figures", None)),
         "interpretation": getattr(result, "interpretation", None),
         "key_findings": _maybe_json(getattr(result, "key_findings", None)),
         "supports_hypothesis": getattr(result, "supports_hypothesis", None),
@@ -135,6 +153,7 @@ def run_research(
     question: Optional[str] = typer.Argument(None, help="Research question to investigate"),
     domain: Optional[str] = typer.Option(None, "--domain", "-d", help="Research domain (biology, neuroscience, materials, etc.)"),
     max_iterations: int = typer.Option(10, "--max-iterations", "-i", help="Maximum number of research iterations"),
+    num_hypotheses: Optional[int] = typer.Option(None, "--num-hypotheses", "-n", min=1, max=10, help="Hypotheses per generation round (default: NUM_HYPOTHESES or 3)"),
     budget: Optional[float] = typer.Option(None, "--budget", "-b", help="Budget limit in USD"),
     data_path: Optional[Path] = typer.Option(None, "--data-path", "-D", help="Path to CSV dataset for experiments"),
     evidence_server: Optional[str] = typer.Option(
@@ -168,6 +187,13 @@ def run_research(
              "declared their subjects disjoint. Alternative to "
              "--evidence-server.",
     ),
+    annotation_build: Optional[str] = typer.Option(
+        None, "--annotation-build",
+        help="Annotation build (e.g. v44) for auto-attached id->symbol / "
+             "gene-set companions when a source does not declare one. "
+             "Auto-annotation runs as a separate `autoevidence annotate` "
+             "process; set KOSMOS_AUTO_ANNOTATE=0 to disable.",
+    ),
     find_data: bool = typer.Option(
         False, "--find-data",
         help="This run has a question and no data: search public repositories "
@@ -181,6 +207,11 @@ def run_research(
     find_data_out: Path = typer.Option(
         Path("./found"), "--find-data-out", metavar="DIR",
         help="Where --find-data writes evidence.yaml and found_datasets.json.",
+    ),
+    find_data_choose: Optional[int] = typer.Option(
+        None, "--find-data-choose", metavar="N",
+        help="Which --find-data candidate (by its # column) to write the "
+             "config for. Default: the first fetchable one.",
     ),
     find_data_intent: Optional[str] = typer.Option(
         None, "--find-data-intent", metavar="WORDS",
@@ -248,14 +279,22 @@ def run_research(
     # So the whole decision moves up here, above the wizard, where none of it
     # depends on how `question` was obtained. Search-and-exit needs no question;
     # it needs words to search for.
-    if find_data_intent and not find_data:
+    # Two paths consume --find-data-intent: --find-data (search and stop), and
+    # the unattended search below that fires when --evidence-config names a
+    # file that does not exist yet (search, write it, run). The refusal must
+    # cover neither of them, or it blocks the one-line form it was never
+    # meant to touch -- which it did, from the commit that added the flag.
+    will_auto_find = bool(evidence_config) and not evidence_config.exists()
+    if find_data_intent and not find_data and not will_auto_find:
         # Refused rather than ignored. It is the argument whose whole purpose is
         # to leave this machine, and silently discarding it would mean an
         # operator who believed they had narrowed their search got a run that
         # never searched at all -- with no line of output saying otherwise.
         print_error(
-            "--find-data-intent gives --find-data the words to search for, and "
-            "this run is not searching. Add --find-data, or drop it."
+            "--find-data-intent gives a search the words to look for, and this "
+            "run is not searching: it has no --find-data, and its "
+            "--evidence-config already exists. Add --find-data, point "
+            "--evidence-config at a file to be created, or drop the intent."
         )
         raise typer.Exit(1)
     if find_data and has_data_source:
@@ -320,6 +359,7 @@ def run_research(
             search_and_report(
                 intent,
                 emit=find_data_out,
+                choose=find_data_choose,
                 as_json=False,
                 research_question=question,
                 retry_flag="--find-data-intent",
@@ -489,6 +529,15 @@ def run_research(
     # be reported exactly like one a steward supplied.
     #
     # Silent and non-fatal for every ordinary hand-written config, which is the
+    # Auto-attach annotation companions the network-less sandbox cannot fetch
+    # (Ensembl id->symbol maps, ...). This runs as a SEPARATE `autoevidence
+    # annotate` process -- Kosmos never imports AutoEvidence for it -- and falls
+    # back to the original config if AutoEvidence is absent or nothing is found.
+    if evidence_config:
+        from kosmos.evidence.annotate_preflight import maybe_expand
+
+        evidence_config = maybe_expand(evidence_config, annotation_build=annotation_build)
+
     # common case: `read_provenance` returns None for anything it cannot read,
     # cannot parse, or that names a different config file.
     found_provenance = None
@@ -583,6 +632,8 @@ def run_research(
         if domain:
             config_obj.research.enabled_domains = [domain]
         config_obj.research.max_iterations = max_iterations
+        if num_hypotheses is not None:
+            config_obj.research.num_hypotheses = num_hypotheses
         if budget:
             config_obj.research.budget_usd = budget
 
@@ -607,6 +658,11 @@ def run_research(
             "enabled_domains": config_obj.research.enabled_domains,
             "enabled_experiment_types": config_obj.research.enabled_experiment_types,
             "min_novelty_score": config_obj.research.min_novelty_score,
+            "num_hypotheses": config_obj.research.num_hypotheses,
+            "relevance_check": config_obj.research.relevance_check,
+            "enable_figures": config_obj.research.enable_figures,
+            "figures_dir": _figures_dir(output, config_obj.research.figures_dir),
+            "max_variants_per_hypothesis": config_obj.research.max_variants_per_hypothesis,
             "enable_autonomous_iteration": config_obj.research.enable_autonomous_iteration,
             "budget_usd": config_obj.research.budget_usd,
 

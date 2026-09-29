@@ -134,6 +134,19 @@ class UnifiedLiteratureSearch:
             )
             ```
         """
+        # Reduce the query ONCE, before the fan-out, so every client gets the
+        # same searchable text. Doing this inside a single client fixed that
+        # client and left the others receiving the raw research objective:
+        # arXiv answered those with HTTP 500 and the federated search timed
+        # out at 90s waiting for it.
+        from kosmos.literature.query import reduce_query
+
+        reduced = reduce_query(query)
+        if not reduced:
+            logger.warning("Literature search: nothing searchable in %r", query[:80])
+            return []
+        query = reduced
+
         # Filter clients if specific sources requested
         search_clients = self.clients
         if sources:

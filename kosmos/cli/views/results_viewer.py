@@ -6,6 +6,7 @@ and analysis using Rich library components.
 """
 
 import json
+import os
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pathlib import Path
@@ -356,8 +357,8 @@ class ResultsViewer:
                 lines.extend([
                     f"### {i}. {hyp.get('claim', 'Unknown')}",
                     f"",
-                    f"- **Novelty:** {hyp.get('novelty_score', 0):.2f}",
-                    f"- **Priority:** {hyp.get('priority_score', 0):.2f}",
+                    f"- **Novelty:** {_fmt_scalar(hyp.get('novelty_score') or 0, '.2f')}",
+                    f"- **Priority:** {_fmt_scalar(hyp.get('priority_score') or 0, '.2f')}",
                     f"- **Status:** {hyp.get('status', 'Unknown')}",
                     "",
                 ])
@@ -425,17 +426,27 @@ class ResultsViewer:
                     if note:
                         lines.extend([f"> {note}", ""])
 
+                    # These three are numbers by contract but not by fact: a
+                    # multi-cohort experiment returned `n_samples` as
+                    # {'wilk': 14, 'stephenson': 0, 'ren': 0}, and `f"{n:,}"` on
+                    # a dict raised "unsupported format string passed to
+                    # dict.__format__" -- which aborted the WHOLE export, so a
+                    # run that had produced five results wrote no report at all.
+                    # Format numbers as numbers and render anything else as-is.
                     n = payload.get("n_samples") if isinstance(payload, dict) else None
                     if n is not None:
-                        lines.append(f"- Sample size: {n:,}")
+                        lines.append(f"- Sample size: {_fmt_scalar(n, ',')}")
 
                     p = result.get("p_value")
                     if p is not None:
-                        verdict = "significant" if p < 0.05 else "NOT significant"
-                        lines.append(f"- p-value: {p:.4g} ({verdict} at alpha=0.05)")
+                        if isinstance(p, (int, float)) and not isinstance(p, bool):
+                            verdict = "significant" if p < 0.05 else "NOT significant"
+                            lines.append(f"- p-value: {p:.4g} ({verdict} at alpha=0.05)")
+                        else:
+                            lines.append(f"- p-value: {_fmt_scalar(p, '.4g')}")
                     effect = result.get("effect_size")
                     if effect is not None:
-                        lines.append(f"- Effect size: {effect:.4g}")
+                        lines.append(f"- Effect size: {_fmt_scalar(effect, '.4g')}")
                     ci = result.get("confidence_interval")
                     if ci:
                         lines.append(f"- 95% CI: {ci}")
@@ -477,6 +488,23 @@ class ResultsViewer:
                     if isinstance(payload, dict):
                         lines.extend(_render_payload(payload))
 
+                    figs = result.get("figures")
+                    if not figs and isinstance(payload, dict):
+                        # Nothing was collected, but the code said it wrote
+                        # something. That happens when it saved outside the
+                        # figure directory -- and since figure_path/figures are
+                        # filtered out of the payload above, suppressing them
+                        # here too would delete the only record of where the
+                        # file went. Fall back to what the payload claims.
+                        figs = payload.get("figures") or payload.get("figure_path")
+                        if isinstance(figs, str):
+                            figs = [figs]
+                    if figs:
+                        rendered = _render_figures(figs, Path(output_path).parent)
+                        if rendered:
+                            lines.extend(["", "**Figures**", ""])
+                            lines.extend(rendered)
+
                     findings = _present(result.get("key_findings"))
                     if findings:
                         lines.append(f"- Key findings: {findings}")
@@ -510,10 +538,33 @@ _RENDERED_ELSEWHERE = frozenset({
     "n_samples", "p_value", "effect_size", "statistical_tests",
     # Our own annotation, rendered as a caveat before the numbers.
     "analysis_note",
+    # Rendered as images in their own block; the raw paths would be noise.
+    "figures", "figure_path", "figure_saved",
 })
 
 _MAX_ROWS = 12
 _MAX_COLS = 8
+
+
+def _fmt_scalar(value, spec: str) -> str:
+    """Apply a numeric format spec only to a real number; render the rest as-is.
+
+    An experiment may hand back a dict or list where the renderer expected a
+    scalar (per-cohort sample sizes, a p-value per arm). Those are findings
+    too; they must not take the export down with a format error.
+    """
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, (int, float)):
+        try:
+            return format(value, spec)
+        except (ValueError, TypeError):
+            return str(value)
+    if isinstance(value, dict):
+        return ", ".join(f"{k}={_fmt_scalar(v, spec)}" for k, v in value.items())
+    if isinstance(value, (list, tuple)):
+        return "[" + ", ".join(_fmt_scalar(v, spec) for v in value) + "]"
+    return str(value)
 
 
 def _fmt(value):
@@ -525,6 +576,58 @@ def _fmt(value):
             return "NaN"
         return f"{value:.4g}"
     return str(value)
+
+
+def _render_figures(figures, report_dir) -> list:
+    """Figures as markdown image references, relative to the report.
+
+    Relative because the report is a file someone opens from wherever it sits:
+    an absolute /private/var/... path resolves on exactly one machine. A figure
+    whose file is missing is NAMED rather than linked -- a broken image in a
+    report reads as a rendering bug, while a line saying the file is gone is a
+    fact about the run.
+
+    Never raises: a figure block must not cost the report, which has already
+    happened once in this file.
+    """
+    out: list = []
+    try:
+        if not isinstance(figures, (list, tuple)) or not figures:
+            return out
+        shown = 0
+        for entry in figures:
+            if isinstance(entry, str):
+                path, caption = entry, ""
+            elif isinstance(entry, dict):
+                path, caption = entry.get("path"), (entry.get("caption") or "")
+            else:
+                continue
+            if not isinstance(path, str) or not path.strip():
+                continue
+            name = os.path.basename(path)
+            caption = str(caption).strip() or os.path.splitext(name)[0].replace("_", " ")
+            if not os.path.isfile(path):
+                out.append(f"- Figure recorded but no longer on disk: `{name}`")
+                continue
+            if shown >= 8:
+                out.append(f"- Also written: `{name}`")
+                continue
+            try:
+                ref = os.path.relpath(path, str(report_dir))
+            except (ValueError, OSError):
+                ref = path
+            ref = ref.replace(os.sep, "/").replace(" ", "%20")
+            if name.lower().endswith((".png", ".svg")):
+                out.append(f"![{caption}]({ref})")
+                out.append("")
+                out.append(f"*{caption}*")
+            else:
+                out.append(f"[{caption}]({ref})")
+            out.append("")
+            shown += 1
+    except Exception:  # pragma: no cover - a figure must never cost the report
+        return out
+    return out
 
 
 def _render_payload(payload: dict) -> list:

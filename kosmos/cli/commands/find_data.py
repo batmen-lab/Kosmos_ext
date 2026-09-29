@@ -710,7 +710,7 @@ def search_and_report(
     repositories: Optional[List[str]] = None,
     limit: int = 10,
     emit: Optional[Path] = None,
-    choose: int = 0,
+    choose: Optional[int] = None,
     serve_cmd: Optional[str] = None,
     signing_key: Optional[str] = None,
     staging_dir: Optional[str] = None,
@@ -814,7 +814,22 @@ def search_and_report(
         )
         return 0
 
-    if choose not in routable:
+    if choose is None:
+        # No candidate named: take the first FETCHABLE one, and say so. The
+        # default used to be #0 regardless, which for a biomedical search is
+        # usually a lead with no connector (an E-MTAB, a PXD) -- so the command
+        # showed a dozen fetchable rows and then refused to write any of them.
+        # This is the emitted file the operator will read before running, not
+        # a decision made on their behalf at run time; `--choose` overrides it.
+        choose = routable[0]
+        print_info(
+            f"No --choose given; writing candidate #{choose} "
+            f"({candidates[choose].get('repository')} "
+            f"{candidates[choose].get('accession')}), the first fetchable one. "
+            f"Fetchable: {', '.join('#' + str(i) for i in routable)}.",
+            title="Candidate chosen",
+        )
+    elif choose not in routable:
         print_error(
             f"Candidate #{choose} has no reference, so no connector can fetch it. "
             f"Fetchable candidates: {', '.join('#' + str(i) for i in routable)}.",
@@ -860,9 +875,10 @@ def find_data(
         help="Directory to write evidence.yaml and found_datasets.json into. "
              "Without this, nothing is written and nothing is chosen.",
     ),
-    choose: int = typer.Option(
-        0, "--choose", "-c",
-        help="Which candidate (by the # column) to write the config for.",
+    choose: Optional[int] = typer.Option(
+        None, "--choose", "-c",
+        help="Which candidate (by the # column) to write the config for. "
+             "Default: the first fetchable one, announced.",
     ),
     serve_cmd: Optional[str] = typer.Option(
         None, "--serve-cmd",

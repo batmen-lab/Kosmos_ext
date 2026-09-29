@@ -272,12 +272,11 @@ class OpenAIProvider(LLMProvider):
             start_time = time_module.time()
 
             # Call OpenAI API
+            reasoning_override = kwargs.get("reasoning_effort", _UNSET)
             response = self.client.chat.completions.create(
                 **api_args,
                 timeout=self.timeout,
-                extra_body=self._reasoning_extra_body(
-                    kwargs.get("reasoning_effort", _UNSET)
-                ),
+                extra_body=self._reasoning_extra_body(reasoning_override),
             )
 
             # Extract text and usage. Reasoning models (e.g. deepseek-v4-flash)
@@ -285,6 +284,38 @@ class OpenAIProvider(LLMProvider):
             # (finish_reason='length') — guard so len(text) doesn't crash.
             _msg = response.choices[0].message
             finish_reason = response.choices[0].finish_reason
+
+            # Reasoning ate the budget. Callers pass small per-call budgets
+            # (the data analyst asks for 2000 tokens for a JSON verdict; the
+            # experiment designer 1000 for a yes/no), sized for the answer, not
+            # for a reasoning trace that shares the same max_tokens on
+            # OpenRouter's unified API. When the trace consumes it all, content
+            # comes back empty with finish_reason='length' and the caller gets
+            # nothing usable -- the result rows with NULL verdict and NULL
+            # interpretation. The answer alone fits the budget; ask for it
+            # without reasoning, once. JSON-mode requests are handled below by
+            # `generate_structured`, which already retries the same way.
+            reasoning_on = bool(
+                self._reasoning_extra_body(reasoning_override)
+            )
+            if (
+                not (_msg.content or "").strip()
+                and finish_reason == "length"
+                and reasoning_on
+                and not api_args.get("response_format")
+            ):
+                logger.warning(
+                    "Reasoning trace consumed max_tokens=%d with no answer "
+                    "(finish_reason=length); retrying once with reasoning off.",
+                    max_tokens,
+                )
+                response = self.client.chat.completions.create(
+                    **api_args,
+                    timeout=self.timeout,
+                    extra_body=self._reasoning_extra_body(None),
+                )
+                _msg = response.choices[0].message
+                finish_reason = response.choices[0].finish_reason
 
             # A reasoning trace is the model's scratchpad, NOT its answer. It is
             # an acceptable last resort for free-text (better to surface
@@ -298,7 +329,7 @@ class OpenAIProvider(LLMProvider):
             # but truthy to Python, so a bare `not _msg.content` would sail past
             # it and hand " " to the JSON parser.
             if not (_msg.content or "").strip() and api_args.get("response_format"):
-                raise ProviderAPIError(
+                err = ProviderAPIError(
                     "openai",
                     f"Model returned no content for a JSON-mode request "
                     f"(finish_reason={finish_reason}). With reasoning enabled the "
@@ -306,6 +337,12 @@ class OpenAIProvider(LLMProvider):
                     f"({max_tokens}), so a long schema can leave nothing for the "
                     f"JSON itself. Raise max_tokens or lower reasoning effort.",
                 )
+                # Tagged so `generate_structured` can tell this budget
+                # interaction apart from a real API failure and retry with
+                # reasoning off -- the same self-healing it already applies when
+                # a reasoning-truncated answer is present but unparseable.
+                err.empty_content = True
+                raise err
 
             text = _msg.content or getattr(_msg, "reasoning", None) or ""
             if not _msg.content and finish_reason == "length":
@@ -365,6 +402,13 @@ class OpenAIProvider(LLMProvider):
                 metadata={'provider_type': self.provider_type}
             )
 
+        except ProviderAPIError:
+            # Already ours -- in particular the empty-content error raised
+            # above for JSON-mode requests carries the `empty_content` tag that
+            # `generate_structured` keys its reasoning-off retry on. Wrapping it
+            # in a fresh ProviderAPIError (as the generic branch below does)
+            # dropped that tag, so the retry never fired. Let it through.
+            raise
         except Exception as e:
             logger.error(f"OpenAI generation failed: {e}")
             raise ProviderAPIError("openai", f"Generation failed: {e}", raw_error=e)
@@ -584,18 +628,48 @@ class OpenAIProvider(LLMProvider):
                     **gen_kwargs
                 )
             except ProviderAPIError as e:
-                if "response_format" not in str(getattr(e, "raw_error", "")) and \
+                if (
+                    getattr(e, "empty_content", False)
+                    and self.reasoning_effort
+                    and gen_kwargs.get("reasoning_effort", _UNSET) is not None
+                ):
+                    # The reasoning trace consumed the whole budget and no JSON
+                    # came back at all. This is the empty-answer twin of the
+                    # unparseable-answer case handled below, and it used to
+                    # escape as a hard failure: the hypothesis generator
+                    # (max_tokens=4000) hit it on most calls under
+                    # reasoning_effort=high, burning three attempts per
+                    # iteration before one happened to fit. Retry once with
+                    # reasoning off; the schema dictates the shape anyway.
+                    logger.warning(
+                        "Model returned no content for structured output with "
+                        "reasoning_effort=%r (finish_reason=length); retrying once "
+                        "with reasoning disabled.",
+                        self.reasoning_effort,
+                    )
+                    retry_kwargs = dict(gen_kwargs)
+                    retry_kwargs["reasoning_effort"] = None
+                    response = self.generate(
+                        prompt=prompt,
+                        system=json_system,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        **retry_kwargs,
+                    )
+                    gen_kwargs = retry_kwargs
+                elif "response_format" not in str(getattr(e, "raw_error", "")) and \
                    "response_format" not in str(e):
                     raise
-                logger.warning("Model rejected response_format=json_object; retrying without it")
-                gen_kwargs.pop("response_format", None)
-                response = self.generate(
-                    prompt=prompt,
-                    system=json_system,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    **gen_kwargs
-                )
+                else:
+                    logger.warning("Model rejected response_format=json_object; retrying without it")
+                    gen_kwargs.pop("response_format", None)
+                    response = self.generate(
+                        prompt=prompt,
+                        system=json_system,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        **gen_kwargs
+                    )
 
             response_text = response.content
 

@@ -50,6 +50,289 @@ ERROR_RECOVERY_LOG_PREFIX = "[ERROR-RECOVERY]"
 MAX_ACTIONS_PER_ITERATION = 50  # Force convergence if exceeded
 
 
+# Formats whose first bytes are binary but which pandas reads directly. The
+# head sniffer can only judge bytes, so without this table a staged .parquet
+# was reported as unreadable rather than summarised.
+_BINARY_READERS = {
+    ".parquet": "read_parquet",
+    ".pq": "read_parquet",
+    ".xlsx": "read_excel",
+    ".xls": "read_excel",
+    ".feather": "read_feather",
+}
+
+
+def _render_file_summary(
+    path: str,
+    df,
+    n_rows: int,
+    head,
+    max_cols: int = 40,
+    descriptions: Optional[Dict[str, str]] = None,
+    show_preview: bool = True,
+) -> Optional[str]:
+    """Shape, columns and numeric summary for a frame already read.
+
+    Split out of `_summarise_file` so a format pandas opens with its own
+    reader -- .parquet, .xlsx -- gets the SAME summary as a CSV instead of
+    being declared unreadable because its first bytes are not text.
+    """
+    import os
+
+    if df.shape[1] == 0:
+        return None
+
+    # A headerless file comes back with INTEGER column labels (0, 1, 2),
+    # and every join and f-string below assumes strings -- `", ".join`
+    # raises TypeError on the first int. Stringify the integers rather than
+    # inventing names for them: naming them `col_0..col_N` made the summary
+    # disagree with the read call it prescribes, so code written from this
+    # list asked for `df['col_0']` against a frame whose columns are
+    # 0..N and raised KeyError. The label shown has to be the label pandas
+    # will produce.
+    if head.verdict == "headerless":
+        df.columns = [str(i) for i in range(df.shape[1])]
+    else:
+        df.columns = [str(c) for c in df.columns]
+
+    # Every column NAME, not the first `max_cols`. Names are cheap --
+    # 151 of them is a couple of kilobytes -- and the cost is the
+    # per-column summary below, which stays capped. Truncating the names
+    # hid all 111 columns past the 40th, including every `age:[0-10)`
+    # bucket, so the model wrote `df['age']` from its memory of the UCI
+    # dataset and the container raised `KeyError: 'age'`. A column the
+    # model cannot see is one it will invent.
+    all_cols = list(df.columns)
+    cols = all_cols[:max_cols]
+    shape_line = f"Shape: {n_rows} rows x {df.shape[1]} columns."
+    if n_rows > len(df):
+        shape_line += (
+            f" Statistics below are computed from the first {len(df):,} rows only."
+        )
+    try:
+        size_mb = os.path.getsize(path) / 1e6
+    except OSError:
+        size_mb = 0.0
+    if size_mb >= 100:
+        # A 548 MB CSV takes several GB to read whole, and the sandbox is
+        # memory-capped: the container is killed with exit 137 and no
+        # traceback, so the analysis fails before it computes anything.
+        shape_line += (
+            f" FILE IS {size_mb:,.0f} MB ON DISK -- read only the columns "
+            f"you need with pd.read_csv(..., usecols=[...]); reading it "
+            f"whole can exhaust the sandbox's memory."
+        )
+
+    # The raw head goes ABOVE the column list, because it is the evidence
+    # for the names in that list. A model shown both can see for itself
+    # that a header was displaced; shown only the parsed names, it cannot.
+    head_block = head.render() if show_preview else head.advisory()
+    lines = [shape_line]
+    if head_block:
+        lines.append(head_block)
+    lines.append("Columns (name: dtype):")
+    descriptions = descriptions or {}
+    for c in all_cols:
+        line = f"  - {c}: {df[c].dtype}"
+        # Missingness, stated per column. A name and a dtype cannot tell
+        # anyone that `Unnamed_32` is 569/569 null -- the trailing-comma
+        # artifact every hand-exported CSV carries -- and a run died on its
+        # own "Dataset contains missing values" check because the column
+        # looked like a 33rd feature. Counted on the sample, so it is
+        # labelled as such rather than presented as the whole truth.
+        n_missing = int(df[c].isna().sum())
+        if n_missing == len(df) and len(df):
+            line += "  [EMPTY: every sampled value is missing -- drop this column]"
+        elif n_missing:
+            line += f"  [{n_missing}/{len(df)} sampled values missing]"
+        meaning = descriptions.get(c)
+        if meaning:
+            line += f" -- {meaning}"
+        lines.append(line)
+    if len(df.columns) > max_cols:
+        lines.append(
+            f"(Every column is named above. The statistics below cover "
+            f"the first {max_cols} of {len(df.columns)}.)"
+        )
+    numeric = df[cols].select_dtypes(include="number")
+    if not numeric.empty:
+        lines.append("Numeric summary (mean / std / min / max):")
+        for c in numeric.columns:
+            s = numeric[c]
+            try:
+                lines.append(
+                    f"  - {c}: mean={s.mean():.4g}, std={s.std():.4g}, "
+                    f"min={s.min():.4g}, max={s.max():.4g}"
+                )
+            except (TypeError, ValueError):
+                continue
+    # Low-cardinality columns, wherever they sit in the table.
+    #
+    # The statistics above cover the first `max_cols` columns, and an
+    # outcome column is usually the LAST one. On the diabetes table
+    # `readmitted` is column 150 of 151, so its values were never shown --
+    # and the model encoded it as the original UCI strings, writing
+    # `1 if x == '<30' else 0` against a column holding integers 0/1. Every
+    # row became 0, its own filter emptied the frame, and train_test_split
+    # got n_samples=0. A handful of distinct values costs a few bytes to
+    # print and is exactly what a label or a flag needs to disclose.
+    # Grouped by the value set, so completeness costs a line rather than a
+    # hundred. Listing them one per column filled a 30-line quota with
+    # one-hot dummies and still never reached `readmitted` at column 150 --
+    # which is the single column whose values decide whether the analysis
+    # works at all.
+    _by_values: dict = {}
+    for _c in all_cols:
+        try:
+            _uniq = df[_c].dropna().unique()
+        except Exception:
+            continue
+        if 0 < len(_uniq) <= 10:
+            _key = tuple(sorted(str(v) for v in _uniq))
+            _by_values.setdefault(_key, []).append(_c)
+    if _by_values:
+        lines.append("Columns with few distinct values, by value set:")
+        for _key, _members in list(_by_values.items())[:12]:
+            # First few AND last few. A truncated list that always drops
+            # the tail hides the outcome column, which is where an outcome
+            # column usually is -- `readmitted` sat at position 150 of 151
+            # and would vanish into "+113 more", which is the one column
+            # whose values decide whether the analysis runs at all.
+            if len(_members) <= 8:
+                _shown, _more = ", ".join(_members), ""
+            else:
+                _shown = ", ".join(_members[:6] + ["..."] + _members[-2:])
+                _more = f"  ({len(_members)} columns)"
+            lines.append(
+                f"  - takes values [{', '.join(_key)}]: {_shown}{_more}"
+            )
+
+    categorical = df[cols].select_dtypes(exclude="number")
+    for c in categorical.columns[:10]:
+        vals = [str(v) for v in df[c].dropna().unique()[:8]]
+        if vals:
+            lines.append(f"  - {c} levels (sample): {', '.join(vals)}")
+    return "\n".join(lines)
+
+
+def _pydantic_tests(statistical_tests, primary_name):
+    """The stored tests as StatisticalTestResult objects for the analyst.
+
+    This list was ALWAYS empty. `DataAnalystAgent._extract_result_summary`
+    iterates it to print "Test 1: ... Statistic ... P-value ..." into its
+    prompt, so the analyst never saw a single per-test number even after the
+    columns were filled.
+
+    It also has to be populated for `primary_test` to be settable at all:
+    ExperimentResult validates that the primary test NAMES one of these, so
+    setting the name against an empty list raises -- which drove a live run to
+    ERROR state after three retries and cost it the experiments it was
+    analysing. The name and the list are one change, not two.
+    """
+    out = []
+    try:
+        from kosmos.models.result import StatisticalTestResult
+
+        if not isinstance(statistical_tests, dict):
+            return out
+        for name, test in statistical_tests.items():
+            if not isinstance(test, dict):
+                continue
+            p = test.get("p_value")
+            if not isinstance(p, (int, float)) or not (0.0 <= float(p) <= 1.0):
+                continue
+            stat = test.get("statistic")
+            p = float(p)
+            out.append(StatisticalTestResult(
+                test_type=str(test.get("statistic_type") or "unspecified"),
+                test_name=str(name),
+                statistic=float(stat) if isinstance(stat, (int, float)) else 0.0,
+                p_value=p,
+                effect_size=test.get("effect_size"),
+                effect_size_type=test.get("effect_size_type"),
+                significant_0_05=p < 0.05,
+                significant_0_01=p < 0.01,
+                significant_0_001=p < 0.001,
+                significance_label=("***" if p < 0.001 else "**" if p < 0.01
+                                    else "*" if p < 0.05 else "ns"),
+                sample_size=test.get("sample_size"),
+                is_primary=(str(name) == primary_name),
+            ))
+    except Exception as e:  # pragma: no cover - never cost the analysis
+        logger.warning(f"Could not rebuild statistical tests for the analyst: {e}")
+        return []
+    return out
+
+
+def _primary_test_name(statistical_tests, p_value) -> Optional[str]:
+    """Which of the stored tests produced the primary p-value.
+
+    Derived rather than stored: the results table has no column for it, and
+    adding one would need a migration of every existing kosmos.db for a string
+    the tests already carry. Matched on the p-value because that is the value
+    the two fields have in common.
+
+    It matters because `DataAnalystAgent` prints `Primary Test:` into its
+    prompt. Leaving it None made every assessment say "no primary statistical
+    test is specified" even once the numbers were there -- so the analyst
+    discounted results it could otherwise read.
+    """
+    try:
+        if not isinstance(statistical_tests, dict) or not statistical_tests:
+            return None
+        if p_value is not None:
+            for name, test in statistical_tests.items():
+                if isinstance(test, dict) and test.get("p_value") == p_value:
+                    return str(name)
+        return str(next(iter(statistical_tests)))
+    except Exception:  # pragma: no cover - a name must never cost the analysis
+        return None
+
+
+def _file_format_text(heads: dict, mount: dict, single: bool) -> str:
+    """The FILE FORMAT paragraph for a set of staged files.
+
+    Two corrections live here, both from the same instinct to keep the prompt
+    from ever holding two contradictory instructions:
+
+      * The per-file calls are OVERRIDES, not a replacement. Emitting only
+        them stripped "every staged file is comma-separated" from the run --
+        so when one file of five was binary, the other four lost the delimiter
+        instruction and were handed the bare `pd.read_csv(path)` that the same
+        paragraph had just declared wrong.
+      * A call is written against the variable the generated code will really
+        hold: `data_path`, or `datasets['<name>']`. `pd.read_csv(path)` names
+        nothing that exists, and the generator's own validator rejects code
+        that uses an undefined name -- so the mandated call could not be
+        followed even in principle.
+    """
+    base = (
+        "FILE FORMAT: every staged file is COMMA-separated with a header row, "
+        "whatever the upstream source's convention was. Read them with "
+        "pd.read_csv(<path variable>) and do NOT pass sep= or delimiter=.\n\n"
+    )
+    overrides = []
+    for name in mount:
+        head = heads.get(name)
+        if head is None or head.is_plain:
+            continue
+        opener = "data_path" if single else f"datasets['{name}']"
+        call = head.read_call(opener)
+        if call == f"pd.read_csv({opener})":
+            continue
+        overrides.append(f"  {name}: {call}")
+    if not overrides:
+        return base
+    return (
+        base
+        + "EXCEPTIONS: these staged files do NOT parse correctly with a bare "
+        "pd.read_csv, and the column names and types listed with each dataset "
+        "below assume the call given here. Use it EXACTLY:\n"
+        + "\n".join(overrides)
+        + "\n\n"
+    )
+
+
 class ResearchDirectorAgent(BaseAgent):
     """
     Master orchestrator for autonomous research.
@@ -186,6 +469,7 @@ class ResearchDirectorAgent(BaseAgent):
         self._data_provider = None
         self._data_analyst = None
         self._hypothesis_refiner = None
+        self._variants_spawned: Dict[str, int] = {}  # parent hypothesis id -> variants spawned
 
         # Message correlation tracking
         self.pending_requests: Dict[str, Dict[str, Any]] = {}  # correlation_id -> request_info
@@ -655,13 +939,17 @@ class ResearchDirectorAgent(BaseAgent):
         for mat in usable:
             if not mat.has_rows:
                 continue
+            # Sniffed, not `readline().split(",")`: reading line 1 blindly
+            # offered an annotation row's tokens as join keys, and splitting on
+            # a bare comma broke any quoted name containing one ("effect, SE").
             try:
-                with open(mat.path) as fh:
-                    header = fh.readline().strip()
-            except OSError:
+                from kosmos.data.table_head import sniff_head
+
+                head = sniff_head(str(mat.path))
+            except Exception:
                 continue
             counts.update({
-                c.strip() for c in header.split(",")
+                c.strip() for c in head.names
                 if c.strip() and c.strip() not in self._CAPSULE_RENDER_COLUMNS
             })
         return {col for col, n in counts.items() if n > 1}
@@ -716,7 +1004,11 @@ class ResearchDirectorAgent(BaseAgent):
         columns: list[tuple[str, str, tuple, str]] = []
         for name, path in mount.items():
             try:
-                df = pd.read_csv(path, nrows=sample_rows)
+                from kosmos.data.table_head import sniff_head
+
+                df = pd.read_csv(
+                    path, nrows=sample_rows, **sniff_head(str(path)).pandas_kwargs()
+                )
             except Exception:
                 continue
             for col in df.columns:
@@ -808,6 +1100,108 @@ class ResearchDirectorAgent(BaseAgent):
                 out[name] = described
         return out
 
+    @staticmethod
+    def _clear_figure_dir(directory: Optional[str]) -> None:
+        """Remove figures left by a previous attempt at this experiment.
+
+        Deletes only figure files, and only directly inside this experiment's
+        own subdirectory, which nothing else writes to. Never raises: failing
+        to clean up must not fail the experiment.
+        """
+        import os  # this module imports os per-function, not at module scope
+
+        try:
+            if not directory or not os.path.isdir(directory):
+                return
+            from kosmos.execution.sandbox import FIGURE_EXTENSIONS
+
+            for name in os.listdir(directory):
+                target = os.path.join(directory, name)
+                if (
+                    os.path.splitext(name)[1].lower() in FIGURE_EXTENSIONS
+                    and os.path.isfile(target)
+                    and not os.path.islink(target)
+                ):
+                    os.remove(target)
+        except OSError as e:
+            logger.warning(f"Could not clear the figure directory: {e}")
+
+    def _hypothesis_literature(self, hypothesis) -> Optional[str]:
+        """Papers relevant to ONE hypothesis, as context for interpreting it.
+
+        Cached per hypothesis: the analyst may be called again on a refined
+        variant of the same statement, and the literature does not change
+        between those calls. Bounded and warn-only -- a failed search must
+        cost a paragraph of context, never the analysis.
+        """
+        statement = getattr(hypothesis, "statement", None)
+        if not statement or not getattr(self, "config", {}).get("use_literature_context", True):
+            return None
+
+        cache = getattr(self, "_literature_cache", None)
+        if cache is None:
+            cache = self._literature_cache = {}
+        key = statement[:200]
+        if key in cache:
+            return cache[key]
+
+        context = None
+        try:
+            from kosmos.literature.unified_search import UnifiedLiteratureSearch
+
+            searcher = getattr(self, "_literature_search", None)
+            if searcher is None:
+                searcher = self._literature_search = UnifiedLiteratureSearch()
+            papers = searcher.search(query=statement, max_results=5) or []
+            lines = []
+            for paper in papers[:5]:
+                title = (getattr(paper, "title", "") or "").strip()
+                if not title:
+                    continue
+                year = getattr(paper, "year", None) or getattr(paper, "publication_year", None)
+                lines.append(f"- {title}" + (f" ({year})" if year else ""))
+            if lines:
+                context = (
+                    "Papers retrieved for this hypothesis. They are context, "
+                    "not evidence: none of them tested THIS dataset, and a "
+                    "title is not a result.\n" + "\n".join(lines)
+                )
+            logger.info(
+                "Literature for hypothesis %r: %d paper(s)", key[:60], len(lines)
+            )
+        except Exception as e:
+            logger.warning(f"Per-hypothesis literature search failed: {e}")
+
+        cache[key] = context
+        return context
+
+    def _experiment_figure_dir(self, protocol_id: str) -> Optional[str]:
+        """Where this experiment's figures are copied to, or None.
+
+        One subdirectory per experiment, named by the first eight characters of
+        its id, under the run's figures directory (set by the CLI beside the
+        --output report so relative links in the report resolve). Returns None
+        when figures are disabled or no run directory was configured, which
+        switches collection off entirely.
+
+        The directory is NOT created here: the sandbox collector creates it
+        only if something was actually written, so a run that drew nothing
+        leaves no empty folders behind.
+        """
+        try:
+            config = getattr(self, "config", None) or {}
+            if not config.get("enable_figures", True):
+                return None
+            base = config.get("figures_dir")
+            if not base:
+                return None
+            from pathlib import Path as _Path
+
+            return str(_Path(base) / str(protocol_id)[:8])
+        except Exception as e:
+            logger.warning(f"Could not resolve a figure directory: {e}")
+            return None
+
     def _staged_file_context(
         self, mount: dict, *, single: bool = False
     ) -> Optional[str]:
@@ -829,6 +1223,16 @@ class ResearchDirectorAgent(BaseAgent):
         grounded in the menu, and each gets the column space it actually needs.
         """
         described = self._column_descriptions()
+        # Sniff every staged file once, here, so the FILE FORMAT paragraph
+        # below can tell the code generator the exact read call per file.
+        from kosmos.data.table_head import sniff_head
+
+        heads = {}
+        for _name, _path in mount.items():
+            try:
+                heads[_name] = sniff_head(str(_path))
+            except Exception:  # a failed sniff must not cost the prompt
+                continue
         compat_text = self._merge_compatibility(mount)
         compat = f"\n\n{compat_text}" if compat_text else ""
         blocks: list[str] = []
@@ -885,9 +1289,15 @@ class ResearchDirectorAgent(BaseAgent):
             # pandas reports it as "Usecols do not match columns" -- naming all
             # eleven real columns as missing, which reads like the wrong file
             # rather than the wrong delimiter.
-            "FILE FORMAT: every staged file is COMMA-separated with a header "
-            "row, whatever the upstream source's convention was. Read them with "
-            "pd.read_csv(path) and do NOT pass sep= or delimiter=.\n\n"
+            # Conditional since the header sniffer landed: the blanket advice
+            # below is right for an ordinary file and actively WRONG for one
+            # whose header is not on line 1 -- there, `pd.read_csv(path)` is
+            # exactly the call that turns every numeric column into text. When
+            # any staged file needs correcting, the per-file calls replace this
+            # paragraph rather than sitting beside it, so the prompt never
+            # carries two contradictory instructions.
+            + _file_format_text(heads, mount, single)
+            + 
             # A GPL96 series stages Affymetrix probe IDs and no symbols. The
             # generated code recognised that, concluded it could not map them,
             # and raised `Probe-to-gene annotation mapping is required ...
@@ -1107,8 +1517,14 @@ class ResearchDirectorAgent(BaseAgent):
 
         Reads only the materialised data path -- for an AutoEvidence run that is
         the released capsule, so this exposes nothing the gateway did not already
-        release. Returns column names/types, shape, and a compact numeric summary
-        (never raw rows), or None when there is no readable dataset.
+        release. Returns column names/types, shape, and a compact numeric
+        summary, or None when there is no readable dataset.
+
+        Raw lines: a --data-path file and an OPEN-DATA release show their first
+        lines verbatim, because the header cannot be verified without them and
+        the whole file was released anyway. A gated capsule shows only the
+        header VERDICT (is the header on line 1?), which is a property of the
+        file's shape and not a disclosure of anyone's data.
 
         Bounded to a fixed-size sample regardless of file size (see
         `_CONTEXT_SAMPLE_ROWS`). This used to be an unbounded `pd.read_csv` on
@@ -1142,55 +1558,61 @@ class ResearchDirectorAgent(BaseAgent):
             return override
         if not self.data_path or not os.path.exists(self.data_path):
             return None
+        # Delegate rather than duplicate. This branch used to be a ~90-line
+        # copy of `_summarise_file` that had drifted: it never gained the
+        # missingness flags or the value-set block, and it printed "(Every
+        # column is named above...)" after slicing to `max_cols`, which was
+        # simply false for a wide CSV. A --data-path run now gets exactly the
+        # summary a staged source gets, head preview included.
+        return self._summarise_file(self.data_path, max_cols=max_cols)
+
+    def _apply_relevance_check(self, context: str) -> str:
+        """Prefix a warning when the data cannot address the question.
+
+        Warn-only, by design. An exploratory run legitimately has no question
+        terms to match, and blocking it would trade one silent failure for a
+        louder one. What this buys is that a run whose data cannot reach its
+        question SAYS so, in the same prompt that asks for hypotheses, instead
+        of quietly proposing something about whatever columns happen to exist.
+
+        Asked at most once per run: the verdict is cached on first use and the
+        cache is written even when the check fails, so a provider timeout costs
+        one call rather than one per iteration. Never raises, never blocks.
+        """
         try:
-            import pandas as pd
+            if not bool((getattr(self, "config", None) or {}).get(
+                "relevance_check", True
+            )):
+                return context
 
-            with open(self.data_path, "rb") as fh:
-                n_rows = sum(1 for _ in fh) - 1  # minus header
-            df = pd.read_csv(self.data_path, nrows=self._CONTEXT_SAMPLE_ROWS)
-        except Exception as e:
-            logger.warning(f"Could not read dataset for hypothesis context: {e}")
-            return None
-        if df.shape[1] == 0:
-            return None
-        sampled = n_rows > len(df)
+            verdict = getattr(self, "_relevance_verdict", None)
+            if verdict is None:
+                from kosmos.data.relevance import assess
 
-        cols = list(df.columns)[:max_cols]
-        shape_line = f"Shape: {n_rows} rows x {df.shape[1]} columns."
-        if sampled:
-            shape_line += (
-                f" Statistics below are computed from the first {len(df):,} "
-                f"rows only (the file is larger than that sample)."
-            )
-        lines = [
-            shape_line,
-            "Columns (name: dtype):",
-        ]
-        lines += [f"  - {c}: {df[c].dtype}" for c in cols]
-        if len(df.columns) > max_cols:
-            lines.append(
-                f"(Every column is named above. The statistics below cover "
-                f"the first {max_cols} of {len(df.columns)}.)"
-            )
-
-        numeric = df[cols].select_dtypes(include="number")
-        if not numeric.empty:
-            lines.append("Numeric summary (mean / std / min / max):")
-            for c in numeric.columns:
-                s = numeric[c]
                 try:
-                    lines.append(
-                        f"  - {c}: mean={s.mean():.4g}, std={s.std():.4g}, "
-                        f"min={s.min():.4g}, max={s.max():.4g}"
+                    verdict = assess(
+                        self.research_question,
+                        context,
+                        client=getattr(self, "llm_client", None),
+                        mode="warn",
                     )
-                except (TypeError, ValueError):
-                    continue
-        categorical = df[cols].select_dtypes(exclude="number")
-        for c in categorical.columns[:10]:
-            vals = [str(v) for v in df[c].dropna().unique()[:8]]
-            if vals:
-                lines.append(f"  - {c} levels (sample): {', '.join(vals)}")
-        return "\n".join(lines)
+                finally:
+                    # Assigned even on failure: one bad call must not become
+                    # one bad call per iteration.
+                    self._relevance_verdict = verdict
+
+            block = verdict.render() if verdict else ""
+            if not block:
+                return context
+
+            print(f"  [data] {verdict.level.upper()}: {verdict.reason}")
+            logger.warning(
+                f"Relevance check: {verdict.level} -- {verdict.reason}"
+            )
+            return block + "\n\n" + context
+        except Exception as e:
+            logger.warning(f"Relevance check skipped: {e}")
+            return context
 
     def _federated_data_context(self, max_cols: int = 40) -> Optional[str]:
         """One string describing every source, for grounding hypotheses in all of them.
@@ -1261,12 +1683,37 @@ class ResearchDirectorAgent(BaseAgent):
         override mechanism used to lose entirely.
         """
         if mat.menu:
-            return self._menu_to_context(
+            body = self._menu_to_context(
                 mat.menu,
                 mat.body,
                 dataset_id=mat.dataset_id,
                 release_regime=mat.describe_release(),
             )
+            # A menu names the science; it cannot say whether the FILE parses.
+            # Every served bundle carries a menu, so a header check that lived
+            # only in `_summarise_file` would miss precisely the runs where
+            # displaced headers were observed. Raw lines only for an open-data
+            # release, whose rows were published in full; a gated capsule gets
+            # the verdict alone.
+            if body and mat.path is not None:
+                try:
+                    from kosmos.data.table_head import sniff_head
+
+                    head = sniff_head(str(mat.path))
+                    if mat.kind == "open_data":
+                        extra = head.render()
+                        if extra:
+                            body += (
+                                "\n\nThe file staged for this dataset begins:\n"
+                                + extra
+                            )
+                    elif not head.is_plain:
+                        advisory = head.advisory()
+                        if advisory:
+                            body += "\n\n" + advisory
+                except Exception as e:  # never lose a block to a preview
+                    logger.warning(f"Head preview failed for {mat.path}: {e}")
+            return body
         if mat.kind == "schema":
             cols = mat.body.get("columns") or []
             lines = [f"Columns (name: type), {len(cols)} total, no rows released:"]
@@ -1281,6 +1728,7 @@ class ResearchDirectorAgent(BaseAgent):
         path: str,
         max_cols: int = 40,
         descriptions: Optional[Dict[str, str]] = None,
+        show_preview: bool = True,
     ) -> Optional[str]:
         """Shape, columns and a compact numeric summary of one staged file.
 
@@ -1289,134 +1737,94 @@ class ResearchDirectorAgent(BaseAgent):
         `_CONTEXT_SAMPLE_ROWS` for the same reason it is there: building a prompt
         must not pull a multi-GB file into memory, and with N sources that cost
         is multiplied.
+
+        The file is SNIFFED before it is parsed (`kosmos.data.table_head`). A
+        bare `pd.read_csv` assumes the header is line 1, and when it is not --
+        a second header row, a banner, no header at all -- pandas does not
+        complain: it returns plausible column names, every numeric column as
+        text, and one real row consumed as a name. Nothing downstream can see
+        that. So the head is read as bytes first, the read is corrected, and
+        `show_preview` controls whether the raw lines themselves are shown
+        (they are withheld for a gated capsule, whose verdict is still stated).
         """
         import os
 
         if not os.path.exists(path):
             return None
+
+        from kosmos.data.table_head import sniff_head
+
+        head = sniff_head(path)
+        binary_reader = _BINARY_READERS.get(os.path.splitext(path)[1].lower())
+        if head.verdict == "binary" and binary_reader is None:
+            # Not text, and not a format pandas can open either. Say so rather
+            # than returning None, which the caller renders as "this source
+            # contributed nothing".
+            return f"{head.advisory()}\nFile: {path}"
+
         try:
             import pandas as pd
 
-            with open(path, "rb") as fh:
-                n_rows = sum(1 for _ in fh) - 1
-            df = pd.read_csv(path, nrows=self._CONTEXT_SAMPLE_ROWS)
+            if binary_reader is not None:
+                # Binary by bytes but perfectly readable: .parquet, .xlsx and
+                # friends. The sniffer only looks at bytes, so it calls these
+                # "not text" -- and returning that advisory told the model a
+                # supported dataset could not be read, then let it invent a
+                # question about columns nobody had looked at. Open it with the
+                # reader the format actually needs.
+                try:
+                    df = getattr(pd, binary_reader)(path)
+                except Exception as e:
+                    logger.warning(f"Could not read {path} with pd.{binary_reader}: {e}")
+                    return f"File: {path}\nThis file could not be opened: {e}"
+                n_rows = len(df)
+                head.verdict = "plain"
+                head.preview_lines = []
+                df = df.head(self._CONTEXT_SAMPLE_ROWS)
+                return _render_file_summary(
+                    path, df, n_rows, head, max_cols, descriptions, show_preview
+                )
+
+            # Through the same opener the sniffer used: counting the LINES of
+            # a .csv.gz means counting them after decompression, not counting
+            # newline bytes in the archive (which reported a 2-row file as 1).
+            from kosmos.data.table_head import _open_maybe_compressed
+
+            with _open_maybe_compressed(path) as fh:
+                n_rows = sum(1 for _ in fh)
+            try:
+                df = pd.read_csv(
+                    path, nrows=self._CONTEXT_SAMPLE_ROWS, **head.pandas_kwargs()
+                )
+            except Exception as parse_error:
+                # The sniff was wrong about something. A wrong preview must not
+                # cost the summary, so fall back to the naive read and say that
+                # the correction was not applied.
+                if head.pandas_kwargs():
+                    logger.warning(
+                        f"Header detection did not apply to {path} "
+                        f"({parse_error}); reading it plainly instead."
+                    )
+                    head.notes.append("header detection could not be applied")
+                    head.verdict = "plain"
+                    df = pd.read_csv(path, nrows=self._CONTEXT_SAMPLE_ROWS)
+                else:
+                    raise
+            # Rows of DATA: the header line and anything skipped above or below
+            # it are not observations. Reporting N+1 would misstate the power of
+            # every test the model goes on to propose.
+            n_rows = max(
+                0,
+                n_rows
+                - (0 if head.verdict == "headerless" else 1)
+                - len(head.skip_lines),
+            )
         except Exception as e:
             logger.warning(f"Could not read {path} for hypothesis context: {e}")
             return None
-        if df.shape[1] == 0:
-            return None
-
-        # Every column NAME, not the first `max_cols`. Names are cheap --
-        # 151 of them is a couple of kilobytes -- and the cost is the
-        # per-column summary below, which stays capped. Truncating the names
-        # hid all 111 columns past the 40th, including every `age:[0-10)`
-        # bucket, so the model wrote `df['age']` from its memory of the UCI
-        # dataset and the container raised `KeyError: 'age'`. A column the
-        # model cannot see is one it will invent.
-        all_cols = list(df.columns)
-        cols = all_cols[:max_cols]
-        shape_line = f"Shape: {n_rows} rows x {df.shape[1]} columns."
-        if n_rows > len(df):
-            shape_line += (
-                f" Statistics below are computed from the first {len(df):,} rows only."
-            )
-        try:
-            size_mb = os.path.getsize(path) / 1e6
-        except OSError:
-            size_mb = 0.0
-        if size_mb >= 100:
-            # A 548 MB CSV takes several GB to read whole, and the sandbox is
-            # memory-capped: the container is killed with exit 137 and no
-            # traceback, so the analysis fails before it computes anything.
-            shape_line += (
-                f" FILE IS {size_mb:,.0f} MB ON DISK -- read only the columns "
-                f"you need with pd.read_csv(..., usecols=[...]); reading it "
-                f"whole can exhaust the sandbox's memory."
-            )
-
-        lines = [shape_line, "Columns (name: dtype):"]
-        descriptions = descriptions or {}
-        for c in all_cols:
-            line = f"  - {c}: {df[c].dtype}"
-            # Missingness, stated per column. A name and a dtype cannot tell
-            # anyone that `Unnamed_32` is 569/569 null -- the trailing-comma
-            # artifact every hand-exported CSV carries -- and a run died on its
-            # own "Dataset contains missing values" check because the column
-            # looked like a 33rd feature. Counted on the sample, so it is
-            # labelled as such rather than presented as the whole truth.
-            n_missing = int(df[c].isna().sum())
-            if n_missing == len(df) and len(df):
-                line += "  [EMPTY: every sampled value is missing -- drop this column]"
-            elif n_missing:
-                line += f"  [{n_missing}/{len(df)} sampled values missing]"
-            meaning = descriptions.get(c)
-            if meaning:
-                line += f" -- {meaning}"
-            lines.append(line)
-        if len(df.columns) > max_cols:
-            lines.append(
-                f"(Every column is named above. The statistics below cover "
-                f"the first {max_cols} of {len(df.columns)}.)"
-            )
-        numeric = df[cols].select_dtypes(include="number")
-        if not numeric.empty:
-            lines.append("Numeric summary (mean / std / min / max):")
-            for c in numeric.columns:
-                s = numeric[c]
-                try:
-                    lines.append(
-                        f"  - {c}: mean={s.mean():.4g}, std={s.std():.4g}, "
-                        f"min={s.min():.4g}, max={s.max():.4g}"
-                    )
-                except (TypeError, ValueError):
-                    continue
-        # Low-cardinality columns, wherever they sit in the table.
-        #
-        # The statistics above cover the first `max_cols` columns, and an
-        # outcome column is usually the LAST one. On the diabetes table
-        # `readmitted` is column 150 of 151, so its values were never shown --
-        # and the model encoded it as the original UCI strings, writing
-        # `1 if x == '<30' else 0` against a column holding integers 0/1. Every
-        # row became 0, its own filter emptied the frame, and train_test_split
-        # got n_samples=0. A handful of distinct values costs a few bytes to
-        # print and is exactly what a label or a flag needs to disclose.
-        # Grouped by the value set, so completeness costs a line rather than a
-        # hundred. Listing them one per column filled a 30-line quota with
-        # one-hot dummies and still never reached `readmitted` at column 150 --
-        # which is the single column whose values decide whether the analysis
-        # works at all.
-        _by_values: dict = {}
-        for _c in all_cols:
-            try:
-                _uniq = df[_c].dropna().unique()
-            except Exception:
-                continue
-            if 0 < len(_uniq) <= 10:
-                _key = tuple(sorted(str(v) for v in _uniq))
-                _by_values.setdefault(_key, []).append(_c)
-        if _by_values:
-            lines.append("Columns with few distinct values, by value set:")
-            for _key, _members in list(_by_values.items())[:12]:
-                # First few AND last few. A truncated list that always drops
-                # the tail hides the outcome column, which is where an outcome
-                # column usually is -- `readmitted` sat at position 150 of 151
-                # and would vanish into "+113 more", which is the one column
-                # whose values decide whether the analysis runs at all.
-                if len(_members) <= 8:
-                    _shown, _more = ", ".join(_members), ""
-                else:
-                    _shown = ", ".join(_members[:6] + ["..."] + _members[-2:])
-                    _more = f"  ({len(_members)} columns)"
-                lines.append(
-                    f"  - takes values [{', '.join(_key)}]: {_shown}{_more}"
-                )
-
-        categorical = df[cols].select_dtypes(exclude="number")
-        for c in categorical.columns[:10]:
-            vals = [str(v) for v in df[c].dropna().unique()[:8]]
-            if vals:
-                lines.append(f"  - {c} levels (sample): {', '.join(vals)}")
-        return "\n".join(lines)
+        return _render_file_summary(
+            path, df, n_rows, head, max_cols, descriptions, show_preview
+        )
 
     def _validate_domain(self):
         """Validate domain against enabled domains (Issue #51)."""
@@ -2593,6 +3001,7 @@ class ResearchDirectorAgent(BaseAgent):
             data_context = self._build_data_context()
             if data_context:
                 logger.info("Hypothesis generation is data-driven (dataset schema supplied)")
+                data_context = self._apply_relevance_check(data_context)
 
             response = self._hypothesis_agent.generate_hypotheses(
                 research_question=self.research_question,
@@ -2600,6 +3009,9 @@ class ResearchDirectorAgent(BaseAgent):
                 domain=self.domain,
                 store_in_db=True,
                 data_context=data_context,
+                # Explore the dataset only when NO question was asked; when a
+                # real question was given, keep hypotheses focused on it.
+                data_driven=bool(self.config.get("data_driven", False)),
             )
 
             # Track rollout (Issue #58)
@@ -2728,6 +3140,17 @@ class ResearchDirectorAgent(BaseAgent):
                 self._code_generator = ExperimentCodeGenerator(use_templates=True, use_llm=True)
             if self._code_executor is None:
                 self._code_executor = CodeExecutor(max_retries=3)
+            # Set on EVERY pass, never left over from the previous experiment:
+            # a stale directory would file this run's figures under another
+            # experiment's id.
+            self._code_executor.figure_dir = self._experiment_figure_dir(protocol_id)
+            # Start each attempt from an empty directory. A retry that drew
+            # `volcano.png` again landed as `volcano-2.png` (the collector's
+            # collision suffix), which broke caption lookup by basename AND
+            # left the failed attempt's figure in the report's directory
+            # forever. The figures of an attempt that is being replaced are not
+            # results.
+            self._clear_figure_dir(self._code_executor.figure_dir)
             if self._data_provider is None:
                 self._data_provider = DataProvider(
                     default_data_dir=self.data_path
@@ -2888,6 +3311,43 @@ class ResearchDirectorAgent(BaseAgent):
                              "mean_difference", "significance_label",
                              "correlation", "r_squared")
                 }
+                # Nothing generated code actually writes is called `p_value`.
+                # It writes `pearson_p`, `spearman_rho_cis_vs_t1`, or nests
+                # `{'r':..,'p':..}` -- so this whitelist of seven exact names
+                # matched NOTHING, and every result was stored with empty
+                # p_value/effect_size/statistical_tests columns.
+                #
+                # That is not a cosmetic loss. DataAnalystAgent reads ONLY
+                # those columns, never `data`, so it was handed "Primary
+                # P-value: None" for experiments that had computed p=1.14e-41,
+                # reported the hypothesis as untested, and scored every one of
+                # them 1/5. The statistics were in the same row the whole time.
+                if p_value is None or effect_size is None or not statistical_tests:
+                    from kosmos.analysis.result_stats import extract_statistics
+
+                    found = extract_statistics(return_value)
+                    if p_value is None:
+                        p_value = found["primary_p_value"]
+                    if effect_size is None:
+                        effect_size = found["primary_effect_size"]
+                    if not statistical_tests and found["tests"]:
+                        # Primary first, so `_primary_test_name` still names it
+                        # correctly if two tests happen to share a p-value.
+                        ordered = sorted(
+                            found["tests"],
+                            key=lambda t: t["test_name"] != found["primary_test"],
+                        )
+                        statistical_tests = {
+                            t["test_name"]: {
+                                k: v for k, v in t.items() if k != "test_name"
+                            }
+                            for t in ordered
+                        }
+                    if found["tests"]:
+                        logger.info(
+                            "Recovered %d statistical test(s) from the result "
+                            "payload; primary p=%s", len(found["tests"]), p_value,
+                        )
             else:
                 p_value = None
                 effect_size = None
@@ -2938,6 +3398,53 @@ class ResearchDirectorAgent(BaseAgent):
                 logger.warning("Experiment %s: %s", protocol_id, _note)
                 safe_data["analysis_note"] = _note
 
+            # Figures: the files that actually came back out of the sandbox,
+            # captioned by the code when it recorded them and by their filename
+            # otherwise. Only collected paths count -- a caption for a figure
+            # that was never written would put a phantom image in the report.
+            _figures = []
+            try:
+                # Local import: this module imports os per-function rather than
+                # at module scope.
+                import os as _os
+                import re as _re
+
+                _re_suffix = _re.compile(r"-\d+$")
+                _captions = {}
+                _claimed = safe_data.get("figures")
+                if isinstance(_claimed, list):
+                    for entry in _claimed:
+                        if isinstance(entry, dict) and entry.get("path"):
+                            _captions[_os.path.basename(str(entry["path"]))] = (
+                                entry.get("caption")
+                            )
+                for entry in (getattr(exec_result, "figures", None) or [])[:12]:
+                    if not isinstance(entry, dict):
+                        continue
+                    path = entry.get("path")
+                    if not isinstance(path, str) or not path:
+                        continue
+                    base = _os.path.basename(path)
+                    caption = _captions.get(base) or entry.get("caption")
+                    if not caption:
+                        # `volcano-2.png` is `volcano.png` written twice; the
+                        # code captioned the name it chose, not the name the
+                        # collector had to give it.
+                        stem, ext = _os.path.splitext(base)
+                        stem = _re_suffix.sub("", stem)
+                        caption = _captions.get(stem + ext)
+                    if not caption:
+                        caption = _os.path.splitext(base)[0].replace("_", " ")
+                    _figures.append({"path": path, "caption": caption})
+                if _figures:
+                    logger.info(
+                        f"Experiment {protocol_id}: kept {len(_figures)} figure(s) "
+                        f"in {self._code_executor.figure_dir}"
+                    )
+            except Exception as fig_err:
+                logger.warning(f"Could not record figures: {fig_err}")
+                _figures = []
+
             # Store result in DB
             result_id = str(uuid4())
             try:
@@ -2955,6 +3462,7 @@ class ResearchDirectorAgent(BaseAgent):
                         p_value=_as_float(p_value),
                         effect_size=_as_float(effect_size),
                         statistical_tests=safe_stats,
+                        figures=_figures or None,
                     )
             except Exception as db_err:
                 logger.error(f"Failed to store result in DB: {db_err}")
@@ -3124,12 +3632,23 @@ class ResearchDirectorAgent(BaseAgent):
                 import sys as _sys
                 import platform as _platform
                 _now = datetime.now(timezone.utc)
+                # Derive both together, and only keep the name if the list
+                # actually contains it: ExperimentResult refuses a primary
+                # test that names nothing, and that refusal is fatal here.
+                _primary = _primary_test_name(
+                    db_result.statistical_tests, db_result.p_value
+                )
+                _tests = _pydantic_tests(db_result.statistical_tests, _primary)
+                if _primary not in {t.test_name for t in _tests}:
+                    _primary = None
                 pydantic_result = ExperimentResult(
                     id=db_result.id,
                     experiment_id=db_result.experiment_id,
                     protocol_id=db_result.experiment_id,
                     status=ResultStatus.SUCCESS,
                     raw_data=db_result.data or {},
+                    primary_test=_primary,
+                    statistical_tests=_tests,
                     primary_p_value=db_result.p_value,
                     primary_effect_size=db_result.effect_size,
                     supports_hypothesis=db_result.supports_hypothesis,
@@ -3156,10 +3675,20 @@ class ResearchDirectorAgent(BaseAgent):
                             domain=db_hyp.domain or self.domain or "general",
                         )
 
-            # Call data analyst
+            # Call data analyst, with the literature for THIS hypothesis.
+            #
+            # `interpret_results` has always accepted `literature_context` and
+            # the director has never passed it, so the analyst interpreted
+            # every result with no literature at all. Searching here rather
+            # than up front is what makes the search usable: the run-level
+            # question ("which plasma proteins causally affect myocardial
+            # fibrosis") is too diffuse to retrieve anything specific, while a
+            # hypothesis names its own subject -- SOD2, a cis-pQTL, a tissue --
+            # which is what a literature index can actually match.
             interpretation = self._data_analyst.interpret_results(
                 result=pydantic_result,
                 hypothesis=pydantic_hyp,
+                literature_context=self._hypothesis_literature(pydantic_hyp),
             )
 
             # Track rollout (Issue #58)
@@ -3175,6 +3704,39 @@ class ResearchDirectorAgent(BaseAgent):
                 f"Result {result_id} interpretation: "
                 f"hypothesis {hypothesis_id} supported={hypothesis_supported}"
             )
+
+            # Persist the verdict. Until now the interpretation lived only in
+            # this process (the plan's supported/rejected sets, the graph edge),
+            # so the `results` row kept NULL supports_hypothesis / interpretation
+            # / key_findings and the hypothesis row stayed GENERATED forever --
+            # which is exactly what the report renders. A run's conclusions
+            # have to survive the run.
+            try:
+                from kosmos.db.models import HypothesisStatus as DBHypStatus
+                with get_session() as session:
+                    row = db_get_result(session, result_id)
+                    if row is not None:
+                        parts = [interpretation.summary or ""]
+                        if interpretation.significance_interpretation:
+                            parts.append(interpretation.significance_interpretation)
+                        if interpretation.biological_significance:
+                            parts.append(interpretation.biological_significance)
+                        if interpretation.overall_assessment:
+                            parts.append(f"Assessment: {interpretation.overall_assessment}")
+                        row.interpretation = "\n\n".join(x for x in parts if x).strip() or None
+                        row.key_findings = list(interpretation.key_findings or []) or None
+                        row.supports_hypothesis = hypothesis_supported
+                    if hypothesis_id and hypothesis_supported is not None:
+                        db_hyp = get_hypothesis(session, hypothesis_id)
+                        if db_hyp is not None:
+                            db_hyp.status = (
+                                DBHypStatus.SUPPORTED if hypothesis_supported
+                                else DBHypStatus.REJECTED
+                            )
+                            db_hyp.updated_at = datetime.now(timezone.utc)
+                    session.commit()
+            except Exception as persist_err:
+                logger.warning(f"Could not persist interpretation for {result_id}: {persist_err}")
 
             # Reset error streak on success
             self._reset_error_streak()
@@ -3215,6 +3777,43 @@ class ResearchDirectorAgent(BaseAgent):
                 recoverable=True,
                 error_details={"result_id": result_id}
             )
+
+    def _score_and_filter_variants(self, variants):
+        """Novelty-score spawned variants and drop those under the run's floor.
+
+        The generator scores every hypothesis it emits and filters on
+        `min_novelty_score`; the refiner's `spawn_variant` does neither, so its
+        output entered the pool unscored (rendered as novelty 0.00) and, being
+        close paraphrases of the parent, would have scored ~0 anyway. Scoring
+        here uses the same checker and threshold, so a variant that survives
+        is at least as distinct from tested work as a generated hypothesis.
+        """
+        if not variants:
+            return []
+        min_novelty = float(self.config.get("min_novelty_score", 0.5))
+        try:
+            from kosmos.hypothesis.novelty_checker import NoveltyChecker
+            checker = NoveltyChecker(similarity_threshold=1.0 - min_novelty)
+        except Exception as e:
+            logger.warning(f"NoveltyChecker unavailable for variants, keeping all: {e}")
+            return list(variants)
+        kept = []
+        for variant in variants:
+            try:
+                report = checker.check_novelty(variant)
+                variant.novelty_score = report.novelty_score
+            except Exception as e:
+                logger.warning(f"Novelty check failed for variant, keeping it: {e}")
+                kept.append(variant)
+                continue
+            if report.novelty_score < min_novelty:
+                logger.info(
+                    "[REFINE] Dropped low-novelty variant (%.2f): %s",
+                    report.novelty_score, variant.statement[:70],
+                )
+            else:
+                kept.append(variant)
+        return kept
 
     async def _handle_refine_hypothesis_action(self, hypothesis_id: str):
         """
@@ -3280,6 +3879,7 @@ class ResearchDirectorAgent(BaseAgent):
                                     primary_p_value=db_r.p_value,
                                     primary_effect_size=db_r.effect_size,
                                     supports_hypothesis=db_r.supports_hypothesis,
+                                    interpretation=getattr(db_r, "interpretation", None) or None,
                                     metadata=ExecutionMetadata(
                                         start_time=_now,
                                         end_time=_now,
@@ -3313,6 +3913,38 @@ class ResearchDirectorAgent(BaseAgent):
             refined_ids = []
             retired_ids = []
 
+            # SPAWN_VARIANT is the refiner's answer to an *inconclusive* result.
+            # A result whose analysis never happened (the analyst call came back
+            # empty or truncated: no verdict, no p-value, no interpretation) is
+            # not inconclusive, it is unanalysed -- and spawning variants of an
+            # unanalysed hypothesis produced near-duplicates that the novelty
+            # check then scored 0.0. Generate fresh hypotheses instead. The same
+            # exit applies once a hypothesis has spawned its share of variants.
+            if decision == RetirementDecision.SPAWN_VARIANT:
+                unanalysed = (
+                    latest_result.supports_hypothesis is None
+                    and latest_result.primary_p_value is None
+                    and not getattr(latest_result, "interpretation", None)
+                )
+                spawned = self._variants_spawned.get(hypothesis_id, 0)
+                cap = int(self.config.get("max_variants_per_hypothesis", 2))
+                if unanalysed or spawned >= cap:
+                    logger.info(
+                        "[REFINE] %s: %s - generating new hypotheses instead of variants",
+                        hypothesis_id,
+                        "result carries no analysis" if unanalysed
+                        else f"already spawned {spawned}/{cap} variants",
+                    )
+                    with self._workflow_context():
+                        self.workflow.transition_to(
+                            WorkflowState.GENERATING_HYPOTHESES,
+                            action="Variant budget spent or result unanalysed",
+                        )
+                    with self._strategy_stats_context():
+                        self.strategy_stats["hypothesis_refinement"]["attempts"] += 1
+                    self.rollout_tracker.increment("hypothesis_refinement")
+                    return
+
             if decision == RetirementDecision.RETIRE:
                 self._hypothesis_refiner.retire_hypothesis(
                     pydantic_hyp, rationale="Retirement based on result evaluation"
@@ -3344,6 +3976,13 @@ class ResearchDirectorAgent(BaseAgent):
             elif decision == RetirementDecision.SPAWN_VARIANT:
                 variants = self._hypothesis_refiner.spawn_variant(
                     pydantic_hyp, latest_result, num_variants=2
+                )
+                # Variants bypass the generator's novelty gate; score them here
+                # so a rewording of the parent is dropped rather than stored
+                # with no score and a zero priority.
+                variants = self._score_and_filter_variants(variants)
+                self._variants_spawned[hypothesis_id] = (
+                    self._variants_spawned.get(hypothesis_id, 0) + len(variants)
                 )
                 for variant in variants:
                     if variant and variant.id:
@@ -3968,7 +4607,23 @@ Provide a structured, actionable plan in 2-3 paragraphs.
             return NextAction.ANALYZE_RESULT
 
         elif current_state == WorkflowState.REFINING:
-            # Refine hypotheses based on results
+            # Test what is already on the table before refining what was tested.
+            # Without this, one analysed result sent every remaining iteration
+            # into REFINE_HYPOTHESIS on the same hypothesis (each refine costs an
+            # iteration) while hypotheses generated alongside it were never
+            # designed -- a run of 15 hypotheses with one experiment.
+            untested = self.research_plan.get_untested_hypotheses()
+            if untested:
+                logger.info(
+                    "[DECISION] REFINING: %d untested hypotheses remain - designing "
+                    "experiments before refining", len(untested)
+                )
+                with self._workflow_context():
+                    self.workflow.transition_to(
+                        WorkflowState.DESIGNING_EXPERIMENTS,
+                        action="Untested hypotheses remain",
+                    )
+                return NextAction.DESIGN_EXPERIMENT
             if self.research_plan.tested_hypotheses:
                 return NextAction.REFINE_HYPOTHESIS
             else:

@@ -357,7 +357,12 @@ class DataAnalystAgent(BaseAgent):
                 system="You are an expert scientific data analyst. Provide nuanced, "
                        "evidence-based interpretations of experimental results. Focus on "
                        "scientific meaning, not just statistical significance.",
-                max_tokens=2000,
+                # 4096, not 2000: the interpretation JSON carries several free-
+                # text lists (key findings, confounds, follow-ups) and 2000 was
+                # tight even before reasoning models shared this budget with
+                # their trace. The provider retries without reasoning if the
+                # trace alone exhausts it.
+                max_tokens=4096,
                 temperature=0.3  # Lower temperature for more focused analysis
             )
 
@@ -516,6 +521,15 @@ Format your response as JSON with the following structure:
             # Extract JSON from response (Claude sometimes adds text before/after)
             json_start = response.find('{')
             json_end = response.rfind('}') + 1
+            if json_start < 0 or json_end <= json_start:
+                # No object at all: an empty reply, or a reasoning trace handed
+                # back as text. Say which, rather than "Expecting value at char 0".
+                logger.error(
+                    "Interpretation response holds no JSON object (%d chars%s); "
+                    "using fallback interpretation",
+                    len(response), "" if response.strip() else ", empty",
+                )
+                return self._create_fallback_interpretation(result)
             json_str = response[json_start:json_end]
 
             data = json.loads(json_str)

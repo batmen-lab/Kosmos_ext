@@ -68,8 +68,13 @@ class TemplateCustomizationParams(BaseModel):
     max_duration_days: Optional[float] = None
     max_compute_hours: Optional[float] = None
 
-    # Additional customization
-    custom_variables: Optional[Dict[str, Any]] = None
+    # Additional customization. `custom_variables` defaults to an empty dict,
+    # not None: every domain template reads it with `.get(...)`, and the
+    # designer builds these params without customisation, so a None default
+    # crashed every template-matched design with "'NoneType' object has no
+    # attribute 'get'" -- which error-recovery then turned into a run that
+    # regenerated hypotheses forever and executed nothing.
+    custom_variables: Dict[str, Any] = Field(default_factory=dict)
     custom_steps: Optional[List[Dict[str, Any]]] = None
     additional_context: Optional[Dict[str, Any]] = None
 

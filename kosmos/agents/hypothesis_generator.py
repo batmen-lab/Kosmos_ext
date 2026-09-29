@@ -6,6 +6,7 @@ with literature context and novelty checking.
 """
 
 import logging
+import os
 import time
 import uuid
 from typing import List, Dict, Any, Optional
@@ -28,6 +29,69 @@ from kosmos.db.models import Hypothesis as DBHypothesis, HypothesisStatus as DBH
 from kosmos.db import get_session
 
 logger = logging.getLogger(__name__)
+
+# Budget for the hypothesis-generation call, overridable because 4000 was not
+# enough and nothing said so until a run stalled on it.
+#
+# The failure is specific to reasoning models behind an OpenAI-compatible API:
+# the reasoning trace and the answer SHARE max_tokens, so a long JSON schema
+# can consume the whole budget and return finish_reason=length with no
+# content at all. A live run logged
+#
+#   Model returned no content for a JSON-mode request (finish_reason=length).
+#   With reasoning enabled the reasoning trace and the answer share max_tokens
+#   (4000), so a long schema can leave nothing for the JSON itself.
+#
+# and then regenerated, and failed again -- 28 hypotheses recorded against 6
+# experiments, because each failure left the director retrying instead of
+# designing. The default is raised to 8192 on the same evidence; the override
+# exists so a longer schema or a chattier model does not need a code change.
+HYPOTHESIS_MAX_TOKENS = int(os.environ.get("KOSMOS_HYPOTHESIS_MAX_TOKENS", "8192"))
+
+
+# `Hypothesis.statement` is capped at 500 characters by the model schema.
+_STATEMENT_LIMIT = 500
+
+
+def _fit_statement(statement: str, rationale: str) -> tuple:
+    """Fit an over-long statement to the cap without losing what it says.
+
+    Two of five hypotheses in one run were discarded outright for overrunning
+    the 500-character cap -- the model writes the full test specification into
+    the claim ("...at Benjamini-Hochberg FDR < 0.05"), and pydantic rejects
+    the whole object. Losing a hypothesis the model did the work of forming,
+    over a formatting rule, is disproportionate.
+
+    So the overflow MOVES to the rationale rather than being cut away: a
+    statement truncated mid-clause can assert something the model did not mean
+    -- dropping "FDR < 0.05" turns a corrected claim into an uncorrected one.
+    The split is taken at a sentence boundary where one exists, and at a word
+    boundary otherwise.
+    """
+    text = (statement or "").strip()
+    if len(text) <= _STATEMENT_LIMIT:
+        return text, rationale
+
+    head = text[:_STATEMENT_LIMIT]
+    cut = max(head.rfind(". "), head.rfind("; "))
+    if cut < _STATEMENT_LIMIT // 2:  # no usable sentence break near the end
+        cut = head.rfind(" ")
+    if cut <= 0:
+        cut = _STATEMENT_LIMIT
+
+    kept, overflow = text[:cut].rstrip(" ;,"), text[cut:].strip(" ;,.")
+    if not kept.endswith("."):
+        kept += "."
+    logger.info(
+        "Hypothesis statement was %d characters; moved %d to the rationale",
+        len(text), len(overflow),
+    )
+    if overflow:
+        rationale = (
+            f"{rationale}\n\nFrom the hypothesis statement: {overflow}"
+            if rationale else f"From the hypothesis statement: {overflow}"
+        )
+    return kept, rationale
 
 
 class HypothesisGeneratorAgent(BaseAgent):
@@ -146,6 +210,7 @@ class HypothesisGeneratorAgent(BaseAgent):
         domain: Optional[str] = None,
         store_in_db: bool = True,
         data_context: Optional[str] = None,
+        data_driven: bool = False,
     ) -> HypothesisGenerationResponse:
         """
         Generate hypotheses from a research question and/or a dataset.
@@ -193,7 +258,8 @@ class HypothesisGeneratorAgent(BaseAgent):
             domain=domain,
             num_hypotheses=num_hypotheses,
             context_papers=papers,
-            data_context=data_context
+            data_context=data_context,
+            data_driven=data_driven,
         )
 
         # Step 4: Validate hypotheses
@@ -331,6 +397,7 @@ No explanation needed."""
         num_hypotheses: int,
         context_papers: List[PaperMetadata],
         data_context: Optional[str] = None,
+        data_driven: bool = False,
     ) -> List[Hypothesis]:
         """
         Generate hypotheses using Claude with structured output.
@@ -367,24 +434,90 @@ No explanation needed."""
             literature_context=literature_context or "No specific literature context provided."
         )
 
-        # Ground the hypotheses in the actual dataset when one is available. This
-        # is what turns a generic question into a data-driven run: the model is
-        # told the real variables and asked to hypothesise about relationships
-        # AMONG them, testable with this data.
+        # Ground the hypotheses in the actual dataset when one is available --
+        # but in ONE of two modes, because the two situations want opposite
+        # things:
+        #
+        #   * data_driven (no question was asked, only data given): the run's
+        #     whole purpose IS to explore the dataset, so ask the model to
+        #     hypothesise about relationships AMONG the variables.
+        #   * question-driven (a real research question was given): the columns
+        #     are there to make the hypotheses TESTABLE, not to become the
+        #     subject. Without this split, a run asked "which proteins causally
+        #     affect fibrosis" produced one on-question hypothesis and four about
+        #     incidental column relationships (|BETA| vs allele frequency, sQTL
+        #     slope vs eQTL slope), because the data block said "base your
+        #     hypotheses on these variables" and drowned out the question.
+        #
+        # The anti-fabrication guard (never substitute a column for an absent
+        # variable; name the gap) is kept in BOTH modes.
         if data_context:
-            prompt = (
-                "DATASET UNDER STUDY — base your hypotheses on THESE actual "
-                "variables, and make each one testable with this dataset:\n"
-                f"{data_context}\n\n"
-                + prompt
-            )
+            if data_driven:
+                framing = (
+                    "DATASET UNDER STUDY — base your hypotheses on THESE actual "
+                    "variables, and make each one testable with this dataset:\n"
+                    f"{data_context}\n\n"
+                    "If the variables above do not include what the question asks "
+                    "about, or a block above reports that a file's header is not "
+                    "on its first line, say so plainly in the rationale of every "
+                    "hypothesis and frame the hypotheses over what IS measured. "
+                    "Never treat a column as a stand-in for a variable that is "
+                    "absent.\n\n"
+                )
+            else:
+                framing = (
+                    "DATASET AVAILABLE FOR TESTING — use these columns to make "
+                    "each hypothesis concretely testable, but the hypotheses must "
+                    "ANSWER THE RESEARCH QUESTION below; they are NOT an "
+                    "invitation to explore the dataset:\n"
+                    f"{data_context}\n\n"
+                    "EVERY hypothesis must directly address the research question. "
+                    "Do NOT propose hypotheses about incidental relationships "
+                    "among columns (for example one variable's magnitude versus "
+                    "another's frequency, or overlaps between identifier lists) "
+                    "unless they bear on the question. Ground each hypothesis in "
+                    "the columns above so it is testable; if a variable the "
+                    "question needs is absent, say so plainly in the rationale "
+                    "and frame the hypothesis over what IS measured — never "
+                    "substitute a column for an absent variable.\n\n"
+                )
+            prompt = framing + prompt
+
+        # One claim per hypothesis, stated where the model will act on it
+        # rather than only in the schema's field description.
+        #
+        # A compound statement gets ONE verdict, and that verdict hides the
+        # finding. A real run produced "across the joined variant set the
+        # effects are concordant ... AND the per-protein MR estimate is
+        # non-zero for a majority of proteins", which came back `rejected` on
+        # the genome-wide half while the per-protein half contained the run's
+        # top hit -- the result the run existed to find, filed under a
+        # hypothesis marked rejected.
+        prompt += (
+            "\n\nONE CLAIM PER HYPOTHESIS. A hypothesis whose statement joins "
+            "two testable claims with 'and' cannot be adjudicated: the report "
+            "records a single status, so a genome-wide claim that fails and a "
+            "per-item claim that succeeds are recorded together as a failure. "
+            "If you find yourself writing 'X is true AND Y is true', emit two "
+            "hypotheses. Prefer several sharp hypotheses to one broad one; "
+            "`n` of them are requested precisely so they can differ.\n"
+        )
 
         # Define expected JSON schema
         schema = {
             "hypotheses": [
                 {
-                    "statement": "string (clear, testable hypothesis)",
-                    "rationale": "string (scientific justification)",
+                    "statement": (
+                        "string, UNDER 500 CHARACTERS: ONE claim, in one sentence. "
+                        "If your statement joins two testable claims with 'and', "
+                        "split it into two hypotheses instead -- a single verdict "
+                        "cannot say which half was supported. Put the test, the "
+                        "threshold and the correction method in `rationale`, not here"
+                    ),
+                    "rationale": (
+                        "string (scientific justification, plus how the claim "
+                        "should be tested: statistic, threshold, correction)"
+                    ),
                     "confidence_score": "float 0.0-1.0",
                     "testability_score": "float 0.0-1.0 (preliminary estimate)",
                     "suggested_experiment_types": ["computational | data_analysis | literature_synthesis"]
@@ -397,7 +530,7 @@ No explanation needed."""
             response = self.llm_client.generate_structured(
                 prompt=prompt,
                 schema=schema,
-                max_tokens=4000,
+                max_tokens=HYPOTHESIS_MAX_TOKENS,
                 temperature=0.7  # Slightly higher for creativity
             )
 
@@ -413,11 +546,14 @@ No explanation needed."""
                         except ValueError:
                             logger.warning(f"Unknown experiment type: {exp_type_str}")
 
+                    statement, rationale = _fit_statement(
+                        hyp_data["statement"], hyp_data.get("rationale", "")
+                    )
                     hypothesis = Hypothesis(
                         id=str(uuid.uuid4()),
                         research_question=research_question,
-                        statement=hyp_data["statement"],
-                        rationale=hyp_data["rationale"],
+                        statement=statement,
+                        rationale=rationale,
                         domain=domain,
                         status=HypothesisStatus.GENERATED,
                         testability_score=hyp_data.get("testability_score"),

@@ -10,6 +10,7 @@ plugs straight into UnifiedLiteratureSearch.
 """
 
 import logging
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -23,6 +24,13 @@ from kosmos.literature.base_client import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Re-exported: the shared query policy lives in kosmos.literature.query so
+# every client obeys the same one.
+from kosmos.literature.query import (  # noqa: E402
+    _MAX_SEARCH_TERMS, _MAX_SEARCH_TERMS_WITH_ID, _TASK_WORDS,
+    _keywords, _sanitise_search,
+)
 
 OPENALEX_WORKS_URL = "https://api.openalex.org/works"
 _SELECT = (
@@ -58,8 +66,20 @@ class OpenAlexClient(BaseLiteratureClient):
                year_from: Optional[int] = None,
                year_to: Optional[int] = None, **kwargs) -> List[PaperMetadata]:
         n = min(max(int(max_results or 10), 1), int(getattr(self, "max_results", 20) or 20), 200)
+        search_text = _sanitise_search(query)
+        # Long objectives and pasted reasoning are not queries. Reduce anything
+        # past a sentence or so to the terms worth matching on.
+        if len(search_text) > 120 or len(search_text.split()) > _MAX_SEARCH_TERMS + 4:
+            reduced = _keywords(search_text)
+            if reduced:
+                logger.info("OpenAlex: searching %r (reduced from %d chars)",
+                            reduced, len(search_text))
+                search_text = reduced
+        if not search_text:
+            logger.warning("OpenAlex: empty search after sanitising %r", query)
+            return []
         params: Dict[str, Any] = {
-            "search": query,
+            "search": search_text,
             "per-page": n,
             "mailto": self.email,
             "select": _SELECT,

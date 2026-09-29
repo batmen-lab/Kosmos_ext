@@ -347,11 +347,13 @@ def create_result(
     supports_hypothesis: Optional[bool] = None,
     p_value: Optional[float] = None,
     effect_size: Optional[float] = None,
+    figures: Optional[List[Any]] = None,
 ) -> Result:
     """Create a new result."""
     _validate_json_dict(data, "data", required=True)
     _validate_json_dict(statistical_tests, "statistical_tests", required=False)
     _validate_json_list(key_findings, "key_findings", required=False)
+    _validate_json_list(figures, "figures", required=False)
     result = Result(
         id=id,
         experiment_id=experiment_id,
@@ -362,6 +364,7 @@ def create_result(
         supports_hypothesis=supports_hypothesis,
         p_value=p_value,
         effect_size=effect_size,
+        figures=figures,
     )
     session.add(result)
     session.commit()

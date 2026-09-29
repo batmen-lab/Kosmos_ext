@@ -69,5 +69,8 @@ h5py>=3.10.0          # HDF5 files
 # Bioinformatics (optional - install separately if needed for heavy deps)
 # =============================================================================
 biopython>=1.81       # Biological computation
+pydeseq2>=0.4.10      # DESeq2 negative-binomial DE in pure Python; the sandbox
+                      # has no R and no network, so without this the generated
+                      # RNA-seq code falls back to a Welch t-test.
+anndata>=0.9.0        # Annotated data matrix; pydeseq2's input container.
 # scanpy>=1.9.0       # Single-cell analysis (heavy dependency)
-# anndata>=0.9.0      # Annotated data (heavy dependency)
