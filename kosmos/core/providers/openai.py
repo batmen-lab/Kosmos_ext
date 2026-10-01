@@ -671,6 +671,48 @@ class OpenAIProvider(LLMProvider):
                         **gen_kwargs
                     )
 
+            # A THIRD budget-interaction case, between "empty" and "unparseable":
+            # the reasoning trace left just enough budget for a PREFIX of the
+            # object, which parses (the salvage strategies close a truncated
+            # array) but is SHORT -- a 5-hypothesis request comes back with the
+            # one hypothesis that fit before the cut. It raises no error, so
+            # neither retry above fires, and the run silently proceeds on a
+            # single hypothesis. Catch it by the same signal the others use --
+            # finish_reason=length with reasoning on -- and refetch with
+            # reasoning off, which frees the whole budget for the complete array.
+            if (
+                getattr(response, "finish_reason", None) == "length"
+                and self.reasoning_effort
+                and gen_kwargs.get("reasoning_effort", _UNSET) is not None
+            ):
+                logger.warning(
+                    "Structured output was truncated (finish_reason=length) with "
+                    "reasoning_effort=%r; refetching once with reasoning disabled "
+                    "so the full object fits.",
+                    self.reasoning_effort,
+                )
+                retry_kwargs = dict(gen_kwargs)
+                retry_kwargs["reasoning_effort"] = None
+                try:
+                    retry = self.generate(
+                        prompt=prompt,
+                        system=json_system,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        **retry_kwargs,
+                    )
+                    # Prefer the refetch only if it is itself not truncated; a
+                    # still-truncated retry is no better than what we have.
+                    if (retry.content or "").strip() and getattr(
+                        retry, "finish_reason", None
+                    ) != "length":
+                        response = retry
+                        gen_kwargs = retry_kwargs
+                except ProviderAPIError:
+                    # The refetch is a best-effort improvement; if it fails, fall
+                    # back to parsing the (short but valid) original.
+                    pass
+
             response_text = response.content
 
             # Parse JSON with robust fallback strategies

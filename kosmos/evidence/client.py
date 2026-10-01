@@ -268,6 +268,58 @@ _HTTP_STAGED_FILE_DENIAL = (
 )
 
 
+# A gateway-free source: the operator points the run straight at a local file
+# they already have, with no AutoEvidence process in between. It exists so a
+# multi-dataset run can be assembled from files on disk -- the same federation,
+# mount rule and `datasets` dict as the gateway path -- when no gateway is wanted
+# or available. It grants no disclosure control (there is no gateway to apply
+# one), so it is for data the operator is already entitled to read in full:
+# public summary statistics, their own staged exports, fixtures. The scheme is
+# explicit precisely so this is a decision, never a silent fallback from a
+# mistyped command.
+_LOCAL_FILE_SCHEMES = ("local-file://", "file://")
+
+
+def _local_file_path(evidence_server: str) -> Optional[str]:
+    """The path a `local-file://` (or `file://`) server names, else None.
+
+    Anything without one of these schemes returns None and is handled exactly as
+    before -- so the stdio and http transports are untouched.
+    """
+    s = evidence_server.strip()
+    for scheme in _LOCAL_FILE_SCHEMES:
+        if s.lower().startswith(scheme):
+            return s[len(scheme):]
+    return None
+
+
+def _materialise_local(raw_path: str, dataset: Optional[str]) -> dict[str, Any]:
+    """An OPEN-DATA result for a local file: the same shape the gateway returns.
+
+    Returns a capsule carrying `staged_path`, so `materialize()` copies the file
+    to the run's staging directory exactly as it does for a gateway open-data
+    release. The data is released IN FULL, which is the truth: the operator named
+    a file they hold. No rows are counted (the file may be large); the column
+    count is read cheaply from the header for the release description.
+    """
+    p = Path(raw_path).expanduser()
+    if not p.exists():
+        raise EvidenceDenied(
+            f"local-file source names {p}, which does not exist. Check the path "
+            f"in the evidence config's `server:` line."
+        )
+    body: dict[str, Any] = {"staged_path": str(p.resolve()), "dataset": dataset or p.stem}
+    try:  # columns for the description only; never fatal
+        with p.open() as fh:
+            header = fh.readline().rstrip("\n")
+        if header:
+            delim = "\t" if header.count("\t") > header.count(",") else ","
+            body["n_columns"] = len(header.split(delim))
+    except Exception:  # noqa: BLE001 -- a description detail, not the data
+        pass
+    return {"kind": "open_data", "signed": {"capsule": body}}
+
+
 def _transport_for(evidence_server: str) -> str:
     """'http' if the value is a URL, else 'stdio' (a shell command line).
 
@@ -589,6 +641,13 @@ def fetch_source(
     Raises EvidenceDenied on a denial or an empty result.
     """
     import asyncio
+
+    # Gateway-free: a local file the operator named directly. Returned before any
+    # transport is chosen, so no subprocess is spawned and no socket is opened --
+    # the stdio/http paths below are reached only by non-local servers.
+    local = _local_file_path(evidence_server)
+    if local is not None:
+        return _materialise_local(local, dataset)
 
     transport = _transport_for(evidence_server)
     url = ""

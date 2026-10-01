@@ -34,6 +34,15 @@ def _find_cli(evidence_config: Path) -> Optional[str]:
     found = shutil.which("autoevidence")
     if found:
         return found
+    # The autoevidence CLI that pairs with this Kosmos install sits in the SAME
+    # virtualenv bin as the running interpreter. This is the reliable locator for
+    # a gateway-free config, which carries no `autoevidence-serve` path to derive
+    # one from, and works even when the venv bin is not on PATH (running
+    # `venv/bin/kosmos` directly does not add it).
+    import sys
+    sibling = Path(sys.executable).with_name("autoevidence")
+    if sibling.exists():
+        return str(sibling)
     try:
         text = Path(evidence_config).read_text()
         m = re.search(r"([\w./~+-]*)autoevidence-serve", text)  # path chars only; no quotes
