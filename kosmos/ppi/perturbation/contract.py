@@ -28,7 +28,8 @@ of the same genes.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Sequence
+import re
+from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -109,9 +110,62 @@ def parse_condition(value: Any, *, separators: Sequence[str] = CONDITION_SEPARAT
     return (text,)
 
 
+#: A control label with its guide index attached: `NTg5`, `eGFPg1`, `ctrl2`.
+#: The digit is required, so a gene that merely starts like a label (`NTS`) is
+#: not read as a control.
+_GUIDE_SUFFIX = re.compile(r"[a-z]?\d+$")
+#: Fluorescent / enzymatic control guides, the non-targeting controls a screen
+#: names when it does not use the word `NT` at all.
+_CONTROL_GENES = ("egfp", "gfp", "lacz", "scramble", "safeharbor")
+
+
+#: A guide's own index appended to the gene it targets: `ATF2g1`, `STAT2_g2`,
+#: `eGFP-g1`. Screens label cells with the guide; the model, the panel and the
+#: GO graph speak gene symbols.
+GUIDE_INDEX = re.compile(r"^(?P<gene>.+?)[-_.]?g\d+$", re.IGNORECASE)
+
+
+def to_perturbed_gene(token: Any, known: Collection[str] | None = None) -> str:
+    """`ATF2g1` -> `ATF2`, when `ATF2` is a gene the panel measures.
+
+    A screen names the guide (`ATF2g1`); the panel, the perturbation embedding
+    and the GO branch all need the gene. The mapping is only made when the
+    stripped name is a gene the panel actually measures, so a symbol that merely
+    ends in `g<digits>` is left alone.
+    """
+    text = str(token).strip()
+    if not text:
+        return text
+    if known is not None and text in known:
+        return text
+    match = GUIDE_INDEX.match(text)
+    if match:
+        gene = match.group("gene")
+        if known is None or gene in known:
+            return gene
+    return text
+
+
 def is_control(value: Any, control_labels: Sequence[str] = DEFAULT_CONTROL_LABELS) -> bool:
+    """Is this condition value "nothing was perturbed"?
+
+    A screen writes its controls as a bare label (`NT`, `ctrl`), as the label
+    plus the guide's index (`NTg5`, `eGFPg1`), or as one of the fluorescent
+    control guides ECCITE-style arrayed screens use. All three mean the same
+    thing to the model, and refusing the last two left screens with no control
+    cells to build a baseline from.
+    """
     text = str(value).strip().lower()
-    return text in {label.lower() for label in control_labels}
+    if text in {label.lower() for label in control_labels}:
+        return True
+    for label in control_labels:
+        label = label.lower()
+        if len(label) >= 2 and text.startswith(label) and _GUIDE_SUFFIX.match(text[len(label):]):
+            return True
+    for gene in _CONTROL_GENES:
+        if text.startswith(gene) and _GUIDE_SUFFIX.match(text[len(gene):]):
+            return True
+    return False
 
 
 def _digest(values: Iterable[str]) -> str:
@@ -202,6 +256,12 @@ def build_examples(
         if control_mask[index]:
             continue
         perturbation = parse_condition(conditions.iloc[index])
+        # `ATF2g1` is the guide that targets `ATF2`: two guides of one gene are
+        # one perturbation, and it can only be encoded if the panel measures the
+        # gene rather than the guide.
+        perturbation = tuple(
+            to_perturbed_gene(gene, task.gene_to_index) for gene in perturbation
+        )
         if not perturbation:
             continue
         unknown = [gene for gene in perturbation if gene not in task.gene_to_index]

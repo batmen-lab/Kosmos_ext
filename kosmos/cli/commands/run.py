@@ -526,6 +526,10 @@ def run_research(
             # Labeled tables to pool (from a plan); data_path stays the first
             # one so every existing reader keeps working.
             "task_labeled_paths": task_labeled_paths,
+            # The plan file itself, for the backends that read more than the
+            # paths -- the perturbation backend pairs a screen's label table with
+            # its measurements from the tables the plan lists.
+            "task_plan_path": str(data_plan) if data_plan else None,
             "ppi_supplementary_paths": task_supplementary_paths,
             "ppi_external_data_path": (
                 str(external_data_path.resolve()) if external_data_path else None

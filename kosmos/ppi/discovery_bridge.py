@@ -119,6 +119,7 @@ def fetch_and_plan(
     tooluniverse_python: str | None = None,
     no_llm: bool = False,
     adjudicate: str | None = None,
+    task_kind: str = "per_cell",
     echo: bool = True,
 ) -> tuple[Path | None, str]:
     """Run the fetcher in plan mode for this question. Returns `(plan, output)`.
@@ -137,6 +138,8 @@ def fetch_and_plan(
         question,
         "--domain",
         domain,
+        "--task-kind",
+        str(task_kind),
         "--fetch-limit",
         str(fetch_limit),
         "--supp-limit",
@@ -257,6 +260,7 @@ def run_data_task(
         )
 
     if kind.backend == "perturbation":
+        plan_from_retrieval = False
         # A perturbation screen is single-cell by construction, so the modality
         # gate does not apply -- but the *data* is found the same way the
         # per-cell task finds its table: the fetcher searches for a screen that
@@ -264,8 +268,12 @@ def run_data_task(
         # "knock out gene X" question is not silently answered on an
         # over-expression screen.
         if plan_path is None and gold_table is None and fetch:
-            from .perturbation.modality import infer_requested_modality, retrieval_requirement
-            from .perturbation.run import supplementary_requirement_text
+            from kosmos.domains.single_cell.modality import (
+                infer_requested_modality,
+                retrieval_requirement,
+            )
+
+            from .perturbation.run import CONDITION_HINTS, supplementary_requirement_text
 
             asked = infer_requested_modality(question)
             # The auxiliary graph only needs control cells; the labeled screen
@@ -285,14 +293,28 @@ def run_data_task(
                     f"control cells for the auxiliary graph",
                     flush=True,
                 )
+            # A perturbation screen's "label" is its condition column, and the
+            # gating is written for the per-cell task, which infers a label from
+            # names in the question. Naming the columns a screen uses lets a
+            # genuine screen (`condition` / `guide` / `sgRNA` / ...) be gated as
+            # gold instead of being refused for "no label column".
+            fetch_hints = tuple(hints) + tuple(CONDITION_HINTS)
+            # Screens ship as multi-gigabyte archives (a GSE RAW.tar was refused
+            # at the 2 GiB per-file default, which is how a run that had found
+            # the right dataset ended up with nothing).
+            fetch_bytes = max_bytes if max_bytes is not None else int(
+                os.getenv("KOSMOS_DATAFETCHER_MAX_BYTES", str(8 * 1024 ** 3))
+            )
             try:
                 resolved_plan, output = fetch_and_plan(
                     question=question,
                     out_dir=out,
                     domain=domain,
                     intent=fetch_intent,
-                    hints=hints,
+                    hints=fetch_hints,
+                    task_kind="perturbation",
                     exclude_columns=exclude_columns,
+                    max_bytes=fetch_bytes,
                     echo=echo,
                     **fetch_kwargs,
                 )
@@ -300,6 +322,7 @@ def run_data_task(
                 resolved_plan, output = None, f"{type(e).__name__}: {e}"
             if resolved_plan is not None:
                 plan_path = resolved_plan
+                plan_from_retrieval = True
             elif echo:
                 print(
                     "# perturbation: the fetcher named no usable screen "
@@ -333,12 +356,52 @@ def run_data_task(
                 gate_kappa=gate_kappa,
             )
         except Exception as e:  # noqa: BLE001 - a failed backend is a finding
+            message = f"{type(e).__name__}: {e}"
+            # The gating is written for the per-cell task: it judges a table by
+            # whether it has a *label* column, so a metadata file can be gated as
+            # gold and a real screen refused. A retrieved table that carries no
+            # perturbation column is therefore not a screen -- say so and let the
+            # registered screens answer, rather than training on the wrong table.
+            if plan_from_retrieval and gold_table is None and "no perturbation column" in message:
+                if echo:
+                    print(
+                        f"# perturbation: the retrieved gold is not a screen ({message}); "
+                        f"falling back to the registered screens",
+                        flush=True,
+                    )
+                try:
+                    return run_perturbation_outcome(
+                        question=question,
+                        plan_path=None,
+                        gold_table=None,
+                        supplementary_tables=supplementary_tables,
+                        out_dir=out,
+                        kind=kind,
+                        seed=seed,
+                        echo=echo,
+                        max_epochs=max_epochs,
+                        patience=patience,
+                        condition_column=condition_column,
+                        control_labels=tuple(control_labels or ()),
+                        split_mode=split_mode,
+                        test_fraction=test_fraction,
+                        validation_fraction=validation_fraction,
+                        min_cells_per_perturbation=min_cells_per_perturbation,
+                        go_graph=go_graph,
+                        go_k=go_k,
+                        coexpress_threshold=coexpress_threshold,
+                        coexpress_k=coexpress_k,
+                        eta=eta,
+                        gate_kappa=gate_kappa,
+                    )
+                except Exception as fallback_error:  # noqa: BLE001
+                    message = f"{type(fallback_error).__name__}: {fallback_error}"
             return DataTaskOutcome(
                 ok=False,
                 stage="perturbation",
                 kind=kind,
                 plan_path=Path(plan_path) if plan_path else None,
-                error=f"{type(e).__name__}: {e}",
+                error=message,
             )
 
     # Before spending a retrieval round: is this a question data can answer?
@@ -702,6 +765,128 @@ def write_plan_data_report(
     return markdown, record_path
 
 
+def _screen_partners(
+    *,
+    gold_path: Path,
+    used: Sequence[Path],
+    plan_tables: Sequence[str],
+    gold_genes: set[str] | None = None,
+    echo: bool = True,
+) -> tuple[list[Any], list[dict[str, Any]]]:
+    """Other screens in the plan, joined and ready to be the unlabeled source.
+
+    A perturbation run wants a second measurement of the same panel with cells
+    that were not perturbed. A published study usually has one -- the same
+    series often holds a second arm, a second donor, or the arrayed version of
+    the pooled screen -- and the plan lists it as `unusable`, because on its own
+    a label table has no measurements and a counts matrix has no labels. Put
+    back together, that pair is exactly the evidence the augmented arms need.
+
+    The pairing is decided by barcodes and reported either way; nothing here
+    invents a source that the fetch did not download.
+    """
+    from .perturbation.assemble import (
+        is_measurement_table,
+        join_screen,
+        measurement_features,
+        pick_expression_partner,
+    )
+    from .perturbation.contract import is_control as is_control_value
+    from .perturbation.run import guess_condition_column
+    from .tabular import read_table
+
+    skip = {Path(str(path)) for path in [gold_path, *used]}
+    # Which tables could be a screen's measurements is decided once, not per
+    # candidate: a series' `RAW.tar` holds one count matrix per sample *and* the
+    # antibody, hashtag and guide panels measured on the same cells, and every
+    # one of them has as many columns as there are cells. Only the transcriptome
+    # has genes in rows too.
+    measurements = [
+        str(path)
+        for path in plan_tables
+        if Path(str(path)) not in skip and is_measurement_table(path)
+    ]
+    frames: list[Any] = []
+    records: list[dict[str, Any]] = []
+    for candidate in plan_tables:
+        label_path = Path(str(candidate))
+        if label_path in skip:
+            continue
+        if is_measurement_table(candidate):
+            # A transcriptome is not the label half of a screen, and reading a
+            # head of one costs a 20,730-column parse per candidate.
+            continue
+        try:
+            head = read_table(label_path, nrows=500)
+        except Exception:  # noqa: BLE001 - an unreadable table is not a screen half
+            continue
+        condition = guess_condition_column(head)
+        if condition is None or condition not in head.columns:
+            continue
+        partner = pick_expression_partner(label_path, measurements)
+        if partner is None or Path(partner) in skip or Path(partner) == label_path:
+            continue
+        try:
+            frame = join_screen(
+                read_table(label_path), read_table(partner), condition_column=condition
+            )
+        except Exception as error:  # noqa: BLE001 - a failed join is not a source
+            records.append(
+                {
+                    "label": str(label_path),
+                    "measurements": str(partner),
+                    "error": f"{type(error).__name__}: {error}",
+                }
+            )
+            continue
+        genes = [str(gene) for gene in frame.attrs.get("expression_columns") or []]
+        shared = len(set(genes) & gold_genes) if gold_genes else 0
+        if gold_genes and shared < 0.3 * max(1, len(genes)):
+            # The same cells, a different measurement: CITE-seq's antibody panel
+            # and ECCITE's guide counts join on barcodes exactly as well as the
+            # transcriptome does, and a graph built on `CD86` shares no gene with
+            # the gold's panel. It is not supplementary *evidence for this model*.
+            records.append(
+                {
+                    "label": str(label_path),
+                    "measurements": str(partner),
+                    "error": (
+                        f"only {shared} of its {len(genes)} measured feature(s) are "
+                        f"genes the gold measures: the same cells, a different "
+                        f"measurement"
+                    ),
+                }
+            )
+            continue
+        frame.attrs["assembled_from"] = [str(label_path), str(partner)]
+        frame.attrs["assembled_from_label"] = str(label_path)
+        frames.append(frame)
+        records.append(
+            {
+                "label": str(label_path),
+                "measurements": str(partner),
+                "condition_column": condition,
+                "cells": int(len(frame)),
+                "control_cells": int(
+                    sum(1 for value in frame[condition].astype(str) if is_control_value(value))
+                ),
+                "genes": len(genes),
+                "shared_with_gold": shared,
+                "barcode_overlap": float(frame.attrs.get("barcode_overlap") or 0.0),
+            }
+        )
+        skip.add(Path(partner))
+        if echo:
+            print(
+                f"# perturbation: {label_path.name} + {Path(partner).name} is another "
+                f"screen in this panel ({len(frame):,} cells, {len(genes):,} genes, "
+                f"{shared:,} shared with the gold); it supplies the unlabeled cells "
+                f"for the augmented arms",
+                flush=True,
+            )
+    return frames, records
+
+
 def run_perturbation_outcome(
     *,
     question: str = "",
@@ -754,6 +939,9 @@ def run_perturbation_outcome(
     from .flow import next_output_dir
 
     staged: dict[str, Any] = {}
+    expression_path: Path | None = None
+    supplementary_frames: list[Any] = []
+    assembled_screens: list[dict[str, Any]] = []
     gold_source = None
     supplementary_source_names: dict[str, str] = {}
     if gold_table:
@@ -768,7 +956,60 @@ def run_perturbation_outcome(
             )
         gold_path = resolved.labeled_paths[0]
         supplementary_paths = list(resolved.supplementary_paths)
-        staged = {"how": "plan", "plan": str(plan_path)}
+        if condition_column is None:
+            # The plan's target *is* the condition column for this task: the
+            # review named the column holding the perturbation, and dropping it
+            # here is what made a screen whose column is `gene` reach the
+            # backend with no condition column at all.
+            condition_column = resolved.target_column or None
+        # A screen is often published as two files: the label table (barcodes
+        # with the perturbation each cell carried) and the measurements. Neither
+        # is trainable alone, so the pair is joined before training. The
+        # measurements are chosen by *which table shares the label table's
+        # barcodes* -- a plan cannot say that, because the two files share
+        # nothing but their series accession.
+        from kosmos.core.diagnostics import stage
+
+        payload = json.loads(Path(plan_path).read_text(encoding="utf-8"))
+        plan_tables = [
+            str(entry["path"])
+            for role in ("gold", "supplementary", "unusable")
+            for entry in (payload.get(role) or [])
+            if entry.get("path")
+        ]
+        from .perturbation.assemble import pick_expression_partner
+
+        expression_path = pick_expression_partner(gold_path, plan_tables)
+        if expression_path is not None:
+            supplementary_paths = [
+                path for path in supplementary_paths if Path(path) != Path(expression_path)
+            ]
+            if echo:
+                print(
+                    f"# perturbation: the gold carries the labels and not the "
+                    f"measurements; joining it with {Path(str(expression_path)).name}",
+                    flush=True,
+                )
+        gold_genes: set[str] = set()
+        if expression_path is not None:
+            # What the gold's own measurements offer, so a second screen can be
+            # judged on the genes it shares rather than on its file name.
+            from .perturbation.assemble import measurement_features
+
+            gold_genes = measurement_features(expression_path)
+        with stage(f"looking for another screen among the plan's {len(plan_tables)} table(s)"):
+            supplementary_frames, assembled_screens = _screen_partners(
+                gold_path=Path(str(gold_path)),
+                used=[Path(str(path)) for path in (expression_path,) if path is not None],
+                plan_tables=plan_tables,
+                gold_genes=gold_genes,
+                echo=echo,
+            )
+        staged = {
+            "how": "plan",
+            "plan": str(plan_path),
+            "assembled_screens": assembled_screens,
+        }
     else:
         from .perturbation.sources import default_pair
         from .perturbation.stage import stage_sources
@@ -783,7 +1024,9 @@ def run_perturbation_outcome(
     if echo:
         print(
             f"# perturbation backend: gold {Path(str(gold_path)).name}, "
-            f"{len(supplementary_paths)} supplementary ({staged.get('how')})",
+            f"{len(supplementary_paths)} supplementary + "
+            f"{len(supplementary_frames)} assembled screen(s) "
+            f"({staged.get('how')})",
             flush=True,
         )
 
@@ -848,6 +1091,8 @@ def run_perturbation_outcome(
         seed=seed,
         config=config,
         modality=modality,
+        expression_path=expression_path,
+        supplementary_frames=supplementary_frames,
     )
     results["staged"] = staged
     arms = results["arms"]

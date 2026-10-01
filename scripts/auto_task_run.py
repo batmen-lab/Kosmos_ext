@@ -48,7 +48,14 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
+from kosmos.domains.single_cell.tasks import profile_for
+
 ROOT = Path(__file__).resolve().parents[1]
+
+#: The generic fetch shape: how many archive members to unpack, and how many
+#: candidate tables one fetch may contribute. A task profile widens these.
+DEFAULT_ARCHIVE_MEMBERS = 12
+DEFAULT_FILES_PER_FETCH = 8
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -402,6 +409,94 @@ def _prefer_data_over_index(
     return kept
 
 
+def _prefer_expression_file(
+    listing: dict, chosen: list[dict], args, log: PipelineLog
+) -> list[dict]:
+    """Keep the measurements half of a screen as well as its labels.
+
+    A screen published as two files needs both: the label table names the
+    perturbation each cell carried, the counts table holds the transcriptome.
+    Preflight prefers the smallest data file, which is the label table, so the
+    measurements are dropped and nothing can be trained. The largest
+    expression-like file is kept alongside (the matrix is the big one).
+    """
+    from kosmos.domains.single_cell.tasks import profile_for
+
+    profile = profile_for(getattr(args, "task_kind", "per_cell"))
+    if not profile.expression_markers:
+        return chosen
+    candidates = [
+        entry
+        for entry in (listing.get("files") or [])
+        if any(
+            marker in str(entry.get("path") or "").lower()
+            for marker in profile.expression_markers
+        )
+        and str(entry.get("reference") or "")
+    ]
+    if not candidates:
+        return chosen
+    best = max(candidates, key=lambda entry: int(entry.get("bytes") or 0))
+    reference = str(best.get("reference"))
+    already = [str(entry.get("reference") or "") for entry in chosen]
+    if any(reference.startswith(existing) or existing.startswith(reference) for existing in already):
+        return chosen
+    log.event(
+        "preflight",
+        f"# preflight: keeping {Path(str(best.get('path'))).name} as well -- a "
+        f"screen's measurements live in the counts file, and the label table does "
+        f"not carry them",
+        reference=reference,
+        why="the measurements this screen's gold needs",
+    )
+    return [*chosen, {"reference": reference, "why": "the measurements file"}]
+
+
+def _prefer_annotated_file(
+    listing: dict, chosen: list[dict], args, log: PipelineLog
+) -> list[dict]:
+    """Keep the annotated sibling of a raw matrix, when the task needs it.
+
+    A perturbation screen's gold must carry the perturbation identity, and the
+    published *matrix* does not: the labels live in a sibling file (a guide or
+    cell annotation). The prompts prefer the smallest data file, so the matrix
+    is downloaded and the annotated file dropped -- which is how a run that had
+    found the right screen ended up with nothing to supervise. Keeping the
+    annotated file too is what gives the gate something to judge.
+
+    A name is a prior, not a fact: this only decides what is worth downloading,
+    and the review decides what the file actually is.
+    """
+    from kosmos.domains.single_cell.tasks import profile_for
+
+    profile = profile_for(getattr(args, "task_kind", "per_cell"))
+    if not profile.annotation_markers:
+        return chosen
+    annotated = [
+        entry
+        for entry in (listing.get("files") or [])
+        if profile.file_prior(str(entry.get("path") or "")) == 2
+        and str(entry.get("reference") or "")
+    ]
+    if not annotated:
+        return chosen
+    # smallest first: an annotation file is small and the budget is per run
+    best = min(annotated, key=lambda entry: int(entry.get("bytes") or 0))
+    reference = str(best.get("reference"))
+    already = [str(entry.get("reference") or "") for entry in chosen]
+    if any(reference.startswith(existing) or existing.startswith(reference) for existing in already):
+        return chosen
+    log.event(
+        "preflight",
+        f"# preflight: keeping {Path(str(best.get('path'))).name} as well -- this "
+        f"task's labels (a perturbation screen's condition/guide) usually live in "
+        f"the annotated file, not the raw matrix",
+        reference=reference,
+        why="the annotated file this task's gold needs",
+    )
+    return [*chosen, {"reference": reference, "why": "the annotated file this task needs"}]
+
+
 def _cost_line(listing: dict) -> str:
     """`3 file(s), smallest 587.0 MB` -- what the choice is made on."""
     files = listing.get("files") or []
@@ -658,9 +753,14 @@ def preflight(
             reference=reference,
         )
     for choice, listing in picked:
-        for replacement in _prefer_data_over_index(
+        replaced = _prefer_data_over_index(
             listing, [{"reference": choice.reference}], log
-        ):
+        )
+        replaced = _prefer_expression_file(listing, replaced, args, log)
+        for replacement in _prefer_annotated_file(listing, replaced, args, log):
+            if not any(item.get("reference") == replacement["reference"] for item in replaced):
+                replaced.append(replacement)
+        for replacement in replaced:
             chosen.append(
                 DownloadChoice(
                     reference=str(replacement["reference"]), why=str(choice.why)
@@ -1409,10 +1509,22 @@ def infer_for_candidates(candidates: list[str], args, log: PipelineLog) -> tuple
         except Exception as e:  # noqa: BLE001 - an unreadable table is a skip
             attempts.append((candidate, None, f"could not read: {e}"))
             continue
+        from kosmos.domains.single_cell.tasks import profile_for
+
+        inference_hints = list(args.hint or [])
+        profile = profile_for(getattr(args, "task_kind", "per_cell"))
+        if profile.label_column_hints:
+            # A screen's label is which perturbation the cell carries, so the
+            # inference only considers the columns that encode that. Which
+            # columns those are is the task profile's business, not this
+            # script's.
+            inference_hints = list(
+                dict.fromkeys([*inference_hints, *profile.label_column_hints])
+            )
         result = infer_target_column(
             candidate,
             objective=args.objective,
-            hints=list(args.hint or []),
+            hints=inference_hints,
             exclude=list(args.exclude_col or []),
             feature_prefixes=list(args.feature_prefix or []),
             client=client,
@@ -1455,6 +1567,23 @@ def infer_for_candidates(candidates: list[str], args, log: PipelineLog) -> tuple
     log.event("target", "\n# no candidate yielded a label column:", ok=False)
     for candidate, _result, reason in attempts:
         log.event("target", f"#   {candidate}: {reason}", path=candidate, reason=reason)
+    if str(getattr(args, "task_kind", "per_cell")) == "perturbation":
+        # A screen's label is its condition column, and the *model review* is
+        # what names it -- the name-matching inference above cannot, because the
+        # column is not a phenotype to look for in the question. Aborting here is
+        # what kept a real screen from ever reaching the review, so hand it over
+        # with no target and let the review decide.
+        log.event(
+            "target",
+            "#   perturbation: no column matched the condition vocabulary; the "
+            "review will judge these tables as screens",
+        )
+        return "", "", {
+            "source": "none",
+            "confidence": 0.0,
+            "reason": f"no column matched the condition vocabulary ({len(attempts)} table(s))",
+            "task_type": "classification",
+        }
     raise SystemExit(2)
 
 
@@ -1487,6 +1616,7 @@ def review_candidates(
             known_paths=candidates,
             log=log.raw,
             target_hint=target_hint,
+            task_kind=str(getattr(args, "task_kind", "per_cell")),
         )
         if review is None:
             continue
@@ -1689,7 +1819,36 @@ def dual_review(
         # with no cell-type column" while the rules had already found
         # `cell_type` in it -- and a model refusal silently overruling a rule
         # that is demonstrably right is how a run ends with no data at all.
+        perturbation_task = str(getattr(args, "task_kind", "per_cell")) == "perturbation"
         if (
+            perturbation_task
+            and role == "unusable"
+            and model_role == "unusable"
+            and mechanical.get("role") == "gold"
+            and review.get("condition_column")
+        ):
+            # A screen is published as two files, and the model is looking at
+            # one of them. It read this table correctly -- it names the
+            # perturbation (`gene`, `guide`) and carries no measurements -- and
+            # refused it as "not a screen", which is true of the half and false
+            # of the screen. The other half is the counts matrix the fetcher
+            # keeps beside it and the backend joins on the barcode, so the half
+            # that has the condition column *is* the gold's target. Parking this
+            # as a disagreement is what sent a perfectly good label table to a
+            # human and left the run with nothing to train on.
+            role = "gold"
+            decided_by = "mechanical+model (screen labels; measurements joined at training time)"
+            log.event(
+                "review",
+                f"# review: {Path(path).name} holds the perturbation column "
+                f"{review.get('condition_column')!r} and not the measurements; it "
+                f"is the label half of a screen, and the backend joins it with "
+                f"its counts matrix",
+                path=path,
+                condition_column=review.get("condition_column"),
+                control_labels=review.get("control_labels"),
+            )
+        elif (
             role == "unusable"
             and model_role == "unusable"
             and review.get("blocker") == "no_label_column"
@@ -1852,6 +2011,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--objective", required=True, help="the research question")
     parser.add_argument(
+        "--task-kind",
+        default="per_cell",
+        choices=("per_cell", "perturbation"),
+        help=(
+            "what kind of table the question needs: `per_cell` looks for a label "
+            "column (the x->y task); `perturbation` looks for a per-cell screen "
+            "with a perturbation/condition column, its control values and its "
+            "assay. The two ask different questions of the same sample, so the "
+            "gating has to know which one is being asked."
+        ),
+    )
+    parser.add_argument(
         "--candidate", action="append", default=[], help="a table to consider (repeatable)"
     )
     parser.add_argument(
@@ -1922,10 +2093,11 @@ def main() -> int:
     parser.add_argument(
         "--max-files-per-fetch",
         type=int,
-        default=8,
+        default=None,
         help=(
-            "how many files one fetch may contribute as candidates (default: 8; "
-            "a GEO RAW.tar can hold one file per sample)"
+            "how many files one fetch may contribute as candidates (default: 8, "
+            "wider for a perturbation screen; a GEO RAW.tar holds one file per "
+            "sample and the counts matrix is not among the first few)"
         ),
     )
     parser.add_argument(
@@ -1949,10 +2121,11 @@ def main() -> int:
     parser.add_argument(
         "--archive-members",
         type=int,
-        default=12,
+        default=None,
         help=(
-            "how many files to unpack from one archive (default: 12; a GEO "
-            "RAW.tar holds one triplet per sample). 0 unpacks everything"
+            "how many files to unpack from one archive (default: 12, wider for a "
+            "perturbation screen; a GEO RAW.tar holds one triplet per sample and "
+            "the counts matrix sits deep in it). 0 unpacks everything"
         ),
     )
     parser.add_argument(
@@ -2010,6 +2183,17 @@ def main() -> int:
         "(the adjudication.json a previous run wrote)",
     )
     args = parser.parse_args()
+
+    # How wide the fetch goes depends on the task: a screen publishes one archive
+    # per series and its measurements are a file deep inside it, so the generic
+    # caps (12 members, 8 candidates) unpack the label tables and stop before the
+    # counts matrix. The task profile carries the wider defaults; an explicit
+    # flag still wins.
+    _profile = profile_for(getattr(args, "task_kind", "per_cell"))
+    if args.archive_members is None:
+        args.archive_members = int(_profile.archive_members or DEFAULT_ARCHIVE_MEMBERS)
+    if args.max_files_per_fetch is None:
+        args.max_files_per_fetch = int(_profile.files_per_fetch or DEFAULT_FILES_PER_FETCH)
 
     # See RUN_ENV_DEFAULTS: exported values win, `.env` values do not. This is
     # the same overwrite `run.py`'s `environment()` does, so both entry points

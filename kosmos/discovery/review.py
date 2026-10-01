@@ -30,6 +30,8 @@ from typing import Any, Literal
 
 Role = Literal["gold", "unlabeled", "bad_label", "unusable"]
 
+from kosmos.domains.single_cell.tasks import profile_for
+
 ROLE_HELP = """\
 gold       -- carries the label this question asks about, at the granularity the
               question asks for, and you would trust it as training labels.
@@ -73,6 +75,18 @@ class TableReview:
     salvage: str = ""
     confidence: float = 0.0
     source: str = "llm"  # llm | fallback | none
+    #: Perturbation tasks only (see `review_table(task_kind="perturbation")`):
+    #: the column holding the perturbation identity, the values that mean
+    #: "nothing was perturbed", the assay, and whether the table is a screen at
+    #: all. The single-cell x->y task has no use for these -- its label is a
+    #: measured phenotype, a screen's label is *which perturbation*.
+    is_screen: bool = False
+    #: A screen needs the measurements too: a metadata table with the
+    #: perturbations but no gene columns cannot supervise a response model.
+    has_expression: bool = False
+    condition_column: str | None = None
+    control_labels: list[str] = field(default_factory=list)
+    modality: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -145,8 +159,16 @@ def review_table(
     known_paths: Sequence[str] = (),
     log: Callable[[str], None] = print,
     target_hint: str = "",
+    task_kind: str = "per_cell",
 ) -> TableReview | None:
-    """Ask the model what this table is. None means "no review was possible"."""
+    """Ask the model what this table is. None means "no review was possible".
+
+    `task_kind="perturbation"` switches the question: the target is not a
+    measured phenotype but *which perturbation* a cell carries, so the review
+    looks for a screen's condition column, its control values and its assay
+    instead of a label column. A table with no condition column cannot be gold
+    for such a task, however table-like it is.
+    """
     from .sample_prompt import render_packet  # local import: keeps prompt text testable
 
     path = str(packet.get("path", ""))
@@ -169,14 +191,52 @@ def review_table(
         if known
         else "No other table has been fetched, so `same_dataset_as` must be null."
     )
+    # One profile per task kind: the roles to explain, the schema to ask for,
+    # the extra fields to read back and the guard to apply. The x->y task and the
+    # perturbation task ask different questions of the same sample.
+    profile = profile_for(task_kind)
+    perturbation = profile.name == "perturbation"
+    roles_help = profile.roles_help
+    schema = profile.review_schema()
+    if perturbation:
+        task_block = (
+            "This run answers a **perturbation-response** question: what does "
+            "perturbing some gene(s) do to a cell's transcriptome. The thing to "
+            "find is therefore a per-cell perturbation **screen**, not a labeled "
+            "phenotype:\n"
+            "- `is_screen` is true only when each row is a single cell and the "
+            "table records which perturbation it carries (or that it is a "
+            "control). A genes-by-cells matrix with no condition column, a cell "
+            "metadata table, or a sample-level table is false.\n"
+            "- `condition_column` is the column naming the targeted gene(s) / "
+            "guide / sgRNA; it must be a column you can see. If there is none, the "
+            "role cannot be `gold`.\n"
+            "- `control_labels` are the values of that column that mean 'nothing "
+            "was perturbed', exactly as they appear in the table (commonly "
+            "`ctrl`, `control`, `non-targeting`, `NT`). A value like `GENE+ctrl` "
+            "means the second guide is a control, i.e. a single-gene "
+            "perturbation.\n"
+            "- `modality` says how the screen perturbs: `crisprko` (knockout / "
+            "deletion), `crispri` (interference / knockdown), `crispra` "
+            "(activation / over-expression), `mixed`, or `unknown` when the table "
+            "does not say. Use your knowledge of the dataset when the header "
+            "alone is silent.\n"
+            "- `target_column` must equal `condition_column` when the role is "
+            "`gold`.\n"
+            "- `bad_label` is for a table that has a perturbation-looking column "
+            "but whose rows are not single perturbed cells.\n\n"
+        )
+    else:
+        task_block = ""
     prompt = (
         "You are reviewing a dataset someone just downloaded, to decide what role "
         "it can play in an analysis.\n\n"
         f"Research question:\n{question}\n\n"
         f"What was downloaded:\n{render_packet(packet)}\n\n"
         "Roles:\n"
-        f"{ROLE_HELP}\n"
+        f"{roles_help}\n"
         f"{known_line}\n\n"
+        f"{task_block}"
         f"{target_line}"
         "Rules for your answer:\n"
         "- `header_present` is false when the first line is data rather than column "
@@ -184,9 +244,14 @@ def review_table(
         "('6', '148', '33.6'), the file has no header. When it is false, give the "
         "real column names in `header_names` **only if you are confident** (for a "
         "well-known dataset you may know them); otherwise leave it empty.\n"
-        "- `target_column` must be a column you actually see (from the parsed "
-        "columns, or from `header_names` when you supplied them). Use null if the "
-        "question's target is not in this table.\n"
+        + (
+            ""
+            if perturbation
+            else "- `target_column` must be a column you actually see (from the "
+            "parsed columns, or from `header_names` when you supplied them). Use "
+            "null if the question's target is not in this table.\n"
+        )
+        +
         "- `bad_label` is for labels that exist but that this analysis must not "
         "train on. Say why in `label_problem`.\n"
         "- `id_columns` are columns that identify a row rather than measure it.\n\n"
@@ -210,7 +275,7 @@ def review_table(
     log(f"# review: asking the model about {_name(path)}")
     try:
         response = client.generate_structured(
-            prompt=prompt, schema=_schema(), max_tokens=1100, temperature=0
+            prompt=prompt, schema=schema, max_tokens=1100, temperature=0
         )
     except Exception as e:  # noqa: BLE001 - a failed call means "no review"
         log(f"# review: model call failed for {_name(path)}: {e}")
@@ -269,6 +334,29 @@ def review_table(
         confidence=float(response.get("confidence") or 0.0),
         source="llm",
     )
+    if profile.extract is not None:
+        fields = dict(profile.extract(response, visible))
+        forced = fields.pop("force_role", None)
+        if forced and review.role == "gold":
+            # The guard the profile exists for: the model called it gold, but a
+            # table without the column this task needs cannot supervise it.
+            log(
+                f"# review: {_name(path)} was proposed gold but {forced} for this "
+                f"task ({ {k: fields.get(k) for k in ('is_screen', 'condition_column')} }); "
+                f"refusing it as gold"
+            )
+            review.role = forced
+            review.blocker = review.blocker or "no_label_column"
+        for key, value in fields.items():
+            setattr(review, key, value)
+        if perturbation:
+            log(
+                f"# review: {_name(path)} screen={review.is_screen} "
+                f"expression={getattr(review, 'has_expression', None)} "
+                f"condition={review.condition_column!r} "
+                f"controls={review.control_labels[:4]} modality={review.modality}"
+            )
+
     log(
         f"# review: {_name(path)} -> {review.role} "
         f"(header_present={review.header_present}, target={review.target_column})"

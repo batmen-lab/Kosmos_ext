@@ -464,6 +464,9 @@ def test_run_data_task_routes_a_perturbation_question_to_the_registry(tmp_path, 
 
     monkeypatch.setattr(stage_module, "stage_sources", fake_stage)
     monkeypatch.setattr(run_module, "run_perturbation_task", fake_run)
+    # The perturbation path now searches for its screen first (the fetcher); this
+    # test is about the registry fallback, so give the search nothing to find.
+    monkeypatch.setattr(bridge, "fetch_and_plan", lambda **kwargs: (None, "no screen"))
 
     outcome = bridge.run_data_task(
         question="Does knocking out CBL with CRISPR change the transcriptome?",

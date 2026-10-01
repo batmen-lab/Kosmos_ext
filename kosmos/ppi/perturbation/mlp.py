@@ -50,7 +50,7 @@ from ..gating import GradientGate
 from .contract import PerturbationExample, PerturbationTask
 from .losses import gears_loss
 from .losses import ppi_signed_correction
-from .metrics import perturbation_metrics
+from .metrics import perturbation_metrics, perturbation_signal
 from .synthetic import SyntheticSet, build_synthetic
 
 if TYPE_CHECKING:  # avoids the train.py <-> mlp.py import cycle
@@ -485,7 +485,19 @@ def run_mlp_arms(
             "epochs_run": len(history),
             "seconds": round(time.time() - started, 1),
             "predictions": _save_predictions(arm, evaluation),
+            "signal": perturbation_signal(
+                evaluation["predictions"], evaluation["observations"]
+            ),
         }
+        metrics = evaluation["metrics"]
+        # The arm's objective decides which metrics exist (`mlp_objective="mse"`
+        # reports no DEG error), so the line reports whatever is there.
+        detail = ", ".join(
+            f"{key} {metrics[key]:.4f}"
+            for key in ("mse_deg", "mse", "pearson", "direction_accuracy")
+            if isinstance(metrics.get(key), (int, float))
+        )
+        print(f"# {arm} done in {results[arm]['seconds']:.0f}s: {detail}", flush=True)
 
     # -- Base MLP: gold only, and the teacher for the augmented arms --------
     torch.manual_seed(config.seed)

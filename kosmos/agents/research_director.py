@@ -1627,6 +1627,10 @@ class ResearchDirectorAgent(BaseAgent):
             # Passing these here is what makes `kosmos run --task perturbation`
             # actually reach the perturbation trainer instead of its defaults.
             backend=self.config.get("task_backend"),
+            # A plan the caller brought (the CLI's `--data-plan`): the
+            # perturbation backend pairs its gold with the measurements the plan
+            # lists, so it has to see the plan file and not only the gold path.
+            plan_path=self.config.get("task_plan_path"),
             max_epochs=int(self.config.get("ppi_max_epochs", 20)),
             patience=int(self.config.get("ppi_patience", 5)),
             seed=int(self.config.get("ppi_seed", 42)),
@@ -1770,7 +1774,13 @@ class ResearchDirectorAgent(BaseAgent):
 
             ppi_external_path = self.config.get("ppi_external_data_path")
             task_target = self.config.get("task_target_column")
-            if task_target and self.data_path:
+            # A perturbation plan is not a labelled table with a label column:
+            # its "target" is which perturbation each cell carries, and it is
+            # answered by the screen backend (control cells, a delta, splits by
+            # perturbation), not by the column task below. Routing it here is
+            # what makes `--data-plan <perturbation plan>` work.
+            task_backend = str(self.config.get("task_backend") or "").strip().lower()
+            if task_target and self.data_path and task_backend not in {"perturbation", "perturb"}:
                 # Training-task path. A task is a label column and a feature
                 # selection, so nothing here knows what the columns mean:
                 #   labeled data alone            -> supervised training

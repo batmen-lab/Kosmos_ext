@@ -59,6 +59,73 @@ def _pearson(a: np.ndarray, b: np.ndarray) -> float:
     return float((a_centred * b_centred).sum() / denominator)
 
 
+def perturbation_signal(
+    predictions: dict[str, np.ndarray], observations: dict[str, np.ndarray]
+) -> dict[str, float]:
+    """How much of the *observed* between-perturbation variation an arm reproduces.
+
+    Every arm predicts one profile per perturbation. An arm that has not learned
+    the identity predicts (nearly) the same profile for all of them -- its
+    per-gene output bias -- and the spread of those profiles across perturbations
+    collapses to the spread of that bias. Dividing by the observed spread says
+    what share of the real difference between perturbations the model carries:
+
+      * 1.0 -- the profiles differ as much as the data's do;
+      * ~0  -- the prediction is a constant, so its `top_k_overlap` and `pearson`
+              describe that constant rather than a ranking of the perturbation's
+              genes (on the ECCITE screen the GEARS arms sat at 14-28% and the
+              MLP arms at 6-7%, which is what "top-K = 0" was made of).
+    """
+    labels = sorted(set(predictions) & set(observations))
+    if len(labels) < 2:
+        return {
+            "across_perturbation_std": 0.0,
+            "observed_across_perturbation_std": 0.0,
+            "signal": 0.0,
+        }
+    predicted = np.stack([np.asarray(predictions[label], dtype=np.float64) for label in labels])
+    observed = np.stack([np.asarray(observations[label], dtype=np.float64) for label in labels])
+    across = float(np.mean(predicted.std(axis=0)))
+    observed_across = float(np.mean(observed.std(axis=0)))
+    return {
+        "across_perturbation_std": across,
+        "observed_across_perturbation_std": observed_across,
+        "signal": across / observed_across if observed_across > 0 else 0.0,
+    }
+
+
+def baseline_metrics(
+    observations: dict[str, np.ndarray], *, top_k: int = 20
+) -> dict[str, dict[str, float]]:
+    """What a reader needs to judge the table: two references on the same metric.
+
+    `predict 0` is "no change anywhere" and `mean response (leave-one-out)` is
+    "the average response of the *other* held-out perturbations" -- the honest
+    version of "predict the average", since the test perturbations are not used
+    to predict themselves. Without them a collapsed arm that scores well on the
+    DEG-restricted quartic looks like a result.
+    """
+    import warnings
+
+    labels = sorted(observations)
+    zero = {label: np.zeros_like(np.asarray(observations[label], dtype=np.float64)) for label in labels}
+    leave_one_out = {}
+    for label in labels:
+        others = [np.asarray(observations[other], dtype=np.float64) for other in labels if other != label]
+        leave_one_out[label] = (
+            np.mean(np.stack(others), axis=0) if others else np.zeros_like(np.asarray(observations[label], dtype=np.float64))
+        )
+    with warnings.catch_warnings():
+        # A constant prediction has no correlation with anything, by definition.
+        warnings.simplefilter("ignore")
+        return {
+            "predict 0": perturbation_metrics(zero, observations, top_k=top_k).summary,
+            "mean response (leave-one-out)": perturbation_metrics(
+                leave_one_out, observations, top_k=top_k
+            ).summary,
+        }
+
+
 def perturbation_metrics(
     predictions: dict[str, np.ndarray],
     observations: dict[str, np.ndarray],

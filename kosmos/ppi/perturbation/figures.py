@@ -131,6 +131,13 @@ def write_summary(results: dict[str, Any], out_dir: str | Path) -> Path:
         f"- splits (by perturbation): {results.get('split_sizes')}",
         f"- arms: {', '.join(results.get('arms') or [])}",
     ]
+    if results.get("partial"):
+        lines += [
+            "",
+            "> **Partial run.** The arms above have finished; the run was still "
+            "training (or was stopped) when this file was written. Read it again "
+            "after the run ends for the complete table.",
+        ]
     modality = results.get("modality") or {}
     verdict = modality.get("verdict") or {}
     if verdict:
@@ -159,6 +166,65 @@ def write_summary(results: dict[str, Any], out_dir: str | Path) -> Path:
             f"{summary['direction_accuracy']:.3f} | {summary['top_k_overlap']:.3f} | "
             f"{payload.get('epochs_run')} |"
         )
+    baselines = results.get("baselines") or {}
+    if baselines:
+        lines += [
+            "",
+            "## Reference baselines (same metrics, same held-out perturbations)",
+            "",
+            "| baseline | mse | mse_deg | pearson | direction | top-K |",
+            "|---|---|---|---|---|---|",
+        ]
+        for name, summary in baselines.items():
+            pearson = summary.get("pearson")
+            lines.append(
+                f"| {name} | {summary['mse']:.4f} | {summary['mse_deg']:.4f} | "
+                + (f"{pearson:.3f} | " if pearson is not None and pearson == pearson else "- | ")
+                + f"{summary['direction_accuracy']:.3f} | {summary['top_k_overlap']:.3f} |"
+            )
+        lines += [
+            "",
+            "`predict 0` is the no-change reference; `mean response (leave-one-out)` "
+            "predicts each held-out perturbation with the average response of the "
+            "others. An arm that does not beat both is not predicting the "
+            "perturbation.",
+        ]
+
+    signals = [
+        (arm, payload.get("signal") or {})
+        for arm, payload in (results.get("arms") or {}).items()
+        if payload.get("signal")
+    ]
+    if signals:
+        lines += [
+            "",
+            "## Per-perturbation signal",
+            "",
+            "How much of the *observed* difference between perturbations the arm "
+            "reproduces (spread of its per-perturbation profiles / spread of the "
+            "observed ones). 0 means a per-gene constant.",
+            "",
+            "| arm | across-perturbation std | of the data's |",
+            "|---|---|---|",
+        ]
+        for arm, signal in signals:
+            lines.append(
+                f"| `{arm}` | {signal['across_perturbation_std']:.4f} | "
+                f"{signal['signal']:.1%} |"
+            )
+        faded = [arm for arm, signal in signals if signal.get("signal", 1.0) < 0.1]
+        if faded:
+            lines += [
+                "",
+                "> **No perturbation signal**: "
+                + ", ".join(f"`{arm}`" for arm in faded)
+                + " reproduce less than a tenth of the observed between-perturbation "
+                "variation. Their prediction is a per-gene constant, so their "
+                "`top_k_overlap` (and `pearson`) describe that constant rather than "
+                "a ranking of the perturbation's genes -- read those rows as "
+                "'did not learn the perturbation', not as a ranking result.",
+            ]
+
     overlap = results.get("graph_edge_overlap") or {}
     if overlap:
         lines += [

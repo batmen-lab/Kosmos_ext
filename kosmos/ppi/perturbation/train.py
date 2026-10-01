@@ -35,7 +35,7 @@ from .figures import write_perturbation_figures, write_summary
 from .graphs import GraphArtifact, edge_overlap
 from .losses import deg_indices, gears_loss, ppi_signed_correction
 from .synthetic import SyntheticSet, build_synthetic
-from .metrics import perturbation_metrics
+from .metrics import baseline_metrics, perturbation_metrics, perturbation_signal
 from .model import GearsModel, ModelConfig, sparse_adjacency
 
 ARMS = ("gears_base", "gears_augmented_ungated", "gears_augmented")
@@ -245,6 +245,19 @@ def run_perturbation_experiment(
     synthetic: "SyntheticSet | None" = None
     supp_rng = np.random.default_rng(config.seed)
 
+    # The references every arm is read against, computed once from the test
+    # split's own per-perturbation mean Δ: "no change" and "the average response
+    # of the other held-out perturbations".
+    test_observations: dict[str, list[np.ndarray]] = {}
+    for example in splits["test"]:
+        test_observations.setdefault(example.label, []).append(
+            np.asarray(example.delta, dtype=np.float64)
+        )
+    results["baselines"] = baseline_metrics(
+        {label: np.mean(np.stack(values), axis=0) for label, values in test_observations.items()},
+        top_k=config.top_k_deg,
+    )
+
     for arm in gears_arms:
         model = _new_model()
         optimizer = torch.optim.Adam(
@@ -385,6 +398,21 @@ def run_perturbation_experiment(
                 }
                 entry["gate_active_fraction"] = float(np.mean([stats["active"] for stats in gate_stats]))
             history.append(entry)
+            # A run of six arms over fifty epochs writes nothing to disk until
+            # the first arm finishes, so the only way to tell "training" from
+            # "stuck" is to say where each epoch landed.
+            print(
+                f"# {arm} epoch {entry['epoch']}/{config.epochs}: "
+                f"validation mse_deg {score:.4f}, pearson "
+                f"{entry['validation_pearson']:.3f}"
+                + (
+                    f", gate cos {entry['gate']['cosine']:.3f} "
+                    f"(lambda {entry['gate']['weight']:.3f})"
+                    if "gate" in entry
+                    else ""
+                ),
+                flush=True,
+            )
             if score < best_score - 1e-6:
                 best_score = score
                 best = {key: value.detach().clone() for key, value in model.state_dict().items()}
@@ -433,7 +461,24 @@ def run_perturbation_experiment(
             "epochs_run": len(history),
             "seconds": round(time.time() - started, 1),
             "predictions": str(out / f"{arm}_test_predictions.npz"),
+            "signal": perturbation_signal(predictions, observations),
         }
+        # Six arms over fifty epochs is an hour of work; a run that is stopped
+        # after the third must still say what the three said. The summary is
+        # rewritten after every arm (marked partial) so the numbers exist as
+        # soon as the arm does, and the console gets one line per arm.
+        print(
+            f"# {arm} done in {results['arms'][arm]['seconds']:.0f}s: "
+            f"test mse_deg {test['summary']['mse_deg']:.4f}, "
+            f"pearson {test['summary']['pearson']:.3f}, "
+            f"direction {test['summary']['direction_accuracy']:.3f}",
+            flush=True,
+        )
+        try:
+            results["partial"] = True
+            write_summary(results, out)
+        except Exception as error:  # noqa: BLE001 - a report never fails a run
+            print(f"# could not write the partial summary: {error}", flush=True)
     if config.include_mlp_baselines:
         # Graph-free baselines. A local import keeps the GEARS path free of the
         # MLP module (and costs nothing when the baselines are off).
@@ -453,6 +498,7 @@ def run_perturbation_experiment(
                 deg_by_perturbation=deg_map,
             )
         )
+    results.pop("partial", None)
     figures = write_perturbation_figures(results, out)
     results["figures"] = [str(path) for path in figures]
     write_summary(results, out)

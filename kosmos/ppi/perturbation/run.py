@@ -10,6 +10,8 @@ trained and reported side by side.
 from __future__ import annotations
 
 import json
+import os
+import re
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -19,9 +21,12 @@ import pandas as pd
 
 from ..tabular import read_table
 from .contract import (
+    to_perturbed_gene,
     DEFAULT_CONTROL_LABELS,
     build_examples,
     build_task,
+    is_control as is_control_value,
+    parse_condition,
     perturbation_splits,
     split_examples,
     write_contract,
@@ -40,7 +45,9 @@ from .train import PerturbationTrainingConfig, run_perturbation_experiment
 
 #: Columns that are never features and never perturbed genes.
 CONTEXT_HINTS = ("cell_type", "celltype", "donor", "donor_id", "batch", "batch_id", "cell_id", "dose", "time", "timepoint")
-CONDITION_HINTS = ("condition", "perturbation", "guide", "target_gene", "gene_target", "sgRNA", "compound_1")
+#: The condition-column vocabulary lives in `modality.py` so the fetcher can use
+#: it without importing torch.
+from .modality import CONDITION_HINTS  # noqa: E402
 
 
 def supplementary_requirement_text() -> str:
@@ -62,18 +69,258 @@ def supplementary_requirement_text() -> str:
     )
 
 
-def guess_condition_column(frame: pd.DataFrame) -> str | None:
+#: A value that names a guide: letters and digits, e.g. `STAT2g1`, `NTg5`.
+_GUIDE_VALUE = re.compile(r"[A-Za-z][A-Za-z0-9_.-]{0,19}$")
+
+
+def _guide_like(value: str) -> bool:
+    return bool(_GUIDE_VALUE.fullmatch(value)) and any(character.isdigit() for character in value)
+
+
+def guess_condition_column(frame: pd.DataFrame, *, exclude: Sequence[str] = ()) -> str | None:
+    """The column naming the perturbation: by its name, then by its values.
+
+    A screen's condition column is usually named for what it holds (`gene`,
+    `guide`, `condition`). When it is not -- ECCITE's guide columns are
+    `GO_lenti_maxID` / `GO_cite_maxID`, and their labels are `STAT2g1`,
+    `eGFPg1`, `NTg5` -- the values still say what the column is: a handful of
+    strings, at least one of which means "nothing was perturbed" and the rest of
+    which name a guide. Both pairs of conditions are required, so a hashing or
+    donor column is not mistaken for a perturbation.
+    """
+    blocked = {str(name) for name in exclude}
     for name in CONDITION_HINTS:
-        if name in frame.columns:
+        if name in frame.columns and str(name) not in blocked:
             return name
-    return None
+    best: tuple[int, str] | None = None
+    for column in frame.columns:
+        if str(column) in blocked:
+            continue
+        series = frame[column]
+        if not (pd.api.types.is_object_dtype(series) or pd.api.types.is_string_dtype(series)):
+            continue
+        values = [value for value in series.dropna().astype(str).unique() if value.strip()]
+        if not 1 < len(values) <= 200:
+            continue
+        controls = sum(1 for value in values if is_control_value(value))
+        if not controls:
+            continue
+        guides = sum(1 for value in values if _guide_like(value))
+        if guides * 2 < len(values):
+            continue
+        score = 5 * controls + guides
+        if best is None or score > best[0]:
+            best = (score, str(column))
+    return best[1] if best else None
 
 
 def feature_columns(frame: pd.DataFrame, condition_column: str) -> list[str]:
-    """The measured genes: numeric columns that are not context or the label."""
+    """The measured genes: numeric columns that are not context or the label.
+
+    A joined screen records which columns came from the measurements
+    (`assemble.join_screen`), and that is the reading that keeps the label
+    table's own QC columns -- `nCount_RNA`, `percent.mito`, `S.Score` -- out of
+    the gene panel. Only when nothing recorded them does this fall back to "every
+    numeric column that is not the label".
+    """
+    curated = frame.attrs.get("expression_columns")
+    if curated:
+        present = {str(column) for column in frame.columns}
+        listed = [str(column) for column in curated if str(column) in present]
+        if listed:
+            return listed
     numeric = frame.select_dtypes(include="number")
     blocked = {condition_column, *CONTEXT_HINTS}
     return [str(column) for column in numeric.columns if str(column) not in blocked]
+
+
+def gene_coverage(
+    frame: pd.DataFrame,
+    column: str,
+    genes: set[str],
+    control_labels: Sequence[str],
+) -> tuple[float, float, int]:
+    """How much of a column's non-control values names a gene the panel measures.
+
+    Two scores, because they mean different things: `mapped` counts a guide id
+    as the gene it targets (`ATF2g1` -> `ATF2`), `direct` counts only values that
+    are already measured genes. A screen that publishes both columns gets the
+    one that needs no interpretation, at equal coverage.
+    """
+    values = [value for value in frame[column].dropna().astype(str).unique() if value.strip()]
+    named = [value for value in values if not is_control_value(value, control_labels)]
+    if not named:
+        return 0.0, 0.0, 0
+    hits = sum(1 for value in named if to_perturbed_gene(value, genes) in genes)
+    direct = sum(1 for value in named if value in genes)
+    return hits / len(named), direct / len(named), len(named)
+
+
+def align_condition_column(
+    frame: pd.DataFrame,
+    genes: set[str],
+    current: str | None,
+    control_labels: Sequence[str],
+) -> tuple[str | None, float]:
+    """The column whose values are the genes the panel measures.
+
+    A screen usually publishes both the guide that was delivered and the gene it
+    targets (`guide_ID` = `ATF2g1`, `gene` = `ATF2`), and which one a reader
+    calls "the perturbation" is a coin toss. The model can only encode a
+    perturbation it can look up in the panel, so the column that names measured
+    genes wins -- and a guide-id column still works, because `ATF2g1` is read as
+    `ATF2` when the panel has `ATF2`.
+    """
+    best = str(current) if current else None
+    best_score = (0.0, 0.0)
+    if best and best in frame.columns:
+        mapped, direct, _ = gene_coverage(frame, best, genes, control_labels)
+        best_score = (mapped, direct)
+    rows = max(1, len(frame))
+    for column in frame.columns:
+        if str(column) == best:
+            continue
+        series = frame[column]
+        if not (pd.api.types.is_object_dtype(series) or pd.api.types.is_string_dtype(series)):
+            continue
+        mapped, direct, named = gene_coverage(frame, str(column), genes, control_labels)
+        # A perturbation column repeats: it says which perturbation each of many
+        # cells carries. A column with one distinct value per row is a barcode,
+        # and barcodes are not perturbations however well they match the panel's
+        # cell names.
+        if not named or named * 4 > rows:
+            continue
+        if (mapped, direct) > best_score:
+            best, best_score = str(column), (mapped, direct)
+    return best, best_score[0]
+
+
+#: Library size every cell is scaled to before `log1p`, when the screen's
+#: measurements are raw counts.
+DEFAULT_TARGET_SUM = 1e4
+
+
+def normalise_counts(
+    frame: pd.DataFrame, genes: Sequence[str], *, target_sum: float | None = None
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Library-size normalise and `log1p` a raw-count screen.
+
+    A screen's published matrix is usually raw UMI counts (the ECCITE
+    macrophages run 5,000-30,000 counts per cell and are 88% zeros). The
+    contract is defined on expression *differences*, and on raw counts those
+    differences are dominated by how deeply each cell was sequenced, so the
+    standard per-cell normalisation is applied and reported. A table that does
+    not look like counts -- `verdict` says why -- is passed through untouched,
+    because normalising an already-normalised matrix divides real units by a
+    number that means nothing.
+    """
+    from ..singlecell import counts_verdict
+
+    target = (
+        float(target_sum)
+        if target_sum is not None
+        else float(os.getenv("KOSMOS_PERTURBATION_TARGET_SUM", DEFAULT_TARGET_SUM))
+    )
+    looks, why = counts_verdict(frame, [str(gene) for gene in genes])
+    if not looks:
+        return frame, {"applied": False, "why": why}
+    values = frame[genes].to_numpy(dtype=np.float64, na_value=0.0)
+    totals = values.sum(axis=1, keepdims=True)
+    totals[totals <= 0] = 1.0
+    out = frame.copy()
+    out[genes] = pd.DataFrame(
+        np.log1p(values / totals * target).astype(np.float32),
+        index=frame.index,
+        columns=list(genes),
+    )
+    return out, {
+        "applied": True,
+        "why": why,
+        "target_sum": target,
+        "how": f"library-size normalisation to {target:g} then log1p",
+    }
+
+
+#: How many genes the panel may hold. A published screen measures every gene the
+#: assay saw -- the ECCITE-seq macrophages have 18,649 -- and both graphs are
+#: quadratic in the panel (18,649 nodes is 348M candidate edges, minutes of
+#: correlation for a matrix whose bottom half is all zeros) and the decoder is a
+#: layer over every gene. The panel is therefore capped, by variance across the
+#: *control* cells (the standard HVG reading, and the cells the graph itself is
+#: built from). 0 disables the cap; `KOSMOS_PERTURBATION_MAX_GENES` overrides it.
+DEFAULT_MAX_PANEL_GENES = 2000
+
+
+def max_panel_genes() -> int:
+    raw = os.getenv("KOSMOS_PERTURBATION_MAX_GENES", str(DEFAULT_MAX_PANEL_GENES))
+    try:
+        return max(0, int(float(raw)))
+    except (TypeError, ValueError):
+        return DEFAULT_MAX_PANEL_GENES
+
+
+def select_panel(
+    frame: pd.DataFrame,
+    genes: Sequence[str],
+    *,
+    control_mask: pd.Series | None = None,
+    always_include: Sequence[str] = (),
+    limit: int | None = None,
+) -> tuple[list[str], dict[str, Any]]:
+    """Cap the measured genes to the most variable ones across the controls.
+
+    The genes a screen perturbed are always kept, however quiet they are: the
+    model encodes a perturbation from the *panel* embeddings of the genes it
+    names, so a perturbed gene outside the panel cannot be represented at all
+    and its cells drop out of the training set.
+
+    Which genes make the panel is a claim about what the model is asked to
+    predict, so it is reported: `panel_selection` travels in the contract and in
+    the data report.
+    """
+    measured = [str(gene) for gene in genes]
+    present = set(measured)
+    must = [gene for gene in dict.fromkeys(str(g) for g in always_include) if gene in present]
+    cap = max_panel_genes() if limit is None else int(limit)
+    info: dict[str, Any] = {
+        "measured": len(measured),
+        "selected": len(measured),
+        "cap": cap,
+        "perturbed_genes_kept": len(must),
+        "how": "every measured gene",
+    }
+    if cap <= 0 or len(measured) <= cap:
+        return measured, info
+    keep = set(must)
+    remaining = cap - len(keep)
+    how = f"top {cap} by variance"
+    if remaining > 0:
+        values = frame[measured].to_numpy(dtype=np.float32)
+        mask = None if control_mask is None else control_mask.to_numpy(dtype=bool)
+        if mask is not None and mask.any():
+            values = values[mask]
+        variance = np.nan_to_num(np.nanvar(values, axis=0), nan=-np.inf)
+        ranked = [
+            measured[index]
+            for index in np.argsort(-variance)
+            if measured[index] not in keep
+        ][:remaining]
+        keep.update(ranked)
+        how = (
+            f"top {cap - len(must)} by variance across the "
+            f"{'control ' if mask is not None else ''}cells plus the "
+            f"{len(must)} perturbed gene(s) "
+            f"(KOSMOS_PERTURBATION_MAX_GENES={cap})"
+        )
+    selected = [gene for gene in measured if gene in keep]
+    info.update(
+        {
+            "selected": len(selected),
+            "how": how,
+            "controls_used": int(control_mask.sum()) if control_mask is not None else 0,
+        }
+    )
+    return selected, info
 
 
 def run_perturbation_task(
@@ -81,6 +328,7 @@ def run_perturbation_task(
     gold_path: str | Path,
     out_dir: str | Path,
     supplementary_paths: Sequence[str | Path] = (),
+    supplementary_frames: Sequence[pd.DataFrame] = (),
     condition_column: str | None = None,
     control_labels: Sequence[str] = DEFAULT_CONTROL_LABELS,
     context_columns: Sequence[str] = ("cell_type", "donor", "batch"),
@@ -95,20 +343,96 @@ def run_perturbation_task(
     seed: int = 42,
     config: PerturbationTrainingConfig | None = None,
     modality: dict[str, Any] | None = None,
+    expression_path: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Build the contract and graphs from tables, then train the three arms."""
+    """Build the contract and graphs from tables, then train the three arms.
+
+    `expression_path` is for a screen published as two files: the label table
+    (barcodes plus the perturbation each cell carried) and the measurements
+    (barcodes by genes). They are joined on the barcode before anything else
+    looks at the data, because neither half alone is a training table.
+
+    `supplementary_frames` is the same pair already joined by the caller -- how a
+    second screen in the same panel becomes the *unlabeled* source the augmented
+    arms learn from, without writing a two-gigabyte copy to disk to hand it over
+    as a path.
+    """
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    gold = read_table(gold_path)
-    condition_column = condition_column or guess_condition_column(gold)
+    from kosmos.core.diagnostics import stage
+
+    with stage(
+        f"reading the screen's tables ({Path(str(gold_path)).name}"
+        + (f" + {Path(str(expression_path)).name}" if expression_path else "")
+        + ")"
+    ):
+        gold = read_table(gold_path)
+        condition_column = condition_column or guess_condition_column(gold)
+        if expression_path is not None and condition_column:
+            from .assemble import join_screen
+
+            label_table = gold
+            expression_table = read_table(expression_path)
+            gold = join_screen(
+                label_table, expression_table, condition_column=condition_column
+            )
+            gold.attrs["assembled_from"] = [str(gold_path), str(expression_path)]
+        if modality:
+            modality = {**modality}
+            modality["assembled_from"] = [
+                str(Path(str(gold_path))),
+                str(Path(str(expression_path))),
+            ]
     if not condition_column or condition_column not in gold.columns:
         raise ValueError(
             "no perturbation column: expected one of "
             f"{list(CONDITION_HINTS)} in {Path(str(gold_path)).name}"
         )
-    genes = feature_columns(gold, condition_column)
-    if not genes:
+    measured = feature_columns(gold, condition_column)
+    if not measured:
         raise ValueError("no numeric gene columns to measure a perturbation against")
+    # The label the plan carries is a guess about which column holds the
+    # perturbation; the panel decides whether it is one the model can encode.
+    aligned, coverage = align_condition_column(
+        gold, set(measured), condition_column, control_labels
+    )
+    if aligned and aligned != str(condition_column):
+        print(
+            f"# perturbation: {aligned!r} names the genes this panel measures "
+            f"({coverage:.0%} of its values), so it is the perturbation column, "
+            f"not {str(condition_column)!r}",
+            flush=True,
+        )
+        condition_column = aligned
+    with stage(
+        f"normalising the measurements and choosing the panel ({len(measured):,} measured gene(s))"
+    ):
+        gold, preprocessing = normalise_counts(gold, measured)
+    control_mask = gold[condition_column].map(
+        lambda value: is_control_value(value, control_labels)
+    )
+    # The gold has to carry *both* halves of a perturbation example: which
+    # perturbation each cell carries, and the transcriptome it changed. A table
+    # with the first and not the second (a cell-metadata file: barcodes plus QC
+    # columns) passes every other check and cannot be trained on.
+    perturbation_genes: set[str] = set()
+    for value in gold[condition_column].astype(str).unique():
+        if is_control_value(value, control_labels):
+            continue
+        for gene in parse_condition(value):
+            perturbation_genes.add(to_perturbed_gene(gene, set(measured)))
+    if perturbation_genes and not (perturbation_genes & set(measured)):
+        raise ValueError(
+            f"the gold names {len(perturbation_genes)} perturbation(s) "
+            f"(e.g. {sorted(perturbation_genes)[:3]}) but none is among its "
+            f"{len(measured)} measured column(s) (e.g. {list(measured)[:3]}): this "
+            f"table has the labels and not the transcriptome -- its numeric "
+            f"columns are metadata, and the expression matrix is in another file "
+            f"(guide ids are read as the gene they target when the panel has it)"
+        )
+    genes, panel_selection = select_panel(
+        gold, measured, control_mask=control_mask, always_include=sorted(perturbation_genes)
+    )
 
     # The panel is shared by every dataset and every graph, so it is the
     # intersection of what the gold and the usable supplementary sources
@@ -129,6 +453,15 @@ def run_perturbation_task(
             sources[f"supp_{index}"] = {"path": str(path), "error": f"{type(error).__name__}: {error}"}
             continue
         tables.append((index, Path(path), table))
+    for frame in supplementary_frames:
+        index = len(tables)
+        origin = str(frame.attrs.get("assembled_from_label") or "assembled screen")
+        tables.append((index, Path(origin), frame))
+        sources[f"supp_{index}"] = {
+            "path": origin,
+            "how": "joined from a label table and its own measurements",
+            "assembled_from": frame.attrs.get("assembled_from") or [],
+        }
     panel = list(genes)
     if tables:
         shared = set(genes)
@@ -161,14 +494,17 @@ def run_perturbation_task(
     # and it decides how much of the screen the auxiliary graph can even see, so
     # it is reported rather than left implicit.
     share = len(panel) / max(1, len(genes))
-    report["panel_in_gold"] = len(genes)
+    report["preprocessing"] = preprocessing
+    report["panel_in_gold"] = len(measured)
+    report["panel_selected"] = len(genes)
+    report["panel_selection"] = panel_selection
     report["panel_shared_with_supplementary"] = len(panel)
     report["panel_share_of_gold"] = round(share, 4)
     report["panel_per_source"] = {
-        **{"gold": len(genes)},
+        **{"gold": len(measured)},
         **{
             f"supp_{index}": int(
-                sum(1 for gene in genes if gene in set(str(c) for c in table.columns))
+                sum(1 for gene in measured if gene in set(str(c) for c in table.columns))
             )
             for index, _, table in tables
         },
@@ -192,20 +528,20 @@ def run_perturbation_task(
             "cells and perturbation identities"
         )
 
-    control_mask = gold[condition_column].map(lambda value: str(value).lower() in {c.lower() for c in control_labels})
     # the gold graph must be built on the *panel*, not on the gold's own gene list:
     # the panel is what every source and every graph shares
     control_matrix = gold.loc[control_mask, panel].to_numpy(dtype=np.float32)
-    graphs = {
-        "G_C": coexpression_graph(
-            control_matrix, name="G_C", threshold=coexpress_threshold, k=coexpress_k
-        )
-    }
+    with stage(f"building the co-expression graphs over {len(panel):,} panel gene(s)"):
+        graphs = {
+            "G_C": coexpression_graph(
+                control_matrix, name="G_C", threshold=coexpress_threshold, k=coexpress_k
+            )
+        }
     # supplementary: prefer its control cells; otherwise compare the whole source
     sources["gold"].update(
         {
             "control_cells": int(control_mask.sum()),
-            "genes": len(genes),
+            "genes": len(measured),
             "panel_after_intersection": len(panel),
         }
     )
@@ -234,7 +570,7 @@ def run_perturbation_task(
             how = "all cells (no condition column: an unperturbed source)"
         else:
             is_control = table[supp_condition].map(
-                lambda value: str(value).lower() in {c.lower() for c in control_labels}
+                lambda value: is_control_value(value, control_labels)
             )
             control_cells = int(is_control.sum())
             if control_cells >= 3:
@@ -295,12 +631,29 @@ def run_perturbation_task(
         # the report, because pooling them would be a claim about compatibility.
         graphs["G_S"] = auxiliary[0]
         auxiliary_graphs = auxiliary[1:]
+    else:
+        # A screen with no second measurement: the augmented arms still run --
+        # the trainer's six-arm contract is what the report and the metrics are
+        # written against -- but there are no supplementary cells to label, so
+        # they are the gold update on one more graph branch. Saying it here is
+        # what keeps "the augmented arm did not help" from reading as a finding.
+        graphs["G_S"] = graphs["G_C"]
+        report["no_supplementary_source"] = (
+            "no supplementary measurement shares the panel: the augmented arms "
+            "have no unlabeled cells to learn from and reduce to the gold update"
+        )
+        print(
+            "# WARNING: no supplementary source shares the panel; the augmented "
+            "arms have nothing extra to learn from",
+            flush=True,
+        )
     go_path = Path(go_reference)
-    graphs["G_GO"] = (
-        go_graph(panel, reference=go_path, k=go_k)
-        if go_path.exists()
-        else identity_graph(len(panel), name="G_GO")
-    )
+    with stage(f"building the GO similarity graph ({go_path.name})"):
+        graphs["G_GO"] = (
+            go_graph(panel, reference=go_path, k=go_k)
+            if go_path.exists()
+            else identity_graph(len(panel), name="G_GO")
+        )
 
     labels = sorted({example.label for example in examples})
     splits_by_label = perturbation_splits(
@@ -319,15 +672,24 @@ def run_perturbation_task(
         )
 
     training = config or PerturbationTrainingConfig(seed=seed)
-    results = run_perturbation_experiment(
-        splits=splits,
-        task=task,
-        graphs=graphs,
-        out_dir=out,
-        config=training,
-        supplementary_controls=supplementary_controls,
-        modality=modality,
+    # The MLP baselines are trained beside `arms`, not inside it: the message
+    # counts what will actually be trained, or it under-reports every run that
+    # has them on.
+    arm_count = len(training.arms) + (
+        3 if getattr(training, "include_mlp_baselines", False) else 0
     )
+    with stage(
+        f"training {arm_count} arms for up to {training.epochs} epoch(s)"
+    ):
+        results = run_perturbation_experiment(
+            splits=splits,
+            task=task,
+            graphs=graphs,
+            out_dir=out,
+            config=training,
+            supplementary_controls=supplementary_controls,
+            modality=modality,
+        )
     # The perturbation-type judgement belongs in the contract: it is a property
     # of the data (which screen, which assay) that the rest of the pipeline is
     # blind to, and the one thing a reader needs to know before trusting a
