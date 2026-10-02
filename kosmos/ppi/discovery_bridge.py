@@ -210,7 +210,7 @@ def run_data_task(
     backend: str | None = None,
     max_epochs: int = 20,
     patience: int = 5,
-    ppi_lambda: float = 0.5,
+    ppi_lambda: float | None = None,
     gate_kappa: float = 1.0,
     gate_scope: str = "batch",
     single_cell: str = "auto",
@@ -249,6 +249,8 @@ def run_data_task(
     """
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
+    if ppi_lambda is None:
+        ppi_lambda = float(os.getenv("PPI_LAMBDA", "0.5") or 0.5)
     kind = apply_backend_override(
         classify_task(question, extra_text=extra_text, client=client), backend
     )
@@ -354,6 +356,7 @@ def run_data_task(
                 coexpress_k=coexpress_k,
                 eta=eta,
                 gate_kappa=gate_kappa,
+                ppi_lambda=ppi_lambda,
             )
         except Exception as e:  # noqa: BLE001 - a failed backend is a finding
             message = f"{type(e).__name__}: {e}"
@@ -393,6 +396,7 @@ def run_data_task(
                         coexpress_k=coexpress_k,
                         eta=eta,
                         gate_kappa=gate_kappa,
+                        ppi_lambda=ppi_lambda,
                     )
                 except Exception as fallback_error:  # noqa: BLE001
                     message = f"{type(fallback_error).__name__}: {fallback_error}"
@@ -911,6 +915,17 @@ def run_perturbation_outcome(
     coexpress_k: int = 20,
     eta: float = 1.0,
     gate_kappa: float = 1.0,
+    #: The signed/gated coefficients and the two-stage schedule. `None` reads
+    #: the same environment variables the column task honours, so one export
+    #: (`PPI_LAMBDA`, `PPI_STAGE1_EPOCHS`, ...) drives both backends.
+    gate_lambda: float | None = None,
+    ppi_lambda: float | None = None,
+    direction_lambda: float | None = None,
+    schedule: str | None = None,
+    stage1_epochs: int | None = None,
+    stage2_epochs: int | None = None,
+    stage2_lr_multiplier: float | None = None,
+    loss_ramp_epochs: int | None = None,
 ) -> DataTaskOutcome:
     """Run the perturbation backend and report it the way the column task is.
 
@@ -1066,12 +1081,36 @@ def run_perturbation_outcome(
     include_mlp = str(os.getenv("PPI_MLP_BASELINES", "1")).strip().lower() not in (
         "0", "false", "no", "off",
     )
+    def _opt_float(name: str, default: float) -> float:
+        raw = os.getenv(name, "").strip()
+        return float(raw) if raw else float(default)
+
+    def _opt_int(name: str, default: int) -> int:
+        raw = os.getenv(name, "").strip()
+        return int(raw) if raw else int(default)
+
     config = PerturbationTrainingConfig(
         epochs=int(max_epochs),
         patience=int(patience),
         seed=int(seed),
         eta=float(eta),
         gate_kappa=float(gate_kappa),
+        gate_lambda=_opt_float("PPI_GATE_LAMBDA", 1.0) if gate_lambda is None else float(gate_lambda),
+        ppi_lambda=_opt_float("PPI_LAMBDA", 0.5) if ppi_lambda is None else float(ppi_lambda),
+        direction_lambda=(
+            _opt_float("PPI_DIRECTION_LAMBDA", 0.1)
+            if direction_lambda is None
+            else float(direction_lambda)
+        ),
+        schedule=os.getenv("PPI_SCHEDULE", "two_stage") if schedule is None else str(schedule),
+        stage1_epochs=_opt_int("PPI_STAGE1_EPOCHS", 4) if stage1_epochs is None else int(stage1_epochs),
+        stage2_epochs=_opt_int("PPI_STAGE2_EPOCHS", 1) if stage2_epochs is None else int(stage2_epochs),
+        stage2_lr_multiplier=(
+            _opt_float("PPI_STAGE2_LR_MULTIPLIER", 0.1)
+            if stage2_lr_multiplier is None
+            else float(stage2_lr_multiplier)
+        ),
+        loss_ramp_epochs=_opt_int("PPI_LOSS_RAMP_EPOCHS", 0) if loss_ramp_epochs is None else int(loss_ramp_epochs),
         include_mlp_baselines=include_mlp,
     )
     results = run_perturbation_task(

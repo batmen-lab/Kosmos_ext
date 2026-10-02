@@ -157,6 +157,52 @@ def test_the_model_consumes_control_and_perturbation_and_predicts_a_vector():
     assert torch.allclose(expression, control + delta)
 
 
+def test_the_ungated_arm_runs_the_two_stage_schedule(tmp_path):
+    """The column task's warm-up / correction cycle, on the perturbation objective."""
+    frame = synthetic_screen()
+    task = build_task(frame, condition_column="condition", gene_columns=GENES)
+    examples, _ = build_examples(frame, task, context_columns=["cell_type"])
+    labels = sorted({example.label for example in examples})
+    splits = split_examples(
+        examples,
+        perturbation_splits(labels, mode="mixed", test_fraction=0.34, validation_fraction=0.17, seed=0),
+    )
+    controls = frame[frame["condition"] == CONTROL][GENES].to_numpy(dtype=np.float32)
+    graphs = {
+        "G_C": coexpression_graph(controls, name="G_C", threshold=0.3, k=6),
+        "G_S": coexpression_graph(controls * 0.9, name="G_S", threshold=0.3, k=6),
+        "G_GO": go_graph(GENES, reference=small_go_graph(tmp_path), k=6),
+    }
+    config = PerturbationTrainingConfig(
+        epochs=3,
+        patience=3,
+        batch_size=16,
+        embedding_dim=8,
+        hidden_dim=8,
+        gnn_layers=1,
+        top_k_deg=6,
+        context_categorical={"cell_type": 2},
+        seed=0,
+        schedule="two_stage",
+        stage1_epochs=1,
+        stage2_epochs=1,
+        stage2_lr_multiplier=0.1,
+    )
+    results = run_perturbation_experiment(
+        splits=splits, task=task, graphs=graphs, out_dir=tmp_path / "run",
+        config=config, supplementary_controls=controls,
+    )
+
+    assert results["stage_epochs"] == {"true_loss": 1, "correction": 1}
+    ungated = results["arms"]["gears_augmented_ungated"]
+    phases = [entry["phase"] for entry in ungated["history"]]
+    # stage 1 warms up on gold alone, stage 2 switches the correction in
+    assert "true" in phases and "correction" in phases
+    # the synthetic term is only applied in the correction stage
+    correction_epochs = [e for e in ungated["history"] if e["phase"] == "correction"]
+    assert all("train_synthetic_loss" in e for e in correction_epochs)
+
+
 def test_the_three_arms_train_and_report_perturbation_level_metrics(tmp_path):
     """The comparison the design asks for: base, ungated three-graph, gated."""
     frame = synthetic_screen()

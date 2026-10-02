@@ -30,6 +30,7 @@ import numpy as np
 import torch
 
 from ..gating import GradientGate
+from ..training import correction_stage
 from .contract import PerturbationExample, PerturbationTask
 from .figures import write_perturbation_figures, write_summary
 from .graphs import GraphArtifact, edge_overlap
@@ -73,6 +74,14 @@ class PerturbationTrainingConfig:
     #: on post-perturbation expression); it is recorded, but it breaks the
     #: like-for-like comparison.
     mlp_objective: str = "gears"
+    #: The two-stage schedule shared with the column task. Stage one trains on
+    #: the gold objective alone; stage two switches to the signed correction and
+    #: takes smaller steps (`stage2_lr_multiplier`). See kosmos/ppi/training.py.
+    schedule: str = "two_stage"
+    stage1_epochs: int = 4
+    stage2_epochs: int = 1
+    stage2_lr_multiplier: float = 0.1
+    loss_ramp_epochs: int = 0
 
 
 def _tensor_graphs(
@@ -220,6 +229,17 @@ def run_perturbation_experiment(
             "include_mlp_baselines": config.include_mlp_baselines,
             "mlp_objective": config.mlp_objective,
             "ppi_lambda": config.ppi_lambda,
+            "schedule": config.schedule,
+            "stage1_epochs": config.stage1_epochs,
+            "stage2_epochs": config.stage2_epochs,
+            "stage2_lr_multiplier": config.stage2_lr_multiplier,
+            "loss_ramp_epochs": config.loss_ramp_epochs,
+        },
+        # The same vocabulary the column task reports, so a reader can compare
+        # "how was the correction scheduled" across backends.
+        "stage_epochs": {
+            "true_loss": config.stage1_epochs,
+            "correction": config.stage2_epochs,
         },
     }
 
@@ -263,6 +283,14 @@ def run_perturbation_experiment(
         optimizer = torch.optim.Adam(
             model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
         )
+        # The correction stage takes smaller steps, exactly as the column task
+        # does: the correction term's errors are not yet cancelled, so it must
+        # not be allowed to drag the model around on its own.
+        correction_optimizer = torch.optim.Adam(
+            model.parameters(),
+            lr=config.learning_rate * config.stage2_lr_multiplier,
+            weight_decay=config.weight_decay,
+        )
         gate = (
             GradientGate(kappa=config.gate_kappa, scope="batch", coefficient=config.gate_lambda)
             if arm == "gears_augmented"
@@ -279,6 +307,15 @@ def run_perturbation_experiment(
         started = time.time()
         for epoch in range(1, config.epochs + 1):
             model.train()
+            use_external = synthetic is not None and config.ppi_lambda > 0
+            in_correction = correction_stage(
+                epoch,
+                use_external=use_external,
+                schedule=config.schedule,
+                stage1_epochs=config.stage1_epochs,
+                stage2_epochs=config.stage2_epochs,
+            )
+            selected_optimizer = correction_optimizer if in_correction else optimizer
             epoch_losses: list[float] = []
             epoch_synthetic: list[float] = []
             gate_stats: list[dict[str, float]] = []
@@ -307,7 +344,7 @@ def run_perturbation_experiment(
 
                 # Augmented arms: the same architecture, with the supplementary
                 # graph *and* the teacher's synthetic labels on supp cells.
-                optimizer.zero_grad(set_to_none=True)
+                selected_optimizer.zero_grad(set_to_none=True)
                 _, delta = model(
                     control, index, adjacency["G_C"], adjacency["G_S"],
                     adjacency["G_GO"], context or None,
@@ -319,7 +356,7 @@ def run_perturbation_experiment(
                 if synthetic is None:
                     # No supplementary evidence: this reduces to the gold update.
                     loss_gold.total.backward()
-                    optimizer.step()
+                    selected_optimizer.step()
                     epoch_losses.append(float(loss_gold.total.detach()))
                     continue
 
@@ -347,8 +384,9 @@ def run_perturbation_experiment(
                 )
 
                 if gate is None:
-                    # Ungated = the column task's signed PPI correction:
-                    #   L = L_gold + λ·(L_ext − L_pseudo_gold)
+                    # Ungated = the column task's signed PPI correction, on the
+                    # same two-stage schedule: stage one trains on L_gold alone,
+                    # stage two optimises λ·(L_ext − L_pseudo_gold) on its own.
                     terms = ppi_signed_correction(
                         gold=loss_gold.total,
                         pseudo_gold=loss_pseudo_gold.total,
@@ -356,9 +394,10 @@ def run_perturbation_experiment(
                         coefficient=config.ppi_lambda,
                         mass=1.0,
                     )
-                    terms.total.backward()
-                    optimizer.step()
-                    epoch_losses.append(float(terms.total.detach()))
+                    objective = terms.correction if in_correction else terms.gold
+                    objective.backward()
+                    selected_optimizer.step()
+                    epoch_losses.append(float(objective.detach()))
                     epoch_synthetic.append(float(loss_extension.total.detach()))
                 else:
                     # Gated: gold sets the direction, the synthetic gradient only
@@ -366,7 +405,7 @@ def run_perturbation_experiment(
                     stats = gate.combine(
                         loss_gold.total, loss_extension.total, model.parameters()
                     )
-                    optimizer.step()
+                    selected_optimizer.step()
                     epoch_losses.append(float(loss_gold.total.detach()))
                     epoch_synthetic.append(float(loss_extension.total.detach()))
                     gate_stats.append(
@@ -384,6 +423,11 @@ def run_perturbation_experiment(
             score = validation["summary"]["mse_deg"]
             entry = {
                 "epoch": epoch,
+                "phase": (
+                    "gated"
+                    if gate is not None
+                    else ("correction" if in_correction else ("true" if use_external else "gold"))
+                ),
                 "train_loss": float(np.mean(epoch_losses)) if epoch_losses else float("nan"),
                 "validation_mse_deg": score,
                 "validation_pearson": validation["summary"]["pearson"],

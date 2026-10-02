@@ -34,6 +34,13 @@ class LossBreakdown:
     error: torch.Tensor
     direction: torch.Tensor
     n_groups: int
+    # The signed-correction vocabulary (`kosmos/ppi/training.py`), filled only
+    # by `ppi_signed_correction`; `error`/`direction` above are the historical
+    # names for `gold`/`correction`.
+    gold: torch.Tensor | None = None
+    correction: torch.Tensor | None = None
+    pseudo_gold: torch.Tensor | None = None
+    extension: torch.Tensor | None = None
 
 
 def deg_indices(
@@ -125,10 +132,22 @@ def ppi_signed_correction(
     different (input, target) pairs. That is what makes the mechanism reusable
     for the GEARS arms and the graph-free MLP arms alike.
     """
-    correction = float(coefficient) * (extension - float(mass) * pseudo_gold)
+    from ..training import signed_correction
+
+    terms = signed_correction(
+        gold=gold,
+        pseudo_gold=pseudo_gold,
+        extension=extension,
+        coefficient=coefficient,
+        mass=mass,
+    )
     return LossBreakdown(
-        total=gold + correction,
-        error=gold,
-        direction=correction,
+        total=terms["loss_total"],
+        error=terms["loss_true"],
+        direction=terms["loss_correction"],
         n_groups=1,
+        gold=terms["loss_true"],
+        correction=terms["loss_correction"],
+        pseudo_gold=terms["loss_pseudo_gold"],
+        extension=terms["loss_external"],
     )

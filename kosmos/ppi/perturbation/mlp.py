@@ -47,6 +47,7 @@ import torch
 from torch import nn
 
 from ..gating import GradientGate
+from ..training import correction_stage
 from .contract import PerturbationExample, PerturbationTask
 from .losses import gears_loss
 from .losses import ppi_signed_correction
@@ -312,6 +313,10 @@ def _train_arm(
     The architecture is identical in all three; only the objective changes.
     """
     optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
+    correction_optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=config.learning_rate * config.stage2_lr_multiplier,
+    )
     history: list[dict[str, Any]] = []
     target_kind = _target_kind(config)
     best_state: dict[str, torch.Tensor] | None = None
@@ -321,6 +326,15 @@ def _train_arm(
 
     for epoch in range(1, config.epochs + 1):
         model.train()
+        use_external = synthetic is not None and config.ppi_lambda > 0
+        in_correction = correction_stage(
+            epoch,
+            use_external=use_external,
+            schedule=config.schedule,
+            stage1_epochs=config.stage1_epochs,
+            stage2_epochs=config.stage2_epochs,
+        )
+        selected_optimizer = correction_optimizer if in_correction else optimizer
         gold_losses: list[float] = []
         synthetic_losses: list[float] = []
         gate_stats_list = []
@@ -338,11 +352,11 @@ def _train_arm(
             gold_loss = _arm_loss(
                 gold_y, gold_delta, target, delta, labels, config, deg_map
             )
-            optimizer.zero_grad(set_to_none=True)
+            selected_optimizer.zero_grad(set_to_none=True)
 
             if mode == "gold" or synthetic is None:
                 gold_loss.backward()
-                optimizer.step()
+                selected_optimizer.step()
                 gold_losses.append(float(gold_loss.detach()))
                 continue
 
@@ -375,6 +389,8 @@ def _train_arm(
             )
 
             if mode == "signed":
+                # The column task's two-stage signed correction: L_gold in
+                # stage one, λ·(L_ext − L_pseudo_gold) alone in stage two.
                 terms = ppi_signed_correction(
                     gold=gold_loss,
                     pseudo_gold=pseudo_loss,
@@ -382,13 +398,14 @@ def _train_arm(
                     coefficient=config.ppi_lambda,
                     mass=1.0,
                 )
-                terms.total.backward()
-                optimizer.step()
-                gold_losses.append(float(terms.total.detach()))
+                objective = terms.correction if in_correction else terms.gold
+                objective.backward()
+                selected_optimizer.step()
+                gold_losses.append(float(objective.detach()))
                 synthetic_losses.append(float(extension_loss.detach()))
             else:  # gated
                 stats = gate.combine(gold_loss, extension_loss, model.parameters())
-                optimizer.step()
+                selected_optimizer.step()
                 gold_losses.append(float(gold_loss.detach()))
                 synthetic_losses.append(float(extension_loss.detach()))
                 gate_stats_list.append(stats)
@@ -396,6 +413,11 @@ def _train_arm(
         validation_metrics = evaluate_mlp(model, validation, task, config)["metrics"]
         entry: dict[str, Any] = {
             "epoch": epoch,
+            "phase": (
+                "gated"
+                if gate is not None
+                else ("correction" if in_correction else ("true" if use_external else "gold"))
+            ),
             "train_gold_loss": float(np.mean(gold_losses)) if gold_losses else float("nan"),
             "train_loss": float(np.mean(gold_losses)) if gold_losses else float("nan"),
             "validation_mse_deg": validation_metrics["summary"]["mse_deg"],

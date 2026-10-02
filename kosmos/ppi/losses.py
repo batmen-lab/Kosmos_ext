@@ -7,6 +7,8 @@ also explicit; neither claims to reproduce scDesign's learnable lambda.
 import torch
 import torch.nn.functional as F
 
+from .training import signed_correction
+
 
 def supervised_per_row(logits, target, *, task_type="classification", label_smoothing=0.0):
     """One loss value per row, for either head, hard labels or soft targets.
@@ -134,19 +136,19 @@ class PPILoss:
         true = self.labeled_term(gold_logits, y_true)
         pseudo = self.labeled_term(gold_logits, y_pseudo)
         ext = torch.zeros_like(true)
-        correction = torch.zeros_like(true)
         if external_logits is not None and weight_mass > 0:
             ext = self.external_term(
                 external_logits, external_pseudo, external_weights, population_size
             )
-            correction = self.coefficient * (ext - weight_mass * pseudo)
-        return {
-            "loss_true": true,
-            "loss_pseudo_gold": pseudo,
-            "loss_correction": correction,
-            "loss_external": ext,
-            "loss_total": true + correction,
-        }
+        # The shared correction: the same algebra the perturbation backend
+        # applies, so both tasks have exactly one definition of "PPI signed".
+        return signed_correction(
+            gold=true,
+            pseudo_gold=pseudo,
+            extension=ext,
+            coefficient=self.coefficient,
+            mass=weight_mass,
+        )
 
 
 class PseudoLabelLoss:

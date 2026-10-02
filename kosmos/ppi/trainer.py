@@ -24,6 +24,7 @@ from .pseudo_labeler import (
     fingerprint,
     prepare_pseudo_labeler,
 )
+from .training import correction_stage as correction_stage_active
 from .schemas import PPITrainingConfig, PPITrainingResult
 from .split import validate_roles
 
@@ -216,10 +217,12 @@ def _fit(
     for epoch in range(1, config.max_epochs + 1):
         if hasattr(loss_fn, "schedule_epoch"):
             loss_fn.schedule_epoch(epoch, config.max_epochs)
-        correction_stage = (
-            use_external
-            and config.schedule == "two_stage"
-            and (epoch - 1) % (config.stage1_epochs + config.stage2_epochs) >= config.stage1_epochs
+        correction_stage = correction_stage_active(
+            epoch,
+            use_external=use_external,
+            schedule=config.schedule,
+            stage1_epochs=config.stage1_epochs,
+            stage2_epochs=config.stage2_epochs,
         )
         selected_optimizer = correction_optimizer if correction_stage else optimizer
         model.train()
