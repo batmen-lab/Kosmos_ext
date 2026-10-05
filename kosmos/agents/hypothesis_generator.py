@@ -252,26 +252,82 @@ class HypothesisGeneratorAgent(BaseAgent):
             papers = self._gather_literature_context(research_question, domain)
             logger.info(f"Gathered {len(papers)} papers for context")
 
-        # Step 3: Generate hypotheses using Claude
-        hypotheses = self._generate_with_claude(
-            research_question=research_question,
-            domain=domain,
-            num_hypotheses=num_hypotheses,
-            context_papers=papers,
-            data_context=data_context,
-            data_driven=data_driven,
-        )
-
-        # Step 4: Validate hypotheses
-        validated_hypotheses = []
-        for hyp in hypotheses:
-            try:
-                if self._validate_hypothesis(hyp):
-                    validated_hypotheses.append(hyp)
-                else:
-                    logger.warning(f"Hypothesis failed validation: {hyp.statement[:50]}...")
-            except Exception as e:
-                logger.error(f"Error validating hypothesis: {e}")
+        # Step 3+4: Generate and validate, TOPPING UP to the requested count.
+        #
+        # A single generate call is not a reliable way to get N hypotheses: the
+        # model returns a VALID array of whatever size it likes (observed 5, then
+        # 3, then 1 across otherwise-identical runs), and nothing asked for the
+        # rest -- so a run that wanted 5 proceeded on 1. The provider's retries
+        # only cover empty/truncated/unparseable responses, not a valid-but-short
+        # one, because only the generator knows the target count. So loop: keep
+        # generating (deduping by statement) until we have `num_hypotheses` valid
+        # ones or we run out of attempts. Bounded, and breaks early if a batch
+        # yields nothing new (generation genuinely failing -- don't spin).
+        validated_hypotheses: List[Hypothesis] = []
+        seen_statements: set = set()
+        max_attempts = max(2, int(os.environ.get("KOSMOS_HYPOTHESIS_MAX_ATTEMPTS", "5")))
+        # OVERSHOOT the per-call request. Asking deepseek for exactly N under the
+        # constrained D4 prompt returns a variable, usually-short count (observed
+        # 1-6 for a request of 5); asking for N+buffer reliably returns ~N+buffer
+        # (a request of 8 returned 8,8). We then dedupe and trim to N. This is the
+        # single most effective lever -- the loop below is the backstop for the
+        # rare short call.
+        buffer = int(os.environ.get("KOSMOS_HYPOTHESIS_OVERSHOOT", "3"))
+        request_n = num_hypotheses + buffer
+        consecutive_empty = 0
+        for attempt in range(max_attempts):
+            if len(validated_hypotheses) >= num_hypotheses:
+                break
+            batch = self._generate_with_claude(
+                research_question=research_question,
+                domain=domain,
+                num_hypotheses=request_n,
+                context_papers=papers,
+                data_context=data_context,
+                data_driven=data_driven,
+                # After the first attempt, tell the model what it already gave so
+                # it adds DISTINCT hypotheses rather than repeating the same few.
+                exclude_statements=[h.statement for h in validated_hypotheses] or None,
+            )
+            added = 0
+            for hyp in batch:
+                key = (hyp.statement or "").strip().lower()
+                if not key or key in seen_statements:
+                    continue  # dedupe across attempts
+                try:
+                    if self._validate_hypothesis(hyp):
+                        seen_statements.add(key)
+                        validated_hypotheses.append(hyp)
+                        added += 1
+                    else:
+                        logger.warning(f"Hypothesis failed validation: {hyp.statement[:50]}...")
+                except Exception as e:
+                    logger.error(f"Error validating hypothesis: {e}")
+            logger.info(
+                "Hypothesis generation attempt %d/%d: +%d new (%d/%d)",
+                attempt + 1, max_attempts, added, len(validated_hypotheses), num_hypotheses,
+            )
+            # A single empty batch is almost always a TRANSIENT flaky structured
+            # response (deepseek occasionally returns no JSON), not a dead end --
+            # the standalone generator returns the full N reliably on retry. So
+            # retry it; only give up after TWO empties in a row, and never while
+            # we still have nothing at all (that is exactly when a retry matters
+            # most -- it is what previously capped a whole run at 1 hypothesis).
+            if not batch:
+                consecutive_empty += 1
+                if consecutive_empty >= 2 and validated_hypotheses:
+                    break
+            else:
+                consecutive_empty = 0
+        # Do NOT trim to num_hypotheses here: keep the overshoot candidates so
+        # novelty filtering (below) has spares to backfill from if it would
+        # otherwise starve the run. The final trim happens AFTER novelty.
+        if len(validated_hypotheses) < num_hypotheses:
+            logger.warning(
+                "Only %d/%d hypotheses after %d attempts (model returned short/empty "
+                "batches); proceeding with what was generated.",
+                len(validated_hypotheses), num_hypotheses, max_attempts,
+            )
 
         logger.info(f"Generated {len(validated_hypotheses)} valid hypotheses")
 
@@ -280,7 +336,7 @@ class HypothesisGeneratorAgent(BaseAgent):
             try:
                 from kosmos.hypothesis.novelty_checker import NoveltyChecker
                 checker = NoveltyChecker(similarity_threshold=1.0 - self.min_novelty_score)
-                novel = []
+                novel, filtered = [], []
                 for hyp in validated_hypotheses:
                     try:
                         report = checker.check_novelty(hyp)
@@ -288,15 +344,38 @@ class HypothesisGeneratorAgent(BaseAgent):
                         if self.require_novelty_check and report.novelty_score < self.min_novelty_score:
                             logger.info("Filtered low-novelty hypothesis (%.2f): %s",
                                         report.novelty_score, hyp.statement[:60])
+                            filtered.append(hyp)
                         else:
                             novel.append(hyp)
                     except Exception as e:
                         logger.warning("Novelty check failed, keeping hypothesis: %s", e)
                         novel.append(hyp)  # Fail open
+                # Novelty FILTERS, but must not STARVE the run. An accumulated DB
+                # of prior-run hypotheses makes a fresh batch look non-novel
+                # (observed 5 -> 1-2 against the 29-row D4 history), which is how
+                # a run that generated five ended up reporting one. So if filtering
+                # left fewer than requested, backfill with the HIGHEST-novelty
+                # filtered ones -- novelty stays a preference (the most-novel
+                # survive and rank first), not a run-killer.
+                if len(novel) < num_hypotheses and filtered:
+                    filtered.sort(key=lambda h: getattr(h, "novelty_score", 0.0), reverse=True)
+                    backfill = filtered[: num_hypotheses - len(novel)]
+                    if backfill:
+                        logger.info(
+                            "Backfilling %d hypothesis(es) by novelty to reach the "
+                            "requested %d (DB-novelty starvation).",
+                            len(backfill), num_hypotheses,
+                        )
+                    novel = novel + backfill
                 validated_hypotheses = novel
                 logger.info(f"After novelty scoring: {len(validated_hypotheses)} hypotheses")
             except ImportError:
                 logger.warning("NoveltyChecker unavailable, skipping novelty scoring")
+
+        # FINAL trim: now that novelty has ranked/filtered (and backfilled), keep
+        # exactly the requested count, most-novel first.
+        validated_hypotheses.sort(key=lambda h: getattr(h, "novelty_score", 0.0), reverse=True)
+        validated_hypotheses = validated_hypotheses[:num_hypotheses]
 
         # Step 5: Store in database if requested
         if store_in_db:
@@ -398,6 +477,7 @@ No explanation needed."""
         context_papers: List[PaperMetadata],
         data_context: Optional[str] = None,
         data_driven: bool = False,
+        exclude_statements: Optional[List[str]] = None,
     ) -> List[Hypothesis]:
         """
         Generate hypotheses using Claude with structured output.
@@ -480,6 +560,21 @@ No explanation needed."""
                     "question needs is absent, say so plainly in the rationale "
                     "and frame the hypothesis over what IS measured — never "
                     "substitute a column for an absent variable.\n\n"
+                    # Why: a discovery question asks WHICH items matter, so the
+                    # finding is the existence of an effect, not its sign. A
+                    # hypothesis that commits the claim to a direction is marked
+                    # rejected the moment the real effect points the other way --
+                    # turning a genuine discovery into a refutation on identical
+                    # numbers. Stated generally; applies to any outcome/predictor.
+                    "DIRECTION BELONGS IN THE RATIONALE, NOT THE CLAIM (for "
+                    "discovery/existence questions — 'which X affect Y'). State "
+                    "each such hypothesis as a NON-ZERO effect in EITHER "
+                    "direction (e.g. 'X has a non-zero effect on Y at FDR<0.05'), "
+                    "and put the expected or observed sign in the rationale. A "
+                    "true effect in the unexpected direction is still a positive "
+                    "finding here. Commit the claim to a specific sign or "
+                    "threshold ONLY when that direction or threshold is itself "
+                    "what the question asks.\n\n"
                 )
             prompt = framing + prompt
 
@@ -524,6 +619,20 @@ No explanation needed."""
                 }
             ]
         }
+
+        # On a top-up attempt, name what has already been proposed so the model
+        # produces DISTINCT additions instead of re-returning the same few ideas.
+        # Under a large, complex prompt deepseek tends to settle on a small set
+        # of hypotheses and repeat it, so dedupe alone stalls below the target;
+        # telling it what to avoid is what actually unlocks the remaining slots.
+        if exclude_statements:
+            _already = "\n".join(f"- {s}" for s in exclude_statements if s)
+            prompt += (
+                "\n\nALREADY PROPOSED — do NOT repeat or lightly reword any of "
+                "these; propose genuinely DISTINCT, non-overlapping hypotheses "
+                "that address different proteins, mechanisms, or tests:\n"
+                f"{_already}\n"
+            )
 
         try:
             # Call Claude with structured output

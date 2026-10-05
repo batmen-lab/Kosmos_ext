@@ -350,37 +350,59 @@ class DataAnalystAgent(BaseAgent):
             result_summary, hypothesis, literature_context
         )
 
-        # Get Claude interpretation
+        system = ("You are an expert scientific data analyst. Provide nuanced, "
+                  "evidence-based interpretations of experimental results. Focus on "
+                  "scientific meaning, not just statistical significance.")
+        # The interpretation is structured output, so take the HARDENED path:
+        # generate_structured uses JSON mode plus the provider's empty /
+        # truncated / unparseable retries. The old `generate()` + find('{') +
+        # json.loads path had none of those, so a single flaky draw (an empty
+        # finish_reason=length reply, or prose without an object) dropped the
+        # whole verdict to the automated fallback -- which writes NO
+        # supports/rejects decision, leaving the hypothesis stuck at 'generated'
+        # and never adjudicated. That was the real cause of "no supported
+        # results". 4096 carries the free-text lists (findings, confounds,
+        # follow-ups); the provider bumps it if a draw truncates.
+        schema = {
+            "hypothesis_supported": "boolean (true if the result supports the hypothesis, false if it refutes it) or null if untestable",
+            "confidence": "float 0.0-1.0",
+            "summary": "string",
+            "key_findings": ["string"],
+            "significance_interpretation": "string",
+            "biological_significance": "string",
+            "comparison_to_prior_work": "string",
+            "potential_confounds": ["string"],
+            "follow_up_experiments": ["string"],
+            "overall_assessment": "string",
+        }
         try:
-            response = self.llm_client.generate(
-                prompt=prompt,
-                system="You are an expert scientific data analyst. Provide nuanced, "
-                       "evidence-based interpretations of experimental results. Focus on "
-                       "scientific meaning, not just statistical significance.",
-                # 4096, not 2000: the interpretation JSON carries several free-
-                # text lists (key findings, confounds, follow-ups) and 2000 was
-                # tight even before reasoning models shared this budget with
-                # their trace. The provider retries without reasoning if the
-                # trace alone exhausts it.
-                max_tokens=4096,
-                temperature=0.3  # Lower temperature for more focused analysis
-            )
+            if hasattr(self.llm_client, "generate_structured"):
+                data = self.llm_client.generate_structured(
+                    prompt=prompt, schema=schema, system=system,
+                    max_tokens=4096, temperature=0.3,
+                )
+                interpretation = self._interpretation_from_data(
+                    data, result.experiment_id, result
+                )
+            else:
+                # A client without structured output (e.g. a bare ClaudeClient):
+                # keep the original free-text parse.
+                response = self.llm_client.generate(
+                    prompt=prompt, system=system, max_tokens=4096, temperature=0.3,
+                )
+                response_text = response.content if hasattr(response, 'content') else str(response)
+                interpretation = self._parse_interpretation_response(
+                    response_text, result.experiment_id, result
+                )
 
-            # Parse Claude's response (extract content from LLMResponse)
-            response_text = response.content if hasattr(response, 'content') else str(response)
-            interpretation = self._parse_interpretation_response(
-                response_text, result.experiment_id, result
-            )
-
-            # Store in history for pattern detection
             self.interpretation_history.append(interpretation)
-
             logger.info(f"Completed interpretation for {result.experiment_id}")
             return interpretation
 
         except Exception as e:
-            logger.error(f"Error getting Claude interpretation: {e}")
-            # Return fallback interpretation
+            logger.error(f"Error getting interpretation: {e}")
+            # Return fallback interpretation (now a genuine last resort, not the
+            # routine outcome of one empty draw).
             return self._create_fallback_interpretation(result)
 
     def _extract_result_summary(self, result: ExperimentResult) -> Dict[str, Any]:
@@ -455,9 +477,23 @@ Statistical Tests:
 """)
 
         for i, test in enumerate(result_summary['statistical_tests'][:3], 1):
+            # `statistic` is a REQUIRED model field, so a test reported as an
+            # effect + p-value (e.g. a correlation's r, or an MR beta) that has no
+            # separate test statistic gets a placeholder 0.0. Rendering that as
+            # "0.0000" reads as a computed zero and gets flagged as a reporting
+            # error -- so show it as "not reported" when it is a 0.0 placeholder
+            # alongside a real effect size, pointing to the effect instead.
+            stat = test['statistic']
+            eff = test['effect_size']
+            if isinstance(stat, (int, float)) and stat == 0.0 and eff not in (None, ""):
+                stat_str = "not reported (see effect size)"
+            elif isinstance(stat, (int, float)):
+                stat_str = f"{stat:.4f}"
+            else:
+                stat_str = str(stat)
             prompt_parts.append(f"""
 Test {i}: {test['test_name']}
-  - Statistic: {test['statistic']:.4f}
+  - Statistic: {stat_str}
   - P-value: {test['p_value']:.6f}
   - Effect Size: {test['effect_size']} ({test['effect_size_type']})
   - Significance: {test['significance_label']}
@@ -533,31 +569,126 @@ Format your response as JSON with the following structure:
             json_str = response[json_start:json_end]
 
             data = json.loads(json_str)
-
-            # Detect anomalies and patterns
-            anomalies = self.detect_anomalies(result) if self.anomaly_detection_enabled else []
-            patterns = []  # Will be populated in pattern detection
-
-            return ResultInterpretation(
-                experiment_id=experiment_id,
-                hypothesis_supported=data.get("hypothesis_supported"),
-                confidence=data.get("confidence", 0.5),
-                summary=data.get("summary", ""),
-                key_findings=data.get("key_findings", []),
-                significance_interpretation=data.get("significance_interpretation", ""),
-                biological_significance=data.get("biological_significance"),
-                comparison_to_prior_work=data.get("comparison_to_prior_work"),
-                potential_confounds=data.get("potential_confounds", []),
-                follow_up_experiments=data.get("follow_up_experiments", []),
-                anomalies_detected=anomalies,
-                patterns_detected=patterns,
-                overall_assessment=data.get("overall_assessment", "")
-            )
+            return self._interpretation_from_data(data, experiment_id, result)
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON from Claude response: {e}")
             logger.debug(f"Response was: {response}")
             return self._create_fallback_interpretation(result)
+
+    # Substrings that, as (part of) a result key with a numeric value, mark a
+    # primary statistical quantity. GENERAL -- no experiment-specific names.
+    _STAT_KEY_TOKENS = (
+        "p_value", "pvalue", "pval", "q_value", "qvalue", "fdr",
+        "effect", "beta", "coef", "estimate", "odds_ratio", "oddsratio",
+        "hazard_ratio", "hazardratio", "correlation", "corr", "rho", "spearman",
+        "pearson", "r_squared", "rsquared", "statistic", "t_stat", "z_score",
+        "zscore", "ci_lower", "ci_upper", "conf_int", "confidence_interval",
+        "slope", "log10p", "chisq", "chi2", "f_stat", "wald",
+    )
+
+    @classmethod
+    def _dict_has_statistic(cls, obj: Any, _depth: int = 0) -> bool:
+        """Does a captured payload contain a stat-named key with a numeric value?
+
+        Bounded recursive scan of the raw/processed result so a genuine result
+        whose statistics were emitted in a custom dict (rather than mapped onto the
+        typed fields) is NOT mistaken for a test-less run.
+        """
+        if _depth > 5 or obj is None:
+            return False
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                norm = str(k).lower().replace(" ", "").replace("-", "_")
+                if any(tok in norm for tok in cls._STAT_KEY_TOKENS):
+                    if isinstance(v, bool):
+                        continue  # a boolean flag named e.g. 'significant' is not a value
+                    if isinstance(v, (int, float)):
+                        return True
+                    if isinstance(v, str):
+                        try:
+                            float(v)
+                            return True
+                        except ValueError:
+                            pass
+                if cls._dict_has_statistic(v, _depth + 1):
+                    return True
+            return False
+        if isinstance(obj, (list, tuple)):
+            return any(cls._dict_has_statistic(v, _depth + 1) for v in obj)
+        return False
+
+    @classmethod
+    def _result_has_statistical_evidence(cls, result: ExperimentResult) -> bool:
+        """Whether the experiment actually produced a primary statistical quantity.
+
+        A verdict (supported/refuted) is only meaningful when SOME statistic was
+        computed -- a p-value, an effect size / coefficient / estimate, a CI, a
+        correlation, or a named test. An experiment that merely completed a
+        data-matching pipeline and emitted descriptive metadata carries none of
+        these, and a true/false verdict over it is unfounded. General: it tests for
+        the PRESENCE of any statistical quantity, never for a specific test.
+        """
+        if getattr(result, "statistical_tests", None):
+            return True
+        for attr in ("primary_p_value", "primary_effect_size",
+                     "primary_ci_lower", "primary_ci_upper"):
+            if getattr(result, attr, None) is not None:
+                return True
+        if getattr(result, "primary_test", None):
+            return True
+        for vr in (getattr(result, "variable_results", None) or []):
+            if getattr(vr, "p_value", None) is not None or \
+               getattr(vr, "effect_size", None) is not None:
+                return True
+        # Stats emitted in a custom shape land in raw_data/processed_data.
+        return (cls._dict_has_statistic(getattr(result, "raw_data", None))
+                or cls._dict_has_statistic(getattr(result, "processed_data", None)))
+
+    def _interpretation_from_data(
+        self,
+        data: Dict[str, Any],
+        experiment_id: str,
+        result: ExperimentResult,
+    ) -> ResultInterpretation:
+        """Build a ResultInterpretation from an already-parsed interpretation dict.
+
+        Shared by the structured-output path and the legacy free-text parser so
+        the field mapping lives in one place.
+        """
+        anomalies = self.detect_anomalies(result) if self.anomaly_detection_enabled else []
+        # Gate an unfounded verdict: if the model returned supported/refuted but the
+        # experiment executed NO primary statistical test, discard the verdict so
+        # the hypothesis lands at INCONCLUSIVE rather than being adjudicated on a
+        # result that never tested it. This is the single chokepoint both the
+        # structured path and the legacy parser build through. We do NOT regenerate
+        # -- the deficiency is in the DATA (no test ran), not in the output's form,
+        # so a re-prompt would only reproduce the same unfounded verdict.
+        hypothesis_supported = data.get("hypothesis_supported")
+        if hypothesis_supported is not None and \
+                not self._result_has_statistical_evidence(result):
+            logger.warning(
+                "Verdict discarded for %s: result carries no primary statistical "
+                "quantity (no p-value/effect/statistic/CI/test); marking "
+                "inconclusive instead of %s.",
+                experiment_id, hypothesis_supported,
+            )
+            hypothesis_supported = None
+        return ResultInterpretation(
+            experiment_id=experiment_id,
+            hypothesis_supported=hypothesis_supported,
+            confidence=data.get("confidence", 0.5),
+            summary=data.get("summary", ""),
+            key_findings=data.get("key_findings", []),
+            significance_interpretation=data.get("significance_interpretation", ""),
+            biological_significance=data.get("biological_significance"),
+            comparison_to_prior_work=data.get("comparison_to_prior_work"),
+            potential_confounds=data.get("potential_confounds", []),
+            follow_up_experiments=data.get("follow_up_experiments", []),
+            anomalies_detected=anomalies,
+            patterns_detected=[],
+            overall_assessment=data.get("overall_assessment", "")
+        )
 
     def _create_fallback_interpretation(self, result: ExperimentResult) -> ResultInterpretation:
         """Create fallback interpretation if Claude fails."""
@@ -583,7 +714,7 @@ Format your response as JSON with the following structure:
             follow_up_experiments=["Manual review needed for recommendations"],
             anomalies_detected=[],
             patterns_detected=[],
-            overall_assessment="Automated fallback interpretation - Claude unavailable"
+            overall_assessment="Automated fallback interpretation - LLM interpretation unavailable (the analyst call failed or the result carried nothing to interpret; see log)"
         )
 
     # ========================================================================

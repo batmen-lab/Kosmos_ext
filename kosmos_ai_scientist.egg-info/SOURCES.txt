@@ -248,6 +248,7 @@ kosmos/agents/research_director.py
 kosmos/agents/skill_loader.py
 kosmos/analysis/__init__.py
 kosmos/analysis/plotly_viz.py
+kosmos/analysis/result_stats.py
 kosmos/analysis/statistics.py
 kosmos/analysis/summarizer.py
 kosmos/analysis/visualization.py
@@ -303,6 +304,9 @@ kosmos/core/providers/litellm_provider.py
 kosmos/core/providers/openai.py
 kosmos/core/utils/__init__.py
 kosmos/core/utils/json_parser.py
+kosmos/data/__init__.py
+kosmos/data/relevance.py
+kosmos/data/table_head.py
 kosmos/datasearch/__init__.py
 kosmos/datasearch/emit.py
 kosmos/db/__init__.py
@@ -326,6 +330,7 @@ kosmos/domains/neuroscience/neurodegeneration.py
 kosmos/domains/neuroscience/ontology.py
 kosmos/domains/physics/__init__.py
 kosmos/evidence/__init__.py
+kosmos/evidence/annotate_preflight.py
 kosmos/evidence/client.py
 kosmos/evidence/federation.py
 kosmos/execution/__init__.py
@@ -388,6 +393,7 @@ kosmos/literature/citations.py
 kosmos/literature/openalex_client.py
 kosmos/literature/pdf_extractor.py
 kosmos/literature/pubmed_client.py
+kosmos/literature/query.py
 kosmos/literature/reference_manager.py
 kosmos/literature/semantic_scholar.py
 kosmos/literature/unified_search.py

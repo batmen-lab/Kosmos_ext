@@ -534,7 +534,48 @@ def materialize_sources(
     out: list[MaterializedSource] = []
     for source in sources:
         out.append(_materialize_one(source, run_root, fetch, stage, _say))
+    _unify_variant_builds(out, _say)
     return out
+
+
+def _unify_variant_builds(
+    materialized: list["MaterializedSource"],
+    say: Callable[[str], None],
+) -> None:
+    """Stamp one build-unified ``variant_key`` across the staged tables.
+
+    General and best-effort. Several omics tables that describe variants are
+    routinely published in DIFFERENT genome builds -- a pQTL or GWAS in GRCh37, a
+    GTEx QTL in GRCh38 -- and the same variant then has different coordinates in
+    each, so a naive join on position silently finds almost nothing. This lifts
+    every staged table into one build (GRCh37/hg19 by default, overridable with
+    ``KOSMOS_UNIFY_BUILD``) and adds a single ``variant_key`` column, which is what
+    lets an experiment relate them at all. It touches only the per-run staged
+    copies, never the operator's originals.
+
+    Driven entirely by conventions in the rows (a build token in a packed id, or
+    liftOver self-consistency for a table carrying two coordinate systems) -- it
+    knows nothing about any particular dataset. Disable with
+    ``KOSMOS_UNIFY_BUILDS=0``. Never raises: on any failure the staged files are
+    left exactly as they were and the run proceeds as if this step did not exist.
+    """
+    if os.environ.get("KOSMOS_UNIFY_BUILDS", "1") == "0":
+        return
+    paths = [str(m.path) for m in materialized if m.has_rows and m.path]
+    if len(paths) < 2:
+        return  # one table (or none) -- nothing to cross-join on a shared key
+    try:
+        from kosmos.data.variant_keys import harmonize_tables
+
+        target = os.environ.get("KOSMOS_UNIFY_BUILD") or None
+        notes = harmonize_tables(paths, target_build=target, log=say)
+        if notes:
+            say(
+                f"  [evidence] unified variant_key across {len(notes)} table(s) "
+                f"in build {target or 'hg19'} -- cross-dataset joins now key-aligned"
+            )
+    except Exception as e:  # pragma: no cover - defensive; never fail the run
+        say(f"  [evidence] variant-key unification skipped: {e}")
 
 
 def _materialize_one(

@@ -80,6 +80,12 @@ class ResearchPlan(BaseModel):
     tested_hypotheses: List[str] = Field(default_factory=list)
     supported_hypotheses: List[str] = Field(default_factory=list)
     rejected_hypotheses: List[str] = Field(default_factory=list)
+    # Tested but with no supported/rejected verdict -- an experiment ran and
+    # produced a result the analyst could not turn into a yes/no (an untestable
+    # null, or a metric the environment could not compute). Kept distinct from
+    # both "never tested" and "rejected" so these neither masquerade as untested
+    # work nor as refuted claims.
+    inconclusive_hypotheses: List[str] = Field(default_factory=list)
 
     # Experiment tracking
     experiment_queue: List[str] = Field(default_factory=list)  # Protocol IDs
@@ -135,6 +141,12 @@ class ResearchPlan(BaseModel):
         """Mark hypothesis as rejected."""
         if hypothesis_id not in self.rejected_hypotheses:
             self.rejected_hypotheses.append(hypothesis_id)
+            self.mark_tested(hypothesis_id)
+
+    def mark_inconclusive(self, hypothesis_id: str):
+        """Mark hypothesis as tested-but-inconclusive (no yes/no verdict)."""
+        if hypothesis_id not in self.inconclusive_hypotheses:
+            self.inconclusive_hypotheses.append(hypothesis_id)
             self.mark_tested(hypothesis_id)
 
     def add_experiment(self, protocol_id: str):

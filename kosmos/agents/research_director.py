@@ -1282,6 +1282,26 @@ class ResearchDirectorAgent(BaseAgent):
             "(different genome builds, units, or identifier conventions), so "
             "choose join keys from the descriptions rather than from the "
             "column names.\n\n"
+            # The dominant failure on the multi-dataset fibrosis runs: the model
+            # merged pQTL+eQTL and then read `BETA_pQTL`, `SE_pQTL`,
+            # `beta_pQTL_h` -- names that exist in NEITHER input and that pandas
+            # never creates. `merge` suffixes shared non-key columns `_x`/`_y`,
+            # not `_pQTL`. Every attempt KeyError'd on the invented name before
+            # computing anything. Spelled out because the general "use actual
+            # columns" rule above is read as applying only to the INPUT files,
+            # not to names the model expects a merge to mint.
+            "AFTER A MERGE OR RENAME, the columns you read must be the ones the "
+            "operation ACTUALLY produces -- never names you expect by "
+            "convention. pandas `merge` does not create semantic suffixes: when "
+            "both frames carry a non-key column of the same name (BETA, SE, "
+            "slope, pval, maf, ...), the result holds `<col>_x` and `<col>_y`, "
+            "NOT `<col>_pQTL`/`<col>_eQTL`. To get meaningful names, RENAME each "
+            "frame BEFORE merging -- e.g. "
+            "`pqtl = pqtl.rename(columns={'BETA': 'BETA_pQTL', 'SE': 'SE_pQTL'})` "
+            "-- and then those names exist; otherwise index the `_x`/`_y` pandas "
+            "produced, or pass an explicit `suffixes=(...)` and use exactly what "
+            "you passed. When unsure, `print(merged.columns.tolist())` right "
+            "after the merge and index only from that list.\n\n"
             # Stated because it was assumed wrongly: GWAS summary statistics are
             # usually distributed as TSV, so the model wrote
             # `pd.read_csv(path, usecols=[...], sep='\t')`. Against a
@@ -1974,25 +1994,35 @@ class ResearchDirectorAgent(BaseAgent):
                 entity = Entity.from_hypothesis(hypothesis, created_by=agent_name)
                 entity_id = self.wm.add_entity(entity)
 
+                # get_hypothesis() returns the SQLAlchemy ORM Hypothesis, which --
+                # unlike the Pydantic model -- has no generation / parent /
+                # refinement_count columns. Read them with getattr defaults, the
+                # same ORM/Pydantic-compatibility pattern Entity.from_hypothesis
+                # uses; a direct attribute access raised AttributeError here and
+                # silently dropped EVERY provenance edge from the graph.
+                generation = getattr(hypothesis, "generation", 1)
+                parent_hypothesis_id = getattr(hypothesis, "parent_hypothesis_id", None)
+                refinement_count = getattr(hypothesis, "refinement_count", 0)
+
                 # Create SPAWNED_BY relationship to research question
                 rel = Relationship.with_provenance(
                     source_id=entity_id,
                     target_id=self.question_entity_id,
                     rel_type="SPAWNED_BY",
                     agent=agent_name,
-                    generation=hypothesis.generation,
+                    generation=generation,
                     iteration=self.research_plan.iteration_count
                 )
                 self.wm.add_relationship(rel)
 
                 # If refined from parent, add REFINED_FROM relationship
-                if hypothesis.parent_hypothesis_id:
+                if parent_hypothesis_id:
                     parent_rel = Relationship.with_provenance(
                         source_id=entity_id,
-                        target_id=hypothesis.parent_hypothesis_id,
+                        target_id=parent_hypothesis_id,
                         rel_type="REFINED_FROM",
                         agent=agent_name,
-                        refinement_count=hypothesis.refinement_count
+                        refinement_count=refinement_count
                     )
                     self.wm.add_relationship(parent_rel)
 
@@ -2494,8 +2524,9 @@ class ResearchDirectorAgent(BaseAgent):
             elif hypothesis_supported is False:
                 self.research_plan.mark_rejected(hypothesis_id)
             else:
-                # Inconclusive
-                self.research_plan.mark_tested(hypothesis_id)
+                # A result exists but yielded no yes/no verdict: tested but
+                # inconclusive, not silently left as if never tested.
+                self.research_plan.mark_inconclusive(hypothesis_id)
 
         # Add SUPPORTS/REFUTES relationship to knowledge graph
         if result_id and hypothesis_id and hypothesis_supported is not None:
@@ -3726,12 +3757,18 @@ class ResearchDirectorAgent(BaseAgent):
                         row.interpretation = "\n\n".join(x for x in parts if x).strip() or None
                         row.key_findings = list(interpretation.key_findings or []) or None
                         row.supports_hypothesis = hypothesis_supported
-                    if hypothesis_id and hypothesis_supported is not None:
+                    if hypothesis_id:
+                        # A result was persisted on this path, so the hypothesis
+                        # was TESTED. Write a terminal status for all three
+                        # outcomes -- including INCONCLUSIVE when there is no
+                        # yes/no verdict -- so a tested hypothesis never stays
+                        # stuck at GENERATED (indistinguishable from untested).
                         db_hyp = get_hypothesis(session, hypothesis_id)
                         if db_hyp is not None:
                             db_hyp.status = (
-                                DBHypStatus.SUPPORTED if hypothesis_supported
-                                else DBHypStatus.REJECTED
+                                DBHypStatus.SUPPORTED if hypothesis_supported is True
+                                else DBHypStatus.REJECTED if hypothesis_supported is False
+                                else DBHypStatus.INCONCLUSIVE
                             )
                             db_hyp.updated_at = datetime.now(timezone.utc)
                     session.commit()
@@ -3749,7 +3786,7 @@ class ResearchDirectorAgent(BaseAgent):
                     elif hypothesis_supported is False:
                         self.research_plan.mark_rejected(hypothesis_id)
                     else:
-                        self.research_plan.mark_tested(hypothesis_id)
+                        self.research_plan.mark_inconclusive(hypothesis_id)
 
             # Add SUPPORTS/REFUTES relationship to knowledge graph
             if result_id and hypothesis_id and hypothesis_supported is not None:

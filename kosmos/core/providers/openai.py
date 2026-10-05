@@ -17,6 +17,11 @@ except ImportError:
     HAS_OPENAI = False
     AsyncOpenAI = None
 
+try:
+    import httpx  # a hard dependency of the openai SDK, so present whenever it is
+except ImportError:  # pragma: no cover
+    httpx = None
+
 from kosmos.core.providers.base import (
     LLMProvider,
     Message,
@@ -31,6 +36,14 @@ logger = logging.getLogger(__name__)
 # Distinguishes "caller passed nothing" from "caller explicitly passed None to
 # mean no reasoning". A plain None default could not tell those apart.
 _UNSET = object()
+
+# Ceiling for the "retry with a bigger budget" self-heal below. When reasoning is
+# already OFF, the reasoning-off retries cannot help an empty/truncated/unparseable
+# structured response -- the only lever left is a larger output budget. max_tokens
+# is a CEILING (a healthy call stops at `stop` well under it), so raising it on a
+# failed structured call costs nothing on the calls that were already fine. Capped
+# so a pathological prompt cannot request an unbounded generation.
+_STRUCT_MAX_TOKENS_CAP = int(os.environ.get("OPENAI_STRUCT_MAX_TOKENS_CAP", "49152"))
 
 
 class OpenAIProvider(LLMProvider):
@@ -119,8 +132,37 @@ class OpenAIProvider(LLMProvider):
         self.temperature = temperature if temperature is not None else 0.7
         self.base_url = get_config_value('base_url') or os.environ.get('OPENAI_BASE_URL')
         self.organization = get_config_value('organization') or os.environ.get('OPENAI_ORGANIZATION')
-        self.timeout = get_config_value('timeout') or 120
+        def _env_float(name):
+            raw = os.environ.get(name)
+            try:
+                return float(raw) if raw not in (None, "") else None
+            except ValueError:
+                return None
+
+        self.timeout = get_config_value('timeout') or _env_float('OPENAI_TIMEOUT') or 120
         self.reasoning_effort = get_config_value('reasoning_effort') or os.environ.get('OPENAI_REASONING_EFFORT')
+
+        # Hard per-request budget so a stalled OpenRouter socket cannot wedge the
+        # run. The bare float timeout the SDK took before set connect == read ==
+        # self.timeout and the client kept the SDK default of ~2 retries, so a
+        # half-open socket (connection ESTABLISHED, no bytes) burned the full
+        # read window on EACH of connect, read, and every retry -- observed as
+        # 16-minute silent hangs on a dead connection the 120s "timeout" never
+        # broke. An explicit httpx.Timeout gives connect a SHORT fuse (a dead
+        # peer fails in seconds, not minutes) while leaving read long enough for
+        # a genuine generation, and OPENAI_MAX_RETRIES caps the multiplier.
+        # Together the worst case is bounded to ~ (retries+1) * read, not open-
+        # ended. Tunable: OPENAI_TIMEOUT (read seconds), OPENAI_CONNECT_TIMEOUT,
+        # OPENAI_MAX_RETRIES.
+        try:
+            self.max_retries = int(os.environ.get('OPENAI_MAX_RETRIES', '1'))
+        except ValueError:
+            self.max_retries = 1
+        _connect = _env_float('OPENAI_CONNECT_TIMEOUT') or 10.0
+        self._http_timeout = (
+            httpx.Timeout(float(self.timeout), connect=_connect, write=30.0, pool=_connect)
+            if httpx is not None else self.timeout
+        )
 
         # Reasoning tokens are drawn from the SAME max_tokens budget as the
         # final answer on OpenRouter's unified reasoning API (this is exactly
@@ -130,7 +172,7 @@ class OpenAIProvider(LLMProvider):
         # the reasoning trace and leave nothing for content. Warned, not
         # silently raised -- an operator's explicit OPENAI_MAX_TOKENS is theirs
         # to keep, but they should know why output might come back empty.
-        if self.reasoning_effort and self.max_tokens < 8192:
+        if self._reasoning_enabled() and self.max_tokens < 8192:
             logger.warning(
                 f"reasoning_effort={self.reasoning_effort!r} is set with "
                 f"max_tokens={self.max_tokens}. Reasoning tokens count against "
@@ -156,6 +198,11 @@ class OpenAIProvider(LLMProvider):
         try:
             client_args = {
                 'api_key': self.api_key,
+                # Bound every request (and the SDK's own retries) at the client
+                # level, so a path that forgets the per-call timeout is still
+                # covered. See the self._http_timeout note above.
+                'timeout': self._http_timeout,
+                'max_retries': self.max_retries,
             }
             if self.base_url:
                 client_args['base_url'] = self.base_url
@@ -174,32 +221,72 @@ class OpenAIProvider(LLMProvider):
             logger.error(f"Failed to initialize OpenAI client: {e}")
             raise ProviderAPIError("openai", f"Failed to initialize: {e}", raw_error=e)
 
-    def _reasoning_extra_body(self, override: Any = _UNSET) -> Dict[str, Any]:
-        """OpenRouter's unified `reasoning` request field, or {} if unset.
+    # Values (case-insensitive) that mean "reasoning OFF" when they appear as the
+    # reasoning_effort config/override. Anything else truthy is treated as an
+    # effort level passed straight through to the provider.
+    _REASONING_OFF_TOKENS = frozenset({"", "off", "none", "false", "no", "disabled", "0"})
 
-        `override` lets one call opt out of reasoning without changing the
-        provider's configuration -- pass None to send no reasoning field at all.
-        `generate_structured` uses this to retry a call that came back
-        unparseable, because reasoning and a long JSON schema compete for the
-        same token budget.
+    def _is_openrouter(self) -> bool:
+        """Whether this provider is talking to OpenRouter (vs plain OpenAI / local).
 
-        `{}` rather than `None` so it can always be splatted into `extra_body`
-        without a conditional at each call site. Only OpenRouter (and providers
-        that adopted the same convention) read this key; a provider that does
-        not recognise it ignores an unknown top-level field, per the OpenAI
-        Chat Completions spec, so this is a no-op rather than an error on a
-        provider that never asked for reasoning support.
+        The `reasoning` request field is an OpenRouter convention. The disable
+        form in particular (`{"enabled": False}`) must be sent ONLY to OpenRouter:
+        a plain OpenAI endpoint rejects unknown top-level fields.
+        """
+        return bool(self.base_url and "openrouter" in self.base_url.lower())
+
+    def _reasoning_is_off(self, override: Any = _UNSET) -> bool:
+        """Is reasoning meant to be OFF for this call?
+
+        True when the effort is unset or one of the explicit "off" tokens. This is
+        the single source of truth the self-heal paths use, so an absent effort is
+        never mistaken for "reasoning is already handled" when, on OpenRouter, the
+        model would reason by default.
         """
         effort = self.reasoning_effort if override is _UNSET else override
-        if not effort:
+        if effort is None:
+            return True
+        return str(effort).strip().lower() in self._REASONING_OFF_TOKENS
+
+    def _reasoning_enabled(self, override: Any = _UNSET) -> bool:
+        """Inverse of :meth:`_reasoning_is_off` -- whether reasoning is ON."""
+        return not self._reasoning_is_off(override)
+
+    def _reasoning_extra_body(self, override: Any = _UNSET) -> Dict[str, Any]:
+        """OpenRouter's unified `reasoning` request field for this call.
+
+        `override` lets one call change reasoning without touching the provider's
+        configuration -- pass None (or an "off" token) to force reasoning off for
+        a retry. `generate_structured` uses this when a call came back empty or
+        unparseable, because reasoning and a long JSON schema compete for the same
+        token budget.
+
+        CRUCIAL on OpenRouter: an ABSENT `reasoning` field is NOT "reasoning off" --
+        it is "use the model's default", and a reasoning model (e.g.
+        deepseek-v4.1) then reasons anyway, draws the reasoning trace from the SAME
+        max_tokens as the answer, and routinely returns content-empty responses at
+        finish_reason=length. So when reasoning is meant to be off we send an
+        EXPLICIT `{"reasoning": {"enabled": False}}` to OpenRouter, which frees the
+        whole budget for the answer. Off OpenRouter we send nothing, because a
+        provider that never implemented the field would reject the unknown key.
+
+        `{}` rather than `None` so it can always be splatted into `extra_body`.
+        """
+        # The `reasoning` field is an OpenRouter convention; a plain OpenAI (or
+        # local) endpoint rejects the unknown top-level key. So NEITHER the enable
+        # nor the disable form may be sent off OpenRouter.
+        if not self._is_openrouter():
             return {}
-        return {"reasoning": {"effort": effort}}
+        if self._reasoning_is_off(override):
+            return {"reasoning": {"enabled": False}}  # explicit disable
+        effort = self.reasoning_effort if override is _UNSET else override
+        return {"reasoning": {"effort": str(effort).strip().lower()}}
 
     def generate(
         self,
         prompt: str,
         system: Optional[str] = None,
-        max_tokens: int = 4096,
+        max_tokens: Optional[int] = None,
         temperature: float = 0.7,
         stop_sequences: Optional[List[str]] = None,
         **kwargs
@@ -210,7 +297,11 @@ class OpenAIProvider(LLMProvider):
         Args:
             prompt: The user prompt
             system: Optional system prompt
-            max_tokens: Maximum tokens to generate
+            max_tokens: Maximum tokens to generate. When omitted, the provider's
+                configured budget (`OPENAI_MAX_TOKENS` / config `max_tokens`) is
+                used rather than a small hard-coded default -- so a deployment that
+                raised the budget for a reasoning model actually gets it on every
+                call, not only the few that pass max_tokens explicitly.
             temperature: Sampling temperature (0.0-1.0)
             stop_sequences: Optional list of stop sequences
             **kwargs: Additional args
@@ -222,6 +313,8 @@ class OpenAIProvider(LLMProvider):
             ProviderAPIError: If the API call fails
         """
         import time as time_module
+        if max_tokens is None:
+            max_tokens = self.max_tokens
         try:
             # Check if LLM call logging is enabled
             log_llm = False
@@ -275,7 +368,7 @@ class OpenAIProvider(LLMProvider):
             reasoning_override = kwargs.get("reasoning_effort", _UNSET)
             response = self.client.chat.completions.create(
                 **api_args,
-                timeout=self.timeout,
+                timeout=self._http_timeout,
                 extra_body=self._reasoning_extra_body(reasoning_override),
             )
 
@@ -295,9 +388,7 @@ class OpenAIProvider(LLMProvider):
             # interpretation. The answer alone fits the budget; ask for it
             # without reasoning, once. JSON-mode requests are handled below by
             # `generate_structured`, which already retries the same way.
-            reasoning_on = bool(
-                self._reasoning_extra_body(reasoning_override)
-            )
+            reasoning_on = self._reasoning_enabled(reasoning_override)
             if (
                 not (_msg.content or "").strip()
                 and finish_reason == "length"
@@ -311,7 +402,7 @@ class OpenAIProvider(LLMProvider):
                 )
                 response = self.client.chat.completions.create(
                     **api_args,
-                    timeout=self.timeout,
+                    timeout=self._http_timeout,
                     extra_body=self._reasoning_extra_body(None),
                 )
                 _msg = response.choices[0].message
@@ -537,7 +628,7 @@ class OpenAIProvider(LLMProvider):
                 messages=openai_messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                timeout=self.timeout,
+                timeout=self._http_timeout,
                 extra_body=self._reasoning_extra_body(),
             )
 
@@ -589,7 +680,7 @@ class OpenAIProvider(LLMProvider):
         prompt: str,
         schema: Dict[str, Any],
         system: Optional[str] = None,
-        max_tokens: int = 4096,
+        max_tokens: Optional[int] = None,
         temperature: float = 0.7,
         **kwargs
     ) -> Dict[str, Any]:
@@ -610,6 +701,8 @@ class OpenAIProvider(LLMProvider):
         Raises:
             ProviderAPIError: If generation or parsing fails
         """
+        if max_tokens is None:
+            max_tokens = self.max_tokens
         try:
             # Add JSON instruction to system prompt
             json_system = (system or "") + "\n\nYou must respond with valid JSON matching this schema:\n" + json.dumps(schema, indent=2)
@@ -630,7 +723,7 @@ class OpenAIProvider(LLMProvider):
             except ProviderAPIError as e:
                 if (
                     getattr(e, "empty_content", False)
-                    and self.reasoning_effort
+                    and self._reasoning_enabled()
                     and gen_kwargs.get("reasoning_effort", _UNSET) is not None
                 ):
                     # The reasoning trace consumed the whole budget and no JSON
@@ -657,6 +750,29 @@ class OpenAIProvider(LLMProvider):
                         **retry_kwargs,
                     )
                     gen_kwargs = retry_kwargs
+                elif getattr(e, "empty_content", False):
+                    # Reasoning is already OFF (so the retry above did not apply),
+                    # yet the model still returned no JSON at finish_reason=length:
+                    # the prompt + schema did not leave room for the answer in this
+                    # budget. Turning reasoning off is not available, so raise the
+                    # ceiling once. Without this the run silently degrades (e.g.
+                    # 1 hypothesis instead of N) because nothing else recovers an
+                    # empty structured response when reasoning was never on.
+                    bumped = min(max_tokens * 2, _STRUCT_MAX_TOKENS_CAP)
+                    if bumped <= max_tokens:
+                        raise
+                    logger.warning(
+                        "Structured output empty (finish_reason=length) with "
+                        "reasoning off; retrying once at max_tokens=%d.", bumped,
+                    )
+                    response = self.generate(
+                        prompt=prompt,
+                        system=json_system,
+                        max_tokens=bumped,
+                        temperature=temperature,
+                        **gen_kwargs,
+                    )
+                    max_tokens = bumped
                 elif "response_format" not in str(getattr(e, "raw_error", "")) and \
                    "response_format" not in str(e):
                     raise
@@ -682,7 +798,7 @@ class OpenAIProvider(LLMProvider):
             # reasoning off, which frees the whole budget for the complete array.
             if (
                 getattr(response, "finish_reason", None) == "length"
-                and self.reasoning_effort
+                and self._reasoning_enabled()
                 and gen_kwargs.get("reasoning_effort", _UNSET) is not None
             ):
                 logger.warning(
@@ -712,6 +828,30 @@ class OpenAIProvider(LLMProvider):
                     # The refetch is a best-effort improvement; if it fails, fall
                     # back to parsing the (short but valid) original.
                     pass
+            elif getattr(response, "finish_reason", None) == "length":
+                # Same truncation, but reasoning is already OFF: the object itself
+                # did not fit the budget. Refetch once at a higher ceiling so the
+                # full array comes back (the parseable-but-short case that leaves a
+                # run on a single hypothesis).
+                bumped = min(max_tokens * 2, _STRUCT_MAX_TOKENS_CAP)
+                if bumped > max_tokens:
+                    logger.warning(
+                        "Structured output truncated (finish_reason=length) with "
+                        "reasoning off; refetching once at max_tokens=%d.", bumped,
+                    )
+                    try:
+                        retry = self.generate(
+                            prompt=prompt,
+                            system=json_system,
+                            max_tokens=bumped,
+                            temperature=temperature,
+                            **gen_kwargs,
+                        )
+                        if (retry.content or "").strip():
+                            response = retry
+                            max_tokens = bumped
+                    except ProviderAPIError:
+                        pass
 
             response_text = response.content
 
@@ -733,7 +873,7 @@ class OpenAIProvider(LLMProvider):
                 # indistinguishable and the retry would never fire on the first
                 # attempt, which is the only attempt that matters.
                 if (
-                    self.reasoning_effort
+                    self._reasoning_enabled()
                     and gen_kwargs.get("reasoning_effort", _UNSET) is not None
                 ):
                     logger.warning(
@@ -750,6 +890,22 @@ class OpenAIProvider(LLMProvider):
                         max_tokens=max_tokens,
                         temperature=temperature,
                         **retry_kwargs,
+                    )
+                    return parse_json_response(retry.content, schema=schema)
+                # Reasoning already OFF: the unparseable text is almost always a
+                # truncation the budget caused. Retry once at a higher ceiling.
+                bumped = min(max_tokens * 2, _STRUCT_MAX_TOKENS_CAP)
+                if bumped > max_tokens:
+                    logger.warning(
+                        "Structured output unparseable with reasoning off; "
+                        "retrying once at max_tokens=%d.", bumped,
+                    )
+                    retry = self.generate(
+                        prompt=prompt,
+                        system=json_system,
+                        max_tokens=bumped,
+                        temperature=temperature,
+                        **gen_kwargs,
                     )
                     return parse_json_response(retry.content, schema=schema)
                 raise

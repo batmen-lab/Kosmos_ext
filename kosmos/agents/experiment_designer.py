@@ -753,14 +753,41 @@ class ExperimentDesignerAgent(BaseAgent):
             parallelization_factor=resource_data.get("parallelization_factor"),
         )
 
+        # The length-constrained string fields (name >= 5, description >= 20,
+        # objective >= 10 on ExperimentProtocol) had defaults that only applied
+        # when the KEY was absent -- but the LLM routinely sends the key with an
+        # EMPTY or too-short value ("description": ""), which sails past `.get`
+        # and fails model validation, raising "Failed to generate protocol" and
+        # burning a whole design iteration (observed repeatedly). Derive each from
+        # the hypothesis when the model's value is missing or under length, the
+        # same defensive parsing the steps/variables above already use. No prompt
+        # or data change -- only makes a thin LLM response parse instead of crash.
+        def _ensure_len(value, minimum, fallback):
+            text = (value or "").strip()
+            if len(text) >= minimum:
+                return text
+            text = (fallback or "").strip()
+            while len(text) < minimum:  # last-resort pad; fallbacks are normally ample
+                text = (text + " " + (hypothesis.statement or "analysis")).strip()
+            return text
+
+        _name = _ensure_len(
+            data.get("name"), 5, f"Experiment for: {hypothesis.statement[:50]}")
+        _objective = _ensure_len(
+            data.get("objective"), 10, f"Test hypothesis: {hypothesis.statement}")
+        _description = _ensure_len(
+            data.get("description"), 20,
+            f"{experiment_type.value.replace('_', ' ').title()} experiment to test "
+            f"the hypothesis: {hypothesis.statement}")
+
         # Create protocol
         protocol = ExperimentProtocol(
-            name=data.get("name", f"Experiment for: {hypothesis.statement[:50]}"),
+            name=_name,
             hypothesis_id=hypothesis.id or "",
             experiment_type=experiment_type,
             domain=hypothesis.domain,
-            description=data.get("description", ""),
-            objective=data.get("objective", f"Test hypothesis: {hypothesis.statement}"),
+            description=_description,
+            objective=_objective,
             steps=steps,
             variables=variables,
             control_groups=control_groups,

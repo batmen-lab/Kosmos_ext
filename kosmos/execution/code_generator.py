@@ -1050,6 +1050,19 @@ class GenericComputationalCodeTemplate(CodeTemplate):
 # (detected at line 54)". That reads like a model that cannot write Python,
 # when it is a model that ran out of room.
 _CODEGEN_MAX_TOKENS = int(os.environ.get("KOSMOS_CODEGEN_MAX_TOKENS", "16384"))
+# Ceiling for RAISING the budget when a script truncates. A multi-dataset MR/coloc
+# script genuinely needs more room than a single-table one; asking the model for a
+# SHORTER script (the old sole response to truncation) degrades the analysis and
+# often truncates again, then falls back to a generic single-table template that
+# produces no statistics. So on a truncation we first give it MORE room, up to this
+# cap, and only ask for brevity once we are already at the ceiling.
+_CODEGEN_MAX_TOKENS_CAP = int(os.environ.get("KOSMOS_CODEGEN_MAX_TOKENS_CAP", "49152"))
+# How many times to (re)draw a script before falling back to the generic
+# single-table template. A complex multi-dataset coloc/MR script hits occasional
+# syntax errors the model CAN fix when handed the error; raising this via
+# KOSMOS_CODEGEN_MAX_ATTEMPTS gives it more cheap redraws before surrendering the
+# whole cross-dataset analysis. Default stays 3 (one failed draw costs one call).
+_CODEGEN_MAX_ATTEMPTS = int(os.environ.get("KOSMOS_CODEGEN_MAX_ATTEMPTS", "3"))
 
 # Syntax errors that mean "the response stopped early" rather than "the model
 # wrote invalid Python". Only these are worth a retry: a genuine syntax error
@@ -1122,7 +1135,13 @@ def _looks_truncated(error: Exception, code: Optional[str] = None) -> bool:
     text = str(error).lower()
     if any(marker in text for marker in _TRUNCATION_MARKERS):
         return True
-    if code and "assigns none of" in text:
+    # Two "the script is incomplete" rejections that are not bracket errors: a
+    # long script that assigns no `results`, and a long script that opens no
+    # dataset. Both are what a draw cut off before its final (or, for the data
+    # load, its only) statement looks like once it still happens to parse. On a
+    # LONG script, answer them with MORE ROOM (a budget-raise redraw), not by
+    # asking for a shorter script -- same reasoning as `assigns none of`.
+    if code and ("assigns none of" in text or "never opens a dataset" in text):
         return len(code.splitlines()) >= _TRUNCATION_MIN_LINES
     return False
 
@@ -1967,7 +1986,7 @@ lines later.{context}"""
         protocol,
         datasets=None,
         fix_hint: Optional[str] = None,
-        max_attempts: int = 3,
+        max_attempts: int = _CODEGEN_MAX_ATTEMPTS,
     ) -> str:
         """Generate code and validate it, escalating when it looks truncated.
 
@@ -1989,6 +2008,8 @@ lines later.{context}"""
         sample rather than a surrender.
         """
         brief = False
+        truncating = False
+        budget = _CODEGEN_MAX_TOKENS
         last_error: Optional[Exception] = None
         for attempt in range(1, max_attempts + 1):
             code = None
@@ -2003,9 +2024,15 @@ lines later.{context}"""
                     datasets=datasets,
                     brief=brief,
                     fix_hint=(
-                        fix_hint if (last_error is None and not brief)
-                        else None if brief else str(last_error)
+                        # First attempt: the caller's hint. A truncation retry
+                        # (more room, or brevity at the ceiling) carries NO
+                        # reason -- the script was cut off, not wrong, so "fix
+                        # your mistake" misleads. Any other rejection carries it.
+                        fix_hint if last_error is None
+                        else None if truncating
+                        else str(last_error)
                     ),
+                    max_tokens=budget,
                 )
                 self._validate_generated(code)
                 if attempt > 1:
@@ -2018,18 +2045,35 @@ lines later.{context}"""
                 last_error = error
                 if attempt == max_attempts:
                     raise
-                # Once asked for, the length limit STAYS on: a second
-                # truncation means the model is still overshooting, and a
-                # fresh sample under the same limit is exactly what the
-                # economics argue for -- one more call against losing the
-                # whole cross-dataset analysis. The attempt budget is what
-                # bounds this, not a rule that gives up at the second strike.
-                brief = brief or _looks_truncated(error, code)
-                logger.warning(
-                    "Generated code rejected on attempt %d/%d (%s); retrying %s",
-                    attempt, max_attempts, error,
-                    "with a length limit" if brief else "with the reason",
-                )
+                truncating = _looks_truncated(error, code)
+                if truncating:
+                    # The script ran out of ROOM, not out of competence. A
+                    # multi-dataset MR/coloc analysis is simply long, so give it
+                    # more budget FIRST -- asking for a shorter script (the old
+                    # behaviour) degrades the analysis and usually truncates
+                    # again, then falls back to a generic single-table template
+                    # that computes no statistics. Only once we are at the
+                    # ceiling do we fall back to asking for brevity.
+                    raised = min(budget * 2, _CODEGEN_MAX_TOKENS_CAP)
+                    if raised > budget:
+                        budget = raised
+                        logger.warning(
+                            "Generated code rejected on attempt %d/%d (%s); "
+                            "retrying with more room (max_tokens=%d)",
+                            attempt, max_attempts, error, budget,
+                        )
+                    else:
+                        brief = True
+                        logger.warning(
+                            "Generated code rejected on attempt %d/%d (%s); at the "
+                            "budget ceiling, retrying with a length limit",
+                            attempt, max_attempts, error,
+                        )
+                else:
+                    logger.warning(
+                        "Generated code rejected on attempt %d/%d (%s); retrying "
+                        "with the reason", attempt, max_attempts, error,
+                    )
         raise last_error  # pragma: no cover - the loop returns or raises
 
     def _generate_with_llm(
@@ -2038,6 +2082,7 @@ lines later.{context}"""
         datasets: Optional[Dict[str, str]] = None,
         brief: bool = False,
         fix_hint: Optional[str] = None,
+        max_tokens: Optional[int] = None,
     ) -> str:
         """Generate code using the configured LLM.
 
@@ -2077,7 +2122,7 @@ lines later.{context}"""
             # script overruns.
             try:
                 response = self.llm_client.generate(
-                    prompt, max_tokens=_CODEGEN_MAX_TOKENS
+                    prompt, max_tokens=max_tokens or _CODEGEN_MAX_TOKENS
                 )
             except TypeError:
                 # A client whose generate() takes no max_tokens.

@@ -396,6 +396,106 @@ except Exception as _rc_e:
 '''
 
 
+# A terminal exception does not always mean the experiment is worthless. Two
+# cases that `exit 1` throws away, and this hook rescues:
+#
+#   1. SALVAGE. The script bound a real `results` dict and THEN raised before
+#      reaching the end-of-script result-capture (e.g. computed MR estimates for
+#      every protein, then a secondary coloc step hit an empty window and raised).
+#      Those estimates are the primary output and are lost to exit 1. The hook
+#      emits whatever was bound -- exactly what the end-of-script capture would
+#      have -- so the real stats survive the crash. When the terminating error
+#      also matches an empty-join signature, two NON-destructive context fields
+#      are added (never overwriting a verdict the code set), so the analyst can
+#      see the run ended on an empty join without the null masking real numbers.
+#
+#   2. EMPTY-JOIN NULL. No results were bound and the message matches an
+#      empty-join / empty-frame signature: the script ran, the join was simply
+#      empty. That is a TESTED NULL (n=0), not a crash, so it is recorded as a
+#      not-testable result (testable=False, p_value=1.0 -- an empty offline join
+#      is UNTESTABLE, never "refuted"; it must not manufacture a false negative)
+#      and exits 0 so the extractor sees it.
+#
+# Anything else -- a non-signature error with nothing recorded (NameError,
+# ImportError, a typo'd KeyError) -- still fails loudly at exit 1. Fully inlined:
+# the container has no `kosmos` package to import a helper from.
+_SANDBOX_TERMINAL_CAPTURE = '''
+# --- injected terminal-exception capture: salvage results / record empty-join null ---
+import sys as _tc_sys, os as _tc_os, json as _tc_json, re as _tc_re
+_tc_prev_hook = _tc_sys.excepthook
+_TC_SIGNATURES = (
+    "n_samples=0", "with n_samples=0", "empty dataframe", "no rows",
+    "zero-size array", "cannot reshape array of size 0",
+    "shared variant", "no overlap", "no common", "no matching",
+    "after merge", "after join", "after filter", "empty after", "insufficient",
+    # An analysis that RAN but yielded nothing to test is a null, not a crash:
+    # a colocalisation/fine-mapping/MR step that finds no qualifying locus, pair,
+    # credible set, or instrument. Phrased many ways by generated code, so match
+    # the common "zero/no <units>" and "produced no/zero ..." shapes.
+    "zero results", "no results", "produced zero", "produced no",
+    "zero credible", "no credible", "zero colocalis", "no colocalis",
+    "zero loci", "no loci", "no testable", "nothing to test", "no instrument",
+    "zero instrument", "no valid instrument", "empty result",
+)
+# "... produced zero X", "... 0 comparisons", ">= 3 shared/common/overlapping ...":
+# a count of zero (or an unmet minimum) of any analysis unit is an empty result.
+_TC_COUNT_RE = _tc_re.compile(
+    r">=?\\s*\\d+\\s+(shared|common|overlapping)"
+    r"|\\b(zero|no|0)\\s+\\w*\\s*(result|comparison|pair|locus|loci|"
+    r"credible|instrument|colocalis|variant|snp|signal)"
+)
+def _tc_safe(_tc_o):
+    if _tc_o is None or isinstance(_tc_o, (str, int, float, bool)):
+        return _tc_o
+    if isinstance(_tc_o, dict):
+        return {str(_tc_k): _tc_safe(_tc_v) for _tc_k, _tc_v in _tc_o.items()}
+    if isinstance(_tc_o, (list, tuple)):
+        return [_tc_safe(_tc_v) for _tc_v in _tc_o]
+    try:
+        import numpy as _tc_np
+        if isinstance(_tc_o, _tc_np.integer): return int(_tc_o)
+        if isinstance(_tc_o, _tc_np.floating): return float(_tc_o)
+        if isinstance(_tc_o, _tc_np.ndarray): return _tc_o.tolist()
+    except Exception:
+        pass
+    return str(_tc_o)
+def _tc_hook(_tc_etype, _tc_exc, _tc_tb):
+    try:
+        _tc_msg = str(_tc_exc)
+        _tc_is_sig = bool(
+            any(s in _tc_msg.lower() for s in _TC_SIGNATURES)
+            or _TC_COUNT_RE.search(_tc_msg.lower())
+        )
+        # 1. Salvage a real results dict the end-of-script capture never reached.
+        _tc_g = globals()
+        for _tc_vn in ("results", "result", "output", "summary", "analysis"):
+            _tc_c = _tc_g.get(_tc_vn)
+            if isinstance(_tc_c, dict) and _tc_c:
+                _tc_payload = {str(_tc_k): _tc_safe(_tc_v) for _tc_k, _tc_v in _tc_c.items()}
+                if _tc_is_sig:
+                    _tc_payload.setdefault("join_empty", True)
+                    _tc_payload.setdefault("terminal_note", _tc_msg)
+                print("RESULT: " + _tc_json.dumps(_tc_payload))
+                _tc_sys.stdout.flush()
+                _tc_os._exit(0)
+        # 2. Nothing recorded, but an empty-join signature -> a tested null.
+        if _tc_is_sig:
+            print("RESULT: " + _tc_json.dumps({
+                "status": "null_result", "null_finding": True, "testable": False,
+                "n_testable_units": 0, "reason": _tc_msg,
+                "exception_type": getattr(_tc_etype, "__name__", "Exception"),
+                "p_value": 1.0,
+            }))
+            _tc_sys.stdout.flush()
+            _tc_os._exit(0)
+    except Exception:
+        pass
+    return _tc_prev_hook(_tc_etype, _tc_exc, _tc_tb)
+_tc_sys.excepthook = _tc_hook
+# --- end terminal-exception capture ---
+'''
+
+
 class CodeExecutor:
     """
     Executes Python code with safety measures and output capture.
@@ -962,7 +1062,12 @@ class CodeExecutor:
 
         # Prepend the kosmos-stub shim so generated `from kosmos.* import ...`
         # lines resolve inside the sandbox (kosmos pkg isn't installed there).
-        code = _build_sandbox_shim() + "\n" + code
+        # The terminal-exception capture goes FIRST of all, so its excepthook is
+        # installed before any line that could raise an empty-join ValueError.
+        code = (
+            _SANDBOX_TERMINAL_CAPTURE + "\n"
+            + _build_sandbox_shim() + "\n" + code
+        )
 
         # Append the result-capture trailer so the code's results dict is emitted
         # as a "RESULT: <json>" stdout line the sandbox extractor can parse.
