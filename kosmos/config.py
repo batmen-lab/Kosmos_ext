@@ -5,8 +5,8 @@ Loads configuration from environment variables and provides validated settings
 for all Kosmos components.
 """
 
-from typing import List, Optional, Literal, Union, Annotated
-from pydantic import Field, field_validator, model_validator, BeforeValidator
+from typing import List, Optional, Literal, Annotated
+from pydantic import Field, model_validator, BeforeValidator
 from pydantic_settings import BaseSettings, SettingsConfigDict, NoDecode
 from pathlib import Path
 import os
@@ -386,13 +386,6 @@ class RedisConfig(BaseSettings):
         description="Enable Redis caching",
         alias="REDIS_ENABLED"
     )
-    max_connections: int = Field(
-        default=50,
-        ge=1,
-        le=1000,
-        description="Maximum connection pool size",
-        alias="REDIS_MAX_CONNECTIONS"
-    )
     socket_timeout: int = Field(
         default=5,
         ge=1,
@@ -407,24 +400,11 @@ class RedisConfig(BaseSettings):
         description="Socket connect timeout in seconds",
         alias="REDIS_SOCKET_CONNECT_TIMEOUT"
     )
-    retry_on_timeout: bool = Field(
-        default=True,
-        description="Retry on timeout",
-        alias="REDIS_RETRY_ON_TIMEOUT"
-    )
     decode_responses: bool = Field(
         default=True,
         description="Decode responses as UTF-8 strings",
         alias="REDIS_DECODE_RESPONSES"
     )
-    default_ttl_seconds: int = Field(
-        default=3600,
-        ge=60,
-        le=86400,
-        description="Default cache TTL in seconds (1 minute to 24 hours)",
-        alias="REDIS_DEFAULT_TTL_SECONDS"
-    )
-
     @property
     def is_available(self) -> bool:
         """Check if Redis is enabled and configured."""
@@ -521,13 +501,6 @@ class LiteratureConfig(BaseSettings):
         description="Email for PubMed E-utilities (recommended)",
         alias="PUBMED_EMAIL"
     )
-    cache_ttl_hours: int = Field(
-        default=48,
-        ge=1,
-        le=168,
-        description="Literature API cache TTL in hours (24-168)",
-        alias="LITERATURE_CACHE_TTL_HOURS"
-    )
     max_results_per_query: int = Field(
         default=100,
         ge=1,
@@ -573,32 +546,6 @@ class VectorDBConfig(BaseSettings):
         description="ChromaDB persistence directory",
         alias="CHROMA_PERSIST_DIRECTORY"
     )
-    pinecone_api_key: Optional[str] = Field(
-        default=None,
-        description="Pinecone API key",
-        alias="PINECONE_API_KEY"
-    )
-    pinecone_environment: Optional[str] = Field(
-        default=None,
-        description="Pinecone environment",
-        alias="PINECONE_ENVIRONMENT"
-    )
-    pinecone_index_name: Optional[str] = Field(
-        default="kosmos",
-        description="Pinecone index name",
-        alias="PINECONE_INDEX_NAME"
-    )
-
-    @model_validator(mode="after")
-    def validate_pinecone_config(self):
-        """Validate Pinecone configuration if selected."""
-        if self.type == "pinecone":
-            if not self.pinecone_api_key:
-                raise ValueError("PINECONE_API_KEY required when using Pinecone")
-            if not self.pinecone_environment:
-                raise ValueError("PINECONE_ENVIRONMENT required when using Pinecone")
-        return self
-
     model_config = SettingsConfigDict(populate_by_name=True)
 
 
@@ -625,36 +572,12 @@ class Neo4jConfig(BaseSettings):
         description="Neo4j database name",
         alias="NEO4J_DATABASE"
     )
-    max_connection_lifetime: int = Field(
-        default=3600,
-        ge=60,
-        description="Max connection lifetime in seconds",
-        alias="NEO4J_MAX_CONNECTION_LIFETIME"
-    )
-    max_connection_pool_size: int = Field(
-        default=50,
-        ge=1,
-        description="Max connection pool size",
-        alias="NEO4J_MAX_CONNECTION_POOL_SIZE"
-    )
-
     model_config = SettingsConfigDict(populate_by_name=True)
 
 
 class SafetyConfig(BaseSettings):
     """Safety and security configuration."""
 
-    enable_safety_checks: bool = Field(
-        default=True,
-        description="Enable code safety checks",
-        alias="ENABLE_SAFETY_CHECKS"
-    )
-    max_experiment_execution_time: int = Field(
-        default=300,
-        ge=1,
-        description="Max execution time for experiments (seconds)",
-        alias="MAX_EXPERIMENT_EXECUTION_TIME"
-    )
     max_memory_mb: int = Field(
         default=2048,
         ge=128,
@@ -666,11 +589,6 @@ class SafetyConfig(BaseSettings):
         ge=0.1,
         description="Maximum CPU cores to use (None = unlimited)",
         alias="MAX_CPU_CORES"
-    )
-    enable_sandboxing: bool = Field(
-        default=True,
-        description="Enable sandboxed code execution",
-        alias="ENABLE_SANDBOXING"
     )
     require_human_approval: bool = Field(
         default=False,
@@ -685,12 +603,6 @@ class SafetyConfig(BaseSettings):
         alias="ETHICAL_GUIDELINES_PATH"
     )
 
-    # Result verification
-    enable_result_verification: bool = Field(
-        default=True,
-        description="Enable result verification",
-        alias="ENABLE_RESULT_VERIFICATION"
-    )
     outlier_threshold: float = Field(
         default=3.0,
         ge=1.0,
@@ -698,41 +610,18 @@ class SafetyConfig(BaseSettings):
         alias="OUTLIER_THRESHOLD"
     )
 
-    # Reproducibility
-    default_random_seed: int = Field(
-        default=42,
-        description="Default random seed for reproducibility",
-        alias="DEFAULT_RANDOM_SEED"
-    )
     capture_environment: bool = Field(
         default=True,
         description="Capture environment snapshots",
         alias="CAPTURE_ENVIRONMENT"
     )
 
-    # Human oversight
-    approval_mode: Literal["blocking", "queue", "automatic", "disabled"] = Field(
-        default="blocking",
-        description="Approval workflow mode (blocking/queue/automatic/disabled)",
-        alias="APPROVAL_MODE"
-    )
     auto_approve_low_risk: bool = Field(
         default=True,
         description="Automatically approve low-risk operations",
         alias="AUTO_APPROVE_LOW_RISK"
     )
 
-    # Notifications
-    notification_channel: Literal["console", "log", "both"] = Field(
-        default="both",
-        description="Notification channel (console/log/both)",
-        alias="NOTIFICATION_CHANNEL"
-    )
-    notification_min_level: Literal["debug", "info", "warning", "error", "critical"] = Field(
-        default="info",
-        description="Minimum notification level (debug/info/warning/error/critical)",
-        alias="NOTIFICATION_MIN_LEVEL"
-    )
     use_rich_formatting: bool = Field(
         default=True,
         description="Use rich formatting for console notifications",
@@ -757,24 +646,12 @@ class SafetyConfig(BaseSettings):
 class PerformanceConfig(BaseSettings):
     """Performance and caching configuration."""
 
-    enable_result_caching: bool = Field(
-        default=True,
-        description="Enable result caching",
-        alias="ENABLE_RESULT_CACHING"
-    )
     cache_ttl: int = Field(
         default=3600,
         ge=0,
         description="Cache TTL in seconds",
         alias="CACHE_TTL"
     )
-    parallel_experiments: int = Field(
-        default=0,
-        ge=0,
-        description="Number of parallel experiments (0 = sequential)",
-        alias="PARALLEL_EXPERIMENTS"
-    )
-
     # Concurrent operations configuration
     enable_concurrent_operations: bool = Field(
         default=False,
@@ -809,127 +686,6 @@ class PerformanceConfig(BaseSettings):
         description="LLM API rate limit per minute",
         alias="LLM_RATE_LIMIT_PER_MINUTE"
     )
-    async_batch_timeout: int = Field(
-        default=300,
-        ge=10,
-        le=3600,
-        description="Timeout for async batch operations (seconds)",
-        alias="ASYNC_BATCH_TIMEOUT"
-    )
-
-    model_config = SettingsConfigDict(populate_by_name=True)
-
-
-class LocalModelConfig(BaseSettings):
-    """Configuration for local models (Ollama, LM Studio, etc.).
-
-    These settings optimize behavior when using local LLM providers
-    that may have different characteristics than cloud APIs.
-    """
-
-    # Retry configuration
-    max_retries: int = Field(
-        default=1,
-        ge=0,
-        le=5,
-        description="Maximum retry attempts for local models (lower than cloud)",
-        alias="LOCAL_MODEL_MAX_RETRIES"
-    )
-
-    # JSON parsing
-    strict_json: bool = Field(
-        default=False,
-        description="Require strict JSON compliance (False allows lenient parsing)",
-        alias="LOCAL_MODEL_STRICT_JSON"
-    )
-
-    json_retry_with_hint: bool = Field(
-        default=True,
-        description="On JSON parse failure, retry with explicit formatting hint",
-        alias="LOCAL_MODEL_JSON_RETRY_HINT"
-    )
-
-    # Timeouts and resource management
-    request_timeout: int = Field(
-        default=120,
-        ge=30,
-        le=600,
-        description="Timeout for local model requests in seconds",
-        alias="LOCAL_MODEL_REQUEST_TIMEOUT"
-    )
-
-    concurrent_requests: int = Field(
-        default=1,
-        ge=1,
-        le=4,
-        description="Max concurrent requests to local model (limited by VRAM)",
-        alias="LOCAL_MODEL_CONCURRENT_REQUESTS"
-    )
-
-    # Graceful degradation
-    fallback_to_unstructured: bool = Field(
-        default=True,
-        description="On structured output failure, try unstructured extraction",
-        alias="LOCAL_MODEL_FALLBACK_UNSTRUCTURED"
-    )
-
-    # Circuit breaker settings
-    circuit_breaker_threshold: int = Field(
-        default=3,
-        ge=1,
-        le=10,
-        description="Consecutive failures before circuit breaker opens",
-        alias="LOCAL_MODEL_CB_THRESHOLD"
-    )
-
-    circuit_breaker_reset_timeout: int = Field(
-        default=60,
-        ge=10,
-        le=300,
-        description="Seconds before circuit breaker allows retry",
-        alias="LOCAL_MODEL_CB_RESET_TIMEOUT"
-    )
-
-    model_config = SettingsConfigDict(populate_by_name=True)
-
-
-class MonitoringConfig(BaseSettings):
-    """Monitoring and metrics configuration."""
-
-    enable_usage_stats: bool = Field(
-        default=True,
-        description="Enable usage statistics tracking",
-        alias="ENABLE_USAGE_STATS"
-    )
-    metrics_export_interval: int = Field(
-        default=60,
-        ge=0,
-        description="Metrics export interval in seconds (0 = disabled)",
-        alias="METRICS_EXPORT_INTERVAL"
-    )
-
-    model_config = SettingsConfigDict(populate_by_name=True)
-
-
-class DevelopmentConfig(BaseSettings):
-    """Development settings."""
-
-    hot_reload: bool = Field(
-        default=False,
-        description="Enable hot reload (development only)",
-        alias="HOT_RELOAD"
-    )
-    log_api_requests: bool = Field(
-        default=False,
-        description="Log all API requests",
-        alias="LOG_API_REQUESTS"
-    )
-    test_mode: bool = Field(
-        default=False,
-        description="Test mode (uses mocks)",
-        alias="TEST_MODE"
-    )
-
     model_config = SettingsConfigDict(populate_by_name=True)
 
 
@@ -1032,7 +788,6 @@ class KosmosConfig(BaseSettings):
     anthropic: Optional[AnthropicConfig] = Field(default_factory=_optional_anthropic_config)  # New name (optional, defaults to claude)
     openai: Optional[OpenAIConfig] = Field(default_factory=_optional_openai_config)  # OpenAI provider config
     litellm: Optional[LiteLLMConfig] = Field(default_factory=LiteLLMConfig)  # LiteLLM multi-provider config
-    local_model: LocalModelConfig = Field(default_factory=LocalModelConfig)  # Local model settings (Ollama, etc.)
     research: ResearchConfig = Field(default_factory=ResearchConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
@@ -1042,8 +797,6 @@ class KosmosConfig(BaseSettings):
     neo4j: Neo4jConfig = Field(default_factory=Neo4jConfig)
     safety: SafetyConfig = Field(default_factory=SafetyConfig)
     performance: PerformanceConfig = Field(default_factory=PerformanceConfig)
-    monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
-    development: DevelopmentConfig = Field(default_factory=DevelopmentConfig)
     world_model: WorldModelConfig = Field(default_factory=WorldModelConfig)
 
     model_config = SettingsConfigDict(
@@ -1113,28 +866,6 @@ class KosmosConfig(BaseSettings):
             pass
         return self
 
-    def get_active_model(self) -> str:
-        """Return the model string for the currently active LLM provider."""
-        provider = self.llm_provider
-        if provider == "litellm":
-            return self.litellm.model
-        elif provider == "anthropic":
-            return self.claude.model
-        elif provider == "openai":
-            return self.openai.model
-        raise ValueError(f"Unknown provider: {provider}")
-
-    def get_active_provider_config(self) -> dict:
-        """Return config dict for the currently active LLM provider."""
-        provider = self.llm_provider
-        if provider == "litellm":
-            return {"model": self.litellm.model, "api_key": self.litellm.api_key, "api_base": self.litellm.api_base}
-        elif provider == "anthropic":
-            return {"model": self.claude.model, "api_key": self.claude.api_key}
-        elif provider == "openai":
-            return {"model": self.openai.model, "api_key": self.openai.api_key}
-        raise ValueError(f"Unknown provider: {provider}")
-
     def create_directories(self):
         """Create necessary directories if they don't exist."""
         # Create log directory
@@ -1165,10 +896,6 @@ class KosmosConfig(BaseSettings):
             elif not self.openai.api_key:
                 missing.append("OPENAI_API_KEY not set (required for openai provider)")
 
-        # Check Pinecone if selected
-        if self.vector_db.type == "pinecone" and not self.vector_db.pinecone_api_key:
-            missing.append("PINECONE_API_KEY not set")
-
         return missing
 
     def to_dict(self) -> dict:
@@ -1190,8 +917,6 @@ class KosmosConfig(BaseSettings):
             "neo4j": model_to_dict(self.neo4j),
             "safety": model_to_dict(self.safety),
             "performance": model_to_dict(self.performance),
-            "monitoring": model_to_dict(self.monitoring),
-            "development": model_to_dict(self.development),
             "world_model": model_to_dict(self.world_model),
         }
 

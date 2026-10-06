@@ -15,12 +15,10 @@ import time
 import logging
 import asyncio
 from typing import Optional
-from datetime import datetime, timezone
 from pathlib import Path
 
 import typer
 from rich.live import Live
-from rich.table import Table
 from rich.panel import Panel
 from rich.progress import (
     Progress,
@@ -30,9 +28,7 @@ from rich.progress import (
     TaskProgressColumn,
     TimeRemainingColumn,
 )
-from rich.layout import Layout
 from rich.markup import escape
-from rich.text import Text
 
 from kosmos.cli.utils import (
     console,
@@ -41,8 +37,6 @@ from kosmos.cli.utils import (
     print_warning,
     print_info,
     get_icon,
-    format_timestamp,
-    create_status_text,
 )
 from kosmos.cli.interactive import run_interactive_mode
 from kosmos.cli.views.results_viewer import ResultsViewer
@@ -707,12 +701,6 @@ def run_research(
             config=flat_config
         )
 
-        # Register director with AgentRegistry for message routing (Issue #66 fix)
-        from kosmos.agents.registry import get_registry
-        registry = get_registry()
-        registry.register(director)
-        logger.info(f"Registered ResearchDirector with AgentRegistry")
-
         # Run research with live progress (async)
         results = asyncio.run(run_with_progress_async(
             director,
@@ -858,22 +846,6 @@ async def run_with_progress_async(
     execution_task = progress.add_task("[green]Executing experiments...", total=100)
     analysis_task = progress.add_task("[magenta]Analyzing results...", total=100)
     iteration_task = progress.add_task("[bright_blue]Research progress...", total=max_iterations)
-
-    # Create current hypothesis table
-    def create_status_table():
-        table = Table(title="Current Status", box=None, show_header=True)
-        table.add_column("Phase", style="cyan")
-        table.add_column("Status", style="white")
-
-        # Get current state from director
-        state = getattr(director.workflow, "current_state", "INITIALIZING")
-        iteration = getattr(director.research_plan, "iteration_count", 0)
-
-        table.add_row("Workflow State", create_status_text(state))
-        table.add_row("Iteration", f"{iteration}/{max_iterations}")
-        table.add_row("Started", format_timestamp(datetime.now(timezone.utc)))
-
-        return table
 
     # Run with live display
     with Live(progress, console=console, refresh_per_second=4):

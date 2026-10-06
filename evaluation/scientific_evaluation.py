@@ -69,12 +69,6 @@ def _reset_eval_state():
     from kosmos.core.claude_cache import reset_claude_cache
     reset_claude_cache()
 
-    from kosmos.agents.registry import get_registry
-    try:
-        get_registry().clear()
-    except Exception:
-        pass
-
     from kosmos.world_model import reset_world_model
     reset_world_model()
 
@@ -296,11 +290,6 @@ async def run_phase2_smoke_test(research_question: str = None, domain: str = Non
         )
         result.add_check("director_created", True)
 
-        # Register with AgentRegistry
-        from kosmos.agents.registry import get_registry
-        registry = get_registry()
-        registry.register(director)
-
         # Generate research plan
         logger.info("Phase 2: Generating research plan...")
         plan_start = time.time()
@@ -456,10 +445,6 @@ async def run_phase3_multi_iteration(research_question: str = None, domain: str 
             config=flat_config,
         )
 
-        from kosmos.agents.registry import get_registry
-        registry = get_registry()
-        registry.register(director)
-
         # Start
         plan = director.generate_research_plan()
         director.start()
@@ -610,19 +595,6 @@ async def run_phase4_dataset_test(research_question: str = None, domain: str = N
     except Exception as e:
         result.add_check("dataset_readable", False, str(e))
 
-    # Test DataProvider loading
-    try:
-        from kosmos.execution.data_provider import DataProvider
-        provider = DataProvider()
-        loaded_df, source = provider.get_data(file_path=str(data_path))
-        result.add_check(
-            "data_provider_loads_csv",
-            loaded_df is not None and len(loaded_df) > 0,
-            f"Loaded {len(loaded_df)} rows via DataProvider (source: {source})",
-        )
-    except Exception as e:
-        result.add_check("data_provider_loads_csv", False, str(e))
-
     # Test with ResearchDirector using data_path
     try:
         from kosmos.agents.research_director import ResearchDirectorAgent
@@ -659,10 +631,6 @@ async def run_phase4_dataset_test(research_question: str = None, domain: str = N
         )
 
         # Run a few steps to see if data is used
-        from kosmos.agents.registry import get_registry
-        registry = get_registry()
-        registry.register(director)
-
         director.generate_research_plan()
         director.start()
 
@@ -690,24 +658,6 @@ async def run_phase4_dataset_test(research_question: str = None, domain: str = N
 
     except Exception as e:
         result.add_check("director_with_data", False, f"{type(e).__name__}: {e}")
-
-    # Test multi-format support
-    logger.info("Phase 4: Testing multi-format data loading...")
-    try:
-        from kosmos.execution.data_provider import DataProvider
-        import inspect
-        source = inspect.getsource(DataProvider.get_data)
-        formats_supported = []
-        for fmt in [".tsv", ".parquet", ".json", ".jsonl", ".csv"]:
-            if fmt in source or fmt.lstrip(".") in source:
-                formats_supported.append(fmt)
-        result.add_check(
-            "multi_format_support",
-            len(formats_supported) >= 3,
-            f"Formats in get_data: {formats_supported}",
-        )
-    except Exception as e:
-        result.add_check("multi_format_support", False, str(e))
 
     failed = sum(1 for c in result.checks if not c["passed"])
     if failed > 0:
@@ -884,48 +834,7 @@ def run_phase6_rigor_scorecard() -> PhaseResult:
         rigor_scores["assumption_checking"] = {"score": 0, "error": str(e)}
         result.add_check("assumption_checking", False, str(e))
 
-    # 4. Effect size randomization
-    try:
-        import inspect
-        from kosmos.execution.data_provider import SyntheticDataGenerator
-        src = inspect.getsource(SyntheticDataGenerator)
-        has_randomize = "randomize_effect_size" in src or "_randomize_effect_size" in src
-
-        rigor_scores["effect_size_randomization"] = {
-            "score": 7 if has_randomize else 2,
-            "implemented": has_randomize,
-            "notes": "30% null, 20% small, 20% medium, 30% large effect distribution",
-        }
-        result.add_check("effect_size_randomization", has_randomize)
-    except Exception as e:
-        rigor_scores["effect_size_randomization"] = {"score": 0, "error": str(e)}
-        result.add_check("effect_size_randomization", False, str(e))
-
-    # 5. Multi-format data loading
-    try:
-        import inspect
-        from kosmos.execution.data_provider import DataProvider
-        src = inspect.getsource(DataProvider.get_data)
-        formats = {
-            "tsv": ".tsv" in src or "sep='\\t'" in src or 'sep="\\t"' in src,
-            "parquet": "parquet" in src,
-            "json": ".json" in src,
-            "jsonl": "jsonl" in src or "lines=True" in src,
-            "csv": ".csv" in src or "read_csv" in src,
-        }
-        count = sum(formats.values())
-
-        rigor_scores["multi_format_loading"] = {
-            "score": min(10, count * 2),
-            "formats": formats,
-            "notes": f"{count}/5 formats supported",
-        }
-        result.add_check("multi_format_loading", count >= 3)
-    except Exception as e:
-        rigor_scores["multi_format_loading"] = {"score": 0, "error": str(e)}
-        result.add_check("multi_format_loading", False, str(e))
-
-    # 6. Convergence criteria
+    # 4. Convergence criteria
     try:
         from kosmos.core.convergence import ConvergenceDetector
         detector = ConvergenceDetector()
@@ -947,7 +856,7 @@ def run_phase6_rigor_scorecard() -> PhaseResult:
         rigor_scores["convergence_criteria"] = {"score": 0, "error": str(e)}
         result.add_check("convergence_criteria", False, str(e))
 
-    # 7. Reproducibility (seeds)
+    # 5. Reproducibility (seeds)
     try:
         from kosmos.safety.reproducibility import ReproducibilityManager
         mgr = ReproducibilityManager()
@@ -963,7 +872,7 @@ def run_phase6_rigor_scorecard() -> PhaseResult:
         rigor_scores["reproducibility"] = {"score": 0, "error": str(e)}
         result.add_check("reproducibility", False, str(e))
 
-    # 8. Cost tracking
+    # 6. Cost tracking
     try:
         from kosmos.core.metrics import get_metrics
         metrics = get_metrics()
@@ -1020,7 +929,7 @@ def run_phase7_paper_compliance(
         1,
         "Input: objective + CSV dataset",
         "PASS" if p4_data_path_works else "PARTIAL",
-        "CLI --data-path flag works, DataProvider loads CSV. "
+        "CLI --data-path flag works and the director accepts the CSV. "
         f"Phase 4 status: {phase4_result.status}",
     ))
 
@@ -1170,17 +1079,13 @@ def run_phase7_paper_compliance(
         claims.append(claim(14, "Neo4j knowledge graph", "PARTIAL", str(e)))
 
     # 15. Reports with citations
-    try:
-        from kosmos.analysis.summarizer import ResultSummarizer
-        claims.append(claim(
-            15,
-            "Reports with citations",
-            "PARTIAL",
-            "ResultsSummarizer exists. Citation quality depends on "
-            "LiteratureAnalyzer integration.",
-        ))
-    except ImportError:
-        claims.append(claim(15, "Reports with citations", "PARTIAL", "Summarizer not importable"))
+    claims.append(claim(
+        15,
+        "Reports with citations",
+        "PARTIAL",
+        "Reports are assembled from the DB by cli/views/results_viewer.py; "
+        "there is no LLM report summarizer.",
+    ))
 
     result.details["paper_claims"] = claims
 

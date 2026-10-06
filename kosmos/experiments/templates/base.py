@@ -388,10 +388,6 @@ class TemplateRegistry:
         - kosmos.experiments.templates.biology
         - kosmos.experiments.templates.neuroscience
         - kosmos.experiments.templates.materials
-
-        Note: General templates (computational, data_analysis, literature_synthesis)
-        are already registered via their module-level register_template() calls,
-        so they are skipped here to avoid circular imports.
         """
         # Domain template packages to discover
         template_packages = [

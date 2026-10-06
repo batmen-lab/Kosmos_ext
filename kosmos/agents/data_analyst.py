@@ -7,13 +7,13 @@ identifying anomalies, and generating scientific insights.
 
 import logging
 import json
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 import numpy as np
 
-from kosmos.agents.base import BaseAgent, AgentMessage, MessageType, AgentStatus
+from kosmos.agents.base import BaseAgent, AgentStatus
 from kosmos.core.llm import get_client
-from kosmos.models.result import ExperimentResult, ResultStatus, StatisticalTestResult
+from kosmos.models.result import ExperimentResult
 from kosmos.models.hypothesis import Hypothesis
 
 logger = logging.getLogger(__name__)
@@ -218,106 +218,6 @@ class DataAnalystAgent(BaseAgent):
         finally:
             self.status = AgentStatus.IDLE
             self.tasks_completed += 1
-
-    def analyze(
-        self,
-        results: List[ExperimentResult],
-        hypothesis: Optional[Hypothesis] = None,
-        literature_context: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """
-        Analyze multiple experiment results and synthesize findings.
-
-        This is a convenience method that combines result interpretation
-        and pattern detection for batch analysis of results.
-
-        Args:
-            results: List of ExperimentResult objects to analyze
-            hypothesis: Optional hypothesis being tested
-            literature_context: Optional literature context string
-
-        Returns:
-            Dict with:
-                - individual_analyses: List of interpretations per result
-                - synthesis: Overall synthesis of findings
-                - patterns: Detected patterns across results
-                - anomalies: Detected anomalies
-
-        Example:
-            ```python
-            analysis = agent.analyze(
-                results=[result1, result2],
-                hypothesis=hypothesis
-            )
-            print(f"Synthesis: {analysis['synthesis']}")
-            ```
-        """
-        individual_analyses = []
-        all_anomalies = []
-
-        # Analyze each result individually
-        for result in results:
-            try:
-                interpretation = self.interpret_results(
-                    result=result,
-                    hypothesis=hypothesis,
-                    literature_context=literature_context
-                )
-                individual_analyses.append(interpretation)
-
-                # Detect anomalies if enabled
-                if self.anomaly_detection_enabled:
-                    anomalies = self.detect_anomalies(result)
-                    all_anomalies.extend(anomalies)
-
-            except Exception as e:
-                logger.warning(f"Failed to analyze result {result.id}: {e}")
-
-        # Detect patterns across all results
-        patterns = []
-        if len(results) > 1 and self.pattern_detection_enabled:
-            patterns = self.detect_patterns_across_results(results)
-
-        # Generate synthesis
-        synthesis = self._generate_synthesis(individual_analyses, patterns)
-
-        return {
-            "individual_analyses": individual_analyses,
-            "synthesis": synthesis,
-            "patterns": patterns,
-            "anomalies": all_anomalies
-        }
-
-    def _generate_synthesis(
-        self,
-        analyses: List['ResultInterpretation'],
-        patterns: List[str]
-    ) -> str:
-        """Generate a synthesis of multiple analyses."""
-        if not analyses:
-            return "No results to synthesize."
-
-        supported_count = sum(1 for a in analyses if a.hypothesis_supported)
-        total_count = len(analyses)
-
-        synthesis_parts = [
-            f"Analyzed {total_count} experiment results.",
-            f"{supported_count}/{total_count} results support the hypothesis." if total_count > 0 else "",
-        ]
-
-        if patterns:
-            synthesis_parts.append(f"Detected {len(patterns)} patterns across results.")
-
-        # Aggregate key findings
-        all_findings = []
-        for a in analyses:
-            if hasattr(a, 'key_findings'):
-                all_findings.extend(a.key_findings[:2])  # Top 2 findings per analysis
-
-        if all_findings:
-            synthesis_parts.append(f"Key findings: {'; '.join(all_findings[:5])}")
-
-        return " ".join(filter(None, synthesis_parts))
 
     # ========================================================================
     # RESULT INTERPRETATION
@@ -883,100 +783,3 @@ Format your response as JSON with the following structure:
     # ========================================================================
     # SIGNIFICANCE INTERPRETATION
     # ========================================================================
-
-    def interpret_significance(
-        self,
-        p_value: float,
-        effect_size: Optional[float],
-        sample_size: Optional[int]
-    ) -> str:
-        """
-        Provide nuanced interpretation of statistical significance.
-
-        Goes beyond "p < 0.05 = significant" to explain:
-        - Strength of evidence
-        - Practical vs statistical significance
-        - Role of sample size
-
-        Args:
-            p_value: P-value from statistical test
-            effect_size: Effect size (e.g., Cohen's d)
-            sample_size: Sample size
-
-        Returns:
-            str: Interpretation of significance
-        """
-        interpretation_parts = []
-
-        # Statistical significance level
-        if p_value < 0.001:
-            interpretation_parts.append(
-                f"The p-value (p={p_value:.6f}) provides very strong evidence against "
-                f"the null hypothesis (p < 0.001)."
-            )
-        elif p_value < 0.01:
-            interpretation_parts.append(
-                f"The p-value (p={p_value:.4f}) provides strong evidence against "
-                f"the null hypothesis (p < 0.01)."
-            )
-        elif p_value < 0.05:
-            interpretation_parts.append(
-                f"The p-value (p={p_value:.4f}) provides moderate evidence against "
-                f"the null hypothesis (p < 0.05), meeting conventional significance threshold."
-            )
-        elif p_value < 0.1:
-            interpretation_parts.append(
-                f"The p-value (p={p_value:.4f}) provides suggestive but inconclusive evidence "
-                f"(0.05 < p < 0.1). This may warrant further investigation."
-            )
-        else:
-            interpretation_parts.append(
-                f"The p-value (p={p_value:.4f}) does not provide sufficient evidence to reject "
-                f"the null hypothesis (p > 0.1)."
-            )
-
-        # Effect size interpretation
-        if effect_size is not None:
-            if abs(effect_size) < 0.2:
-                size_label = "negligible"
-            elif abs(effect_size) < 0.5:
-                size_label = "small"
-            elif abs(effect_size) < 0.8:
-                size_label = "medium"
-            else:
-                size_label = "large"
-
-            interpretation_parts.append(
-                f"The effect size ({effect_size:.3f}) is {size_label}, indicating "
-                f"{'a practically meaningful difference' if abs(effect_size) >= 0.5 else 'limited practical significance'}."
-            )
-
-            # Check for mismatch
-            is_stat_sig = p_value < 0.05
-            is_pract_sig = abs(effect_size) >= 0.5
-
-            if is_stat_sig and not is_pract_sig:
-                interpretation_parts.append(
-                    "⚠ Note: While statistically significant, the small effect size suggests "
-                    "limited practical importance. This may be due to large sample size."
-                )
-            elif not is_stat_sig and is_pract_sig:
-                interpretation_parts.append(
-                    "⚠ Note: While not statistically significant, the large effect size suggests "
-                    "potential practical importance. This may be due to small sample size or high variance."
-                )
-
-        # Sample size interpretation
-        if sample_size is not None:
-            if sample_size < 30:
-                interpretation_parts.append(
-                    f"The small sample size (n={sample_size}) limits statistical power. "
-                    f"Results should be interpreted with caution."
-                )
-            elif sample_size > 1000:
-                interpretation_parts.append(
-                    f"The large sample size (n={sample_size}) provides high statistical power, "
-                    f"making even small effects statistically significant."
-                )
-
-        return " ".join(interpretation_parts)

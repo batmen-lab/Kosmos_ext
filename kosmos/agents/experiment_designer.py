@@ -12,14 +12,12 @@ import json
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 
-from kosmos.agents.base import BaseAgent, AgentMessage, MessageType, AgentStatus
+from kosmos.agents.base import BaseAgent
 from kosmos.core.llm import get_client
 from kosmos.core.prompts import EXPERIMENT_DESIGNER
-from kosmos.utils.compat import model_to_dict
 from kosmos.models.hypothesis import Hypothesis, ExperimentType
 from kosmos.models.experiment import (
     ExperimentProtocol,
-    ExperimentDesignRequest,
     ExperimentDesignResponse,
     ProtocolStep,
     Variable,
@@ -28,10 +26,8 @@ from kosmos.models.experiment import (
     ResourceRequirements,
     StatisticalTestSpec,
     StatisticalTest,
-    ValidationCheck,
 )
 from kosmos.experiments.templates.base import (
-    TemplateBase,
     get_template_registry,
     TemplateCustomizationParams,
 )
@@ -105,61 +101,6 @@ class ExperimentDesignerAgent(BaseAgent):
         self.template_registry = get_template_registry()
 
         logger.info(f"Initialized ExperimentDesignerAgent {self.agent_id}")
-
-    def execute(self, message):
-        """
-        Execute agent task from message.
-
-        Args:
-            message: AgentMessage with task details
-
-        Returns:
-            AgentMessage: Response message with results
-        """
-        self.status = AgentStatus.WORKING
-
-        try:
-            task_type = message.content.get("task_type")
-
-            if task_type == "design_experiment":
-                hypothesis_id = message.content.get("hypothesis_id")
-                hypothesis = message.content.get("hypothesis")
-                preferred_type = message.content.get("preferred_experiment_type")
-                max_cost = message.content.get("max_cost_usd")
-                max_duration = message.content.get("max_duration_days")
-
-                response = self.design_experiment(
-                    hypothesis=hypothesis,
-                    hypothesis_id=hypothesis_id,
-                    preferred_experiment_type=preferred_type,
-                    max_cost_usd=max_cost,
-                    max_duration_days=max_duration
-                )
-
-                return AgentMessage(
-                    type=MessageType.RESPONSE,
-                    from_agent=self.agent_id,
-                    to_agent=message.from_agent,
-                    content={"response": model_to_dict(response)},
-                    correlation_id=message.correlation_id
-                )
-
-            else:
-                raise ValueError(f"Unknown task type: {task_type}")
-
-        except Exception as e:
-            logger.error(f"Error executing task: {e}", exc_info=True)
-            self.status = AgentStatus.ERROR
-            return AgentMessage(
-                type=MessageType.ERROR,
-                from_agent=self.agent_id,
-                to_agent=message.from_agent,
-                content={"error": str(e)},
-                correlation_id=message.correlation_id
-            )
-
-        finally:
-            self.status = AgentStatus.IDLE
 
     def design_experiment(
         self,
@@ -297,58 +238,6 @@ class ExperimentDesignerAgent(BaseAgent):
         )
 
         return response
-
-    def design_experiments(
-        self,
-        hypotheses: List[Hypothesis],
-        preferred_experiment_type: Optional[ExperimentType] = None,
-        max_cost_usd: Optional[float] = None,
-        max_duration_days: Optional[float] = None,
-        store_in_db: bool = True
-    ) -> List[ExperimentDesignResponse]:
-        """
-        Design experimental protocols for multiple hypotheses.
-
-        This is a convenience wrapper around design_experiment() for batch
-        processing of multiple hypotheses.
-
-        Args:
-            hypotheses: List of Hypothesis objects to design experiments for
-            preferred_experiment_type: Preferred experiment type for all
-            max_cost_usd: Maximum cost constraint per experiment
-            max_duration_days: Maximum duration constraint per experiment
-            store_in_db: Whether to store protocols in database
-
-        Returns:
-            List of ExperimentDesignResponse objects, one per hypothesis
-
-        Example:
-            ```python
-            responses = agent.design_experiments(
-                hypotheses=[h1, h2, h3],
-                preferred_experiment_type=ExperimentType.COMPUTATIONAL
-            )
-            for resp in responses:
-                print(f"Protocol: {resp.protocol.name}")
-            ```
-        """
-        responses = []
-        for hypothesis in hypotheses:
-            try:
-                response = self.design_experiment(
-                    hypothesis=hypothesis,
-                    preferred_experiment_type=preferred_experiment_type,
-                    max_cost_usd=max_cost_usd,
-                    max_duration_days=max_duration_days,
-                    store_in_db=store_in_db
-                )
-                responses.append(response)
-            except Exception as e:
-                logger.warning(f"Failed to design experiment for hypothesis {hypothesis.id}: {e}")
-                # Continue with remaining hypotheses
-
-        logger.info(f"Designed {len(responses)} experiments for {len(hypotheses)} hypotheses")
-        return responses
 
     def _load_hypothesis(self, hypothesis_id: str) -> Hypothesis:
         """Load hypothesis from database."""
@@ -1045,27 +934,3 @@ Return ONLY a JSON object with suggested enhancements (keep it concise).
             else:
                 logger.error(f"Error storing protocol: {e}")
                 raise
-
-    def list_templates(
-        self,
-        experiment_type: Optional[ExperimentType] = None,
-        domain: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        List available templates.
-
-        Args:
-            experiment_type: Filter by experiment type
-            domain: Filter by domain
-
-        Returns:
-            List of template metadata dictionaries
-        """
-        if experiment_type:
-            templates = self.template_registry.get_templates_by_type(experiment_type)
-        elif domain:
-            templates = self.template_registry.get_templates_by_domain(domain)
-        else:
-            templates = list(self.template_registry)
-
-        return [model_to_dict(template.metadata) for template in templates]

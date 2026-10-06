@@ -10,15 +10,12 @@ import os
 import time
 import uuid
 from typing import List, Dict, Any, Optional
-from datetime import datetime
 
-from kosmos.agents.base import BaseAgent, AgentMessage, MessageType, AgentStatus
+from kosmos.agents.base import BaseAgent
 from kosmos.core.llm import get_client
-from kosmos.utils.compat import model_to_dict
 from kosmos.core.prompts import HYPOTHESIS_GENERATOR
 from kosmos.models.hypothesis import (
     Hypothesis,
-    HypothesisGenerationRequest,
     HypothesisGenerationResponse,
     HypothesisStatus,
     ExperimentType
@@ -151,57 +148,6 @@ class HypothesisGeneratorAgent(BaseAgent):
         self.literature_search = UnifiedLiteratureSearch() if self.use_literature_context else None
 
         logger.info(f"Initialized HypothesisGeneratorAgent {self.agent_id}")
-
-    def execute(self, message):
-        """
-        Execute agent task from message.
-
-        Args:
-            message: AgentMessage with task details
-
-        Returns:
-            AgentMessage: Response message with results
-        """
-        self.status = AgentStatus.WORKING
-
-        try:
-            task_type = message.content.get("task_type")
-
-            if task_type == "generate_hypotheses":
-                research_question = message.content.get("research_question")
-                num_hypotheses = message.content.get("num_hypotheses", self.num_hypotheses)
-                domain = message.content.get("domain")
-
-                response = self.generate_hypotheses(
-                    research_question=research_question,
-                    num_hypotheses=num_hypotheses,
-                    domain=domain
-                )
-
-                return AgentMessage(
-                    type=MessageType.RESPONSE,
-                    from_agent=self.agent_id,
-                    to_agent=message.from_agent,
-                    content={"response": model_to_dict(response)},
-                    correlation_id=message.correlation_id
-                )
-
-            else:
-                raise ValueError(f"Unknown task type: {task_type}")
-
-        except Exception as e:
-            logger.error(f"Error executing task: {e}", exc_info=True)
-            self.status = AgentStatus.ERROR
-            return AgentMessage(
-                type=MessageType.ERROR,
-                from_agent=self.agent_id,
-                to_agent=message.from_agent,
-                content={"error": str(e)},
-                correlation_id=message.correlation_id
-            )
-
-        finally:
-            self.status = AgentStatus.IDLE
 
     def generate_hypotheses(
         self,
@@ -762,96 +708,3 @@ No explanation needed."""
         except Exception as e:
             logger.error(f"Error storing hypothesis: {e}", exc_info=True)
             return None
-
-    def get_hypothesis_by_id(self, hypothesis_id: str) -> Optional[Hypothesis]:
-        """
-        Retrieve hypothesis from database by ID.
-
-        Args:
-            hypothesis_id: Hypothesis ID
-
-        Returns:
-            Optional[Hypothesis]: Hypothesis if found
-        """
-        try:
-            with get_session() as session:
-                db_hyp = session.query(DBHypothesis).filter(DBHypothesis.id == hypothesis_id).first()
-
-                if not db_hyp:
-                    return None
-
-                # Convert DB model to Pydantic model
-                hypothesis = Hypothesis(
-                    id=db_hyp.id,
-                    research_question=db_hyp.research_question,
-                    statement=db_hyp.statement,
-                    rationale=db_hyp.rationale,
-                    domain=db_hyp.domain,
-                    status=HypothesisStatus(db_hyp.status.value),
-                    testability_score=db_hyp.testability_score,
-                    novelty_score=db_hyp.novelty_score,
-                    confidence_score=db_hyp.confidence_score,
-                    related_papers=db_hyp.related_papers or [],
-                    created_at=db_hyp.created_at,
-                    updated_at=db_hyp.updated_at
-                )
-
-                return hypothesis
-
-        except Exception as e:
-            logger.error(f"Error retrieving hypothesis: {e}", exc_info=True)
-            return None
-
-    def list_hypotheses(
-        self,
-        domain: Optional[str] = None,
-        status: Optional[HypothesisStatus] = None,
-        limit: int = 100
-    ) -> List[Hypothesis]:
-        """
-        List hypotheses from database with optional filtering.
-
-        Args:
-            domain: Filter by domain
-            status: Filter by status
-            limit: Maximum number to return
-
-        Returns:
-            List[Hypothesis]: Matching hypotheses
-        """
-        try:
-            with get_session() as session:
-                query = session.query(DBHypothesis)
-
-                if domain:
-                    query = query.filter(DBHypothesis.domain == domain)
-
-                if status:
-                    db_status = DBHypothesisStatus(status.value)
-                    query = query.filter(DBHypothesis.status == db_status)
-
-                query = query.order_by(DBHypothesis.created_at.desc()).limit(limit)
-
-                hypotheses = []
-                for db_hyp in query.all():
-                    hypothesis = Hypothesis(
-                        id=db_hyp.id,
-                        research_question=db_hyp.research_question,
-                        statement=db_hyp.statement,
-                        rationale=db_hyp.rationale,
-                        domain=db_hyp.domain,
-                        status=HypothesisStatus(db_hyp.status.value),
-                        testability_score=db_hyp.testability_score,
-                        novelty_score=db_hyp.novelty_score,
-                        confidence_score=db_hyp.confidence_score,
-                        related_papers=db_hyp.related_papers or [],
-                        created_at=db_hyp.created_at,
-                        updated_at=db_hyp.updated_at
-                    )
-                    hypotheses.append(hypothesis)
-
-                return hypotheses
-
-        except Exception as e:
-            logger.error(f"Error listing hypotheses: {e}", exc_info=True)
-            return []

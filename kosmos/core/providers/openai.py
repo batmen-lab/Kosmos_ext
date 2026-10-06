@@ -922,9 +922,8 @@ class OpenAIProvider(LLMProvider):
                     f"Local models may not reliably produce structured JSON output.\n\n"
                     f"Suggestions:\n"
                     f"  1. Try a larger model (e.g., llama3.1:70b instead of :8b)\n"
-                    f"  2. Set LOCAL_MODEL_STRICT_JSON=false for lenient parsing\n"
-                    f"  3. Use a cloud provider for complex structured outputs\n"
-                    f"  4. Simplify the JSON schema if possible\n"
+                    f"  2. Use a cloud provider for complex structured outputs\n"
+                    f"  3. Simplify the JSON schema if possible\n"
                     f"{'='*60}"
                 )
 
@@ -945,7 +944,7 @@ class OpenAIProvider(LLMProvider):
             if self.provider_type == 'local' and 'timeout' in error_str:
                 logger.error(
                     f"Request to local model ({self.model}) timed out.\n"
-                    f"Consider increasing LOCAL_MODEL_REQUEST_TIMEOUT or using a smaller model."
+                    f"Consider increasing OPENAI_TIMEOUT or using a smaller model."
                 )
 
             logger.error(f"Structured generation failed: {e}")

@@ -53,8 +53,7 @@ python3 -c "from kosmos.compression import ContextCompressor" 2>/dev/null && pas
 python3 -c "from kosmos.orchestration import ResearchOrchestrator" 2>/dev/null && pass "Orchestration module" || fail "Orchestration module"
 python3 -c "from kosmos.validation import ScholarEvalValidator" 2>/dev/null && pass "Validation module" || fail "Validation module"
 python3 -c "from kosmos.workflow import ResearchWorkflow" 2>/dev/null && pass "Workflow module" || fail "Workflow module"
-python3 -c "from kosmos.execution import ProductionExecutor, PackageResolver" 2>/dev/null && pass "Execution module (new)" || fail "Execution module (new)"
-python3 -c "from kosmos.monitoring import MetricsCollector" 2>/dev/null && pass "Monitoring module" || warn "Monitoring module (optional)"
+python3 -c "from kosmos.execution import CodeExecutor, DockerSandbox" 2>/dev/null && pass "Execution module" || fail "Execution module"
 
 # 3. Run smoke tests
 echo ""
@@ -79,9 +78,8 @@ pytest tests/unit/compression/ \
 # 5. Run execution module tests
 echo ""
 echo "=== Step 5: Execution Module Tests ==="
-pytest tests/unit/execution/test_package_resolver.py \
-       tests/unit/execution/test_docker_manager.py \
-       tests/unit/execution/test_production_executor.py \
+pytest tests/unit/execution/test_executor.py \
+       tests/unit/execution/test_sandbox.py \
        -v --timeout=60 2>/dev/null && pass "Execution module tests" || fail "Execution module tests"
 
 # 6. Run integration tests

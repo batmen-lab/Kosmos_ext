@@ -7,14 +7,13 @@ Implements hybrid retirement logic:
 - Claude-powered: Ambiguous cases
 """
 
-from typing import List, Dict, Optional, Any, Tuple
+from typing import List, Dict, Optional, Any
 from datetime import datetime, timezone
 from enum import Enum
 import logging
 import json
 import os
 import uuid
-import numpy as np
 from pydantic import BaseModel, Field
 
 from kosmos.models.hypothesis import Hypothesis, HypothesisStatus
@@ -176,74 +175,6 @@ class HypothesisRefiner:
                 return RetirementDecision.SPAWN_VARIANT
             else:
                 return RetirementDecision.CONTINUE_TESTING
-
-    def should_retire_hypothesis_claude(
-        self,
-        hypothesis: Hypothesis,
-        results: List[ExperimentResult]
-    ) -> Tuple[bool, str]:
-        """
-        Use Claude to decide if hypothesis should be retired (for ambiguous cases).
-
-        Args:
-            hypothesis: Hypothesis to evaluate
-            results: All experimental results for this hypothesis
-
-        Returns:
-            Tuple of (should_retire: bool, rationale: str)
-        """
-        # Build prompt
-        results_summary = self._format_results_for_claude(results)
-
-        prompt = f"""You are evaluating whether a scientific hypothesis should be retired based on experimental evidence.
-
-Hypothesis: {hypothesis.statement}
-Rationale: {hypothesis.rationale}
-Domain: {hypothesis.domain}
-
-Experimental Results ({len(results)} experiments):
-{results_summary}
-
-Analysis:
-1. Overall pattern: Are results consistently rejecting, supporting, or mixed?
-2. Effect sizes: Even if statistically significant, are effects meaningful?
-3. Quality of evidence: Are there methodological concerns?
-4. Theoretical implications: Does the pattern suggest the hypothesis is fundamentally flawed?
-
-Decision: Should this hypothesis be retired, refined, or continue testing?
-
-Respond with JSON:
-{{
-    "decision": "retire" | "refine" | "continue",
-    "confidence": 0.0-1.0,
-    "rationale": "2-3 sentence explanation",
-    "suggested_action": "What to do next (if not retire)"
-}}
-"""
-
-        try:
-            response = self.llm_client.generate(prompt, max_tokens=_REFINER_MAX_TOKENS)
-
-            # Parse JSON
-            json_start = response.find('{')
-            json_end = response.rfind('}') + 1
-            if json_start >= 0 and json_end > json_start:
-                json_str = response[json_start:json_end]
-                result = json.loads(json_str)
-
-                should_retire = result.get("decision") == "retire"
-                rationale = result.get("rationale", "")
-
-                logger.info(f"Claude decision for {hypothesis.id}: {result.get('decision')} (confidence: {result.get('confidence')})")
-
-                return should_retire, rationale
-            else:
-                logger.warning("Could not parse Claude response as JSON")
-                return False, "Parsing error"
-
-        except Exception as e:
-            logger.error(f"Error getting Claude decision: {e}")
-            return False, f"Error: {str(e)}"
 
     def _count_consecutive_failures(self, results: List[ExperimentResult]) -> int:
         """Count consecutive failures (rejected or error) from most recent results."""
@@ -539,64 +470,6 @@ Respond with JSON array:
     # CONTRADICTION DETECTION
     # ========================================================================
 
-    def detect_contradictions(
-        self,
-        hypotheses: List[Hypothesis],
-        results: Dict[str, List[ExperimentResult]]  # hypothesis_id -> results
-    ) -> List[Dict[str, Any]]:
-        """
-        Detect contradictions between hypotheses.
-
-        Contradictions occur when:
-        - Two similar hypotheses have opposite outcomes
-        - Results support H1 but reject H2 where H1 and H2 are semantically similar
-
-        Args:
-            hypotheses: List of hypotheses to check
-            results: Results for each hypothesis
-
-        Returns:
-            List of contradiction dicts
-        """
-        logger.info(f"Detecting contradictions among {len(hypotheses)} hypotheses")
-
-        contradictions = []
-
-        # Compare all pairs
-        for i, hyp1 in enumerate(hypotheses):
-            for hyp2 in hypotheses[i+1:]:
-                # Check semantic similarity
-                similarity = self._compute_semantic_similarity(hyp1.statement, hyp2.statement)
-
-                if similarity >= self.similarity_threshold:
-                    # Check if outcomes contradict
-                    results1 = results.get(hyp1.id, [])
-                    results2 = results.get(hyp2.id, [])
-
-                    support1 = self._overall_support(results1)
-                    support2 = self._overall_support(results2)
-
-                    if support1 is not None and support2 is not None and support1 != support2:
-                        # Contradiction: similar hypotheses, opposite outcomes
-                        contradiction = {
-                            "hypothesis1_id": hyp1.id,
-                            "hypothesis2_id": hyp2.id,
-                            "similarity": similarity,
-                            "hypothesis1_statement": hyp1.statement,
-                            "hypothesis2_statement": hyp2.statement,
-                            "hypothesis1_supported": support1,
-                            "hypothesis2_supported": support2,
-                            "detected_at": datetime.now(timezone.utc).isoformat()
-                        }
-
-                        contradictions.append(contradiction)
-                        logger.warning(
-                            f"Contradiction detected between {hyp1.id} and {hyp2.id} "
-                            f"(similarity: {similarity:.2f})"
-                        )
-
-        return contradictions
-
     def _compute_semantic_similarity(self, text1: str, text2: str) -> float:
         """
         Compute semantic similarity between two texts.
@@ -667,86 +540,6 @@ Respond with JSON array:
     # HYPOTHESIS MERGING
     # ========================================================================
 
-    def merge_hypotheses(
-        self,
-        hypotheses: List[Hypothesis],
-        rationale: str = "Merging similar supported hypotheses"
-    ) -> Hypothesis:
-        """
-        Merge similar hypotheses that are both supported.
-
-        Args:
-            hypotheses: List of hypotheses to merge (should be 2-3)
-            rationale: Reason for merging
-
-        Returns:
-            Hypothesis: Merged hypothesis
-        """
-        logger.info(f"Merging {len(hypotheses)} hypotheses")
-
-        # Build prompt
-        statements = "\n".join([f"- {h.statement}" for h in hypotheses])
-        rationales = "\n".join([f"- {h.rationale}" for h in hypotheses])
-
-        prompt = f"""You are synthesizing multiple related hypotheses into a single unified hypothesis.
-
-Hypotheses to merge:
-{statements}
-
-Rationales:
-{rationales}
-
-Task: Create a single hypothesis that captures the essence of all inputs. The merged hypothesis should:
-1. Integrate the key claims from all hypotheses
-2. Be more comprehensive than any single hypothesis
-3. Remain testable and falsifiable
-
-Respond with JSON:
-{{
-    "merged_statement": "Unified hypothesis statement",
-    "merged_rationale": "Integrated rationale",
-    "synthesis_explanation": "How the hypotheses were combined"
-}}
-"""
-
-        try:
-            response = self.llm_client.generate(prompt, max_tokens=_REFINER_MAX_TOKENS)
-
-            json_start = response.find('{')
-            json_end = response.rfind('}') + 1
-            if json_start >= 0 and json_end > json_start:
-                json_str = response[json_start:json_end]
-                merge_data = json.loads(json_str)
-
-                # Create merged hypothesis with new ID
-                merged = Hypothesis(
-                    id=f"hyp_{uuid.uuid4().hex[:12]}",
-                    research_question=hypotheses[0].research_question,
-                    statement=merge_data.get("merged_statement", ""),
-                    rationale=merge_data.get("merged_rationale", ""),
-                    domain=hypotheses[0].domain,
-                    status=HypothesisStatus.GENERATED,
-                    parent_hypothesis_id=hypotheses[0].id,  # First as parent
-                    generation=max(h.generation for h in hypotheses) + 1,
-                    evolution_history=[{
-                        "action": "merged",
-                        "merged_from": [h.id for h in hypotheses],
-                        "synthesis": merge_data.get("synthesis_explanation", ""),
-                        "timestamp": datetime.now(timezone.utc).isoformat()
-                    }]
-                )
-
-                logger.info(f"Created merged hypothesis")
-                return merged
-
-            else:
-                logger.warning("Could not parse merge JSON")
-                return hypotheses[0]
-
-        except Exception as e:
-            logger.error(f"Error merging hypotheses: {e}")
-            return hypotheses[0]
-
     # ========================================================================
     # LINEAGE TRACKING
     # ========================================================================
@@ -779,50 +572,6 @@ Respond with JSON:
     def get_lineage(self, hypothesis_id: str) -> Optional[HypothesisLineage]:
         """Get lineage for a hypothesis."""
         return self.lineage_tracking.get(hypothesis_id)
-
-    def get_family_tree(self, hypothesis_id: str) -> Dict[str, Any]:
-        """
-        Get complete family tree for a hypothesis.
-
-        Returns:
-            dict: Family tree with ancestors and descendants
-        """
-        lineage = self.get_lineage(hypothesis_id)
-        if not lineage:
-            return {"hypothesis_id": hypothesis_id, "ancestors": [], "descendants": []}
-
-        # Get ancestors
-        ancestors = []
-        current_id = lineage.parent_id
-        while current_id:
-            current_lineage = self.get_lineage(current_id)
-            if current_lineage:
-                ancestors.append(current_id)
-                current_id = current_lineage.parent_id
-            else:
-                break
-
-        # Get descendants (recursive)
-        def get_descendants(hyp_id: str) -> List[str]:
-            lin = self.get_lineage(hyp_id)
-            if not lin or not lin.children_ids:
-                return []
-
-            descendants = lin.children_ids.copy()
-            for child_id in lin.children_ids:
-                descendants.extend(get_descendants(child_id))
-
-            return descendants
-
-        descendants = get_descendants(hypothesis_id)
-
-        return {
-            "hypothesis_id": hypothesis_id,
-            "generation": lineage.generation,
-            "ancestors": ancestors,
-            "descendants": descendants,
-            "total_family_size": 1 + len(ancestors) + len(descendants)
-        }
 
     # ========================================================================
     # UTILITIES

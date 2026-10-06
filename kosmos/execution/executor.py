@@ -5,7 +5,6 @@ Executes generated Python code safely with output capture, error handling, and r
 Supports both direct execution and Docker-based sandboxed execution.
 """
 
-import sys
 import os
 from kosmos.utils.compat import model_to_dict
 import io
@@ -19,7 +18,6 @@ from contextlib import redirect_stdout, redirect_stderr
 from typing import Dict, Any, Optional, List
 import logging
 import time
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -515,9 +513,6 @@ class CodeExecutor:
         allowed_globals: Optional[Dict[str, Any]] = None,
         use_sandbox: bool = True,
         sandbox_config: Optional[Dict[str, Any]] = None,
-        enable_profiling: bool = False,
-        profiling_mode: str = "light",
-        test_determinism: bool = False,
         execution_timeout: int = DEFAULT_EXECUTION_TIMEOUT
     ):
         """
@@ -529,9 +524,6 @@ class CodeExecutor:
             allowed_globals: Optional dictionary of allowed global variables
             use_sandbox: If True, use Docker sandbox for execution (default: True for F-17)
             sandbox_config: Optional sandbox configuration (cpu_limit, memory_limit, timeout)
-            enable_profiling: If True, profile code execution (default: False)
-            profiling_mode: Profiling mode: light, standard, full (default: light)
-            test_determinism: If True, run determinism check after successful execution (default: False)
             execution_timeout: Timeout in seconds for unsandboxed execution (default: 300, F-19)
         """
         self.max_retries = max_retries
@@ -539,9 +531,6 @@ class CodeExecutor:
         self.allowed_globals = allowed_globals or {}
         self.use_sandbox = use_sandbox
         self.sandbox_config = sandbox_config or {}
-        self.enable_profiling = enable_profiling
-        self.profiling_mode = profiling_mode
-        self.test_determinism = test_determinism
         self.execution_timeout = execution_timeout
         # Set per experiment by the director; None disables figure collection.
         self.figure_dir: Optional[str] = None
@@ -658,24 +647,6 @@ class CodeExecutor:
                             result.error_type or "Unknown", True
                         )
                     logger.info(f"Code executed successfully in {result.execution_time:.2f}s")
-
-                    # Optional determinism check
-                    if self.test_determinism:
-                        try:
-                            from kosmos.safety.reproducibility import ReproducibilityManager
-                            mgr = ReproducibilityManager()
-                            is_deterministic = mgr.test_determinism(
-                                experiment_function=lambda: self._execute_once(current_code, local_vars),
-                                seed=42, n_runs=2
-                            )
-                            if not is_deterministic:
-                                logger.warning("Non-deterministic results detected")
-                                if result.return_value and isinstance(result.return_value, dict):
-                                    result.return_value.setdefault('warnings', []).append(
-                                        "Non-deterministic results detected"
-                                    )
-                        except Exception as det_err:
-                            logger.debug(f"Determinism check failed (non-fatal): {det_err}")
 
                     return result
                 else:
@@ -883,22 +854,11 @@ class CodeExecutor:
         code: str,
         local_vars: Optional[Dict[str, Any]] = None
     ) -> ExecutionResult:
-        """Execute code once with output capture and optional profiling."""
+        """Execute code once with output capture."""
 
         # Route to sandbox if enabled
         if self.use_sandbox:
             return self._execute_in_sandbox(code, local_vars)
-
-        # Initialize profiler if enabled
-        profiler = None
-        profile_result = None
-        if self.enable_profiling:
-            try:
-                from kosmos.core.profiling import ExecutionProfiler, ProfilingMode
-                mode = ProfilingMode(self.profiling_mode)
-                profiler = ExecutionProfiler(mode=mode)
-            except Exception as e:
-                logger.warning(f"Failed to initialize profiler: {e}")
 
         # Otherwise execute directly
         start_time = time.time()
@@ -923,18 +883,9 @@ class CodeExecutor:
         stderr_capture = io.StringIO()
 
         try:
-            # Start profiling if enabled
-            if profiler:
-                profiler._start_profiling()
-
             with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
                 # Execute code with timeout (F-19)
                 self._exec_with_timeout(code, exec_globals, exec_locals)
-
-            # Stop profiling if enabled
-            if profiler:
-                profiler._stop_profiling()
-                profile_result = profiler.get_result()
 
             execution_time = time.time() - start_time
 
@@ -952,19 +903,10 @@ class CodeExecutor:
                 stdout=stdout_capture.getvalue(),
                 stderr=stderr_capture.getvalue(),
                 execution_time=execution_time,
-                profile_result=profile_result,
                 data_source=data_source,
             )
 
         except Exception as e:
-            # Stop profiling even on error
-            if profiler:
-                try:
-                    profiler._stop_profiling()
-                    profile_result = profiler.get_result()
-                except Exception as e:
-                    logger.warning(f"Profiler stop/result retrieval failed: {e}")
-
             execution_time = time.time() - start_time
 
             # Capture full traceback
@@ -978,8 +920,7 @@ class CodeExecutor:
                 stderr=stderr_capture.getvalue() + "\n" + error_traceback,
                 error=str(e),
                 error_type=type(e).__name__,
-                execution_time=execution_time,
-                profile_result=profile_result
+                execution_time=execution_time
             )
 
         finally:
@@ -1362,7 +1303,6 @@ class RetryStrategy:
         Returns:
             Modified code or None if no modification strategy
         """
-        import re as regex_module
 
         # Try LLM-based repair first if available (only first 2 attempts)
         if llm_client and attempt <= 2:

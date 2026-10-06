@@ -12,14 +12,11 @@ Based on patterns from docs/integration-plan.md.
 import ast
 import builtins
 import os
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional
 import logging
-from pathlib import Path
 
-from kosmos.models.experiment import ExperimentProtocol, ProtocolStep, ExperimentType
-from kosmos.models.hypothesis import Hypothesis
+from kosmos.models.experiment import ExperimentProtocol, ExperimentType
 from kosmos.core.llm import ClaudeClient
-from kosmos.core.prompts import EXPERIMENT_DESIGNER
 
 logger = logging.getLogger(__name__)
 
@@ -1636,14 +1633,12 @@ class ExperimentCodeGenerator:
     Uses hybrid approach:
     1. Template matching for common patterns
     2. LLM generation for novel experiments
-    3. Optional LLM enhancement of templates
     """
 
     def __init__(
         self,
         use_templates: bool = True,
         use_llm: bool = True,
-        llm_enhance_templates: bool = False,
         llm_client: Optional[ClaudeClient] = None
     ):
         """
@@ -1652,12 +1647,10 @@ class ExperimentCodeGenerator:
         Args:
             use_templates: If True, try template matching first
             use_llm: If True, use LLM for novel cases or fallback
-            llm_enhance_templates: If True, enhance template code with LLM
             llm_client: Optional Claude client (created if not provided)
         """
         self.use_templates = use_templates
         self.use_llm = use_llm
-        self.llm_enhance_templates = llm_enhance_templates
         # Datasets this experiment may open: {dataset_name: host path}. Empty or
         # one entry reproduces today's behaviour exactly; more than one switches
         # on the multi-table path in `generate()` (Step 0 there explains why it
@@ -1802,10 +1795,6 @@ class ExperimentCodeGenerator:
                 code = template.generate(protocol)
                 self.last_generation["path"] = "template"
                 self.last_generation["template"] = template.name
-
-                # Optionally enhance with LLM
-                if self.llm_enhance_templates and self.llm_client:
-                    code = self._enhance_with_llm(code, protocol)
 
         # Step 2: Fall back to LLM generation
         if code is None and self.use_llm:
@@ -2227,42 +2216,6 @@ Return ONLY the Python code, no explanations."""
 
         return code
 
-    def _enhance_with_llm(self, template_code: str, protocol: ExperimentProtocol) -> str:
-        """Enhance template code with LLM additions."""
-        prompt = f"""Enhance this experiment code for better results:
-
-**Protocol:** {protocol.name}
-**Description:** {protocol.description}
-
-**Current Code:**
-```python
-{template_code}
-```
-
-Enhance the code to:
-1. Add any domain-specific preprocessing
-2. Add robustness checks
-3. Add additional relevant statistics
-4. Keep the same structure
-
-CRITICAL - REAL DATA ONLY: Use ONLY the real dataset loaded from `data_path`. Never add
-synthetic, random, simulated, or fabricated data, and never add a synthetic-data fallback.
-If the data is insufficient for a step, raise an exception instead of substituting data.
-
-Return the enhanced Python code only."""
-
-        try:
-            response = self.llm_client.generate(prompt)
-            text = response if isinstance(response, str) else getattr(response, "content", str(response))
-            enhanced_code = self._extract_code_from_response(text)
-            # An enhancement that lost the data load or the results assignment
-            # is a regression on working template code, not an improvement.
-            self._validate_generated(enhanced_code)
-            return enhanced_code
-        except Exception as e:
-            logger.warning(f"LLM enhancement failed, using original template: {e}")
-            return template_code
-
     def _generate_basic_template(self, protocol: ExperimentProtocol) -> str:
         """Generate basic fallback template."""
         code_lines = [
@@ -2480,9 +2433,3 @@ Return the enhanced Python code only."""
         """Full gate for model-written code: syntax, then substance."""
         cls._validate_syntax(code)
         cls._validate_substance(code)
-
-    def save_code(self, code: str, file_path: str) -> None:
-        """Save generated code to file."""
-        with open(file_path, 'w') as f:
-            f.write(code)
-        logger.info(f"Saved generated code to {file_path}")

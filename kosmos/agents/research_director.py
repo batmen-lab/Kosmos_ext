@@ -4,11 +4,10 @@ Research Director Agent - Master orchestrator for autonomous research (Phase 7).
 This agent coordinates all other agents to execute the full research cycle:
 Research Question → Hypotheses → Experiments → Results → Analysis → Refinement → Iteration
 
-Uses message-based async coordination with all specialized agents.
+Calls each specialized agent directly from its stage handler (Issue #76).
 
 Async Architecture (Issue #66 fix):
 - execute(), _execute_next_action(), _do_execute_action() are now async
-- All _send_to_* methods are now async
 - Threading locks replaced with asyncio.Lock for async-safe operation
 """
 
@@ -16,13 +15,11 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
 import logging
 import asyncio
-import concurrent.futures
 import threading
 import time
 from contextlib import contextmanager
 
-from kosmos.agents.base import BaseAgent, AgentMessage, MessageType, AgentStatus
-from kosmos.utils.compat import model_to_dict
+from kosmos.agents.base import BaseAgent
 from kosmos.core.rollout_tracker import RolloutTracker
 from kosmos.core.workflow import (
     ResearchWorkflow,
@@ -30,14 +27,12 @@ from kosmos.core.workflow import (
     WorkflowState,
     NextAction
 )
-from kosmos.core.convergence import ConvergenceDetector, StoppingDecision, StoppingReason
+from kosmos.core.convergence import ConvergenceDetector, StoppingDecision
 from kosmos.core.llm import get_client
 from kosmos.core.stage_tracker import get_stage_tracker
-from kosmos.models.hypothesis import Hypothesis, HypothesisStatus
 from kosmos.world_model import get_world_model, Entity, Relationship
 from kosmos.db import get_session
 from kosmos.db.operations import get_hypothesis, get_experiment, get_result
-from kosmos.agents.skill_loader import SkillLoader
 
 logger = logging.getLogger(__name__)
 
@@ -377,13 +372,11 @@ class ResearchDirectorAgent(BaseAgent):
         self._validate_domain()
 
         # Load domain-specific skills (Issue #51 - skills integration)
-        self.skills: Optional[str] = None
-        self._load_skills()
 
         # Dataset path for experiments. When an evidence gateway is configured
         # instead of a local CSV, materialise one Evidence Capsule from it into a
         # data_path the rest of the pipeline reads unchanged (LECP). This is the
-        # single seam: DataProvider, execute_with_data and the sandbox are all
+        # single seam: execute_with_data and the sandbox are both
         # downstream and untouched.
         self.data_path = self.config.get("data_path")
         self.evidence_server = self.config.get("evidence_server")
@@ -394,7 +387,7 @@ class ResearchDirectorAgent(BaseAgent):
         # federated one. `data_path` stays bound to exactly ONE file -- the
         # declared primary -- because everything downstream consumes it as a
         # file: the context reader opens it, the executor keys its data_files
-        # dict on its basename, DataProvider treats it as a directory root. This
+        # dict on its basename. This
         # list is what GROUNDING reads; nothing else looks at it, which is what
         # keeps "hypotheses see N datasets" separate from "an experiment can
         # open N datasets".
@@ -459,20 +452,17 @@ class ResearchDirectorAgent(BaseAgent):
             logger.warning(f"Database initialization failed: {e}")
 
         # Agent registry (will be populated during coordination)
-        self.agent_registry: Dict[str, str] = {}  # agent_type -> agent_id
 
         # Lazy-init agent slots for direct-call pattern (Issue #76 extension)
         self._hypothesis_agent = None
         self._experiment_designer = None
         self._code_generator = None
         self._code_executor = None
-        self._data_provider = None
         self._data_analyst = None
         self._hypothesis_refiner = None
         self._variants_spawned: Dict[str, int] = {}  # parent hypothesis id -> variants spawned
 
         # Message correlation tracking
-        self.pending_requests: Dict[str, Dict[str, Any]] = {}  # correlation_id -> request_info
 
         # Strategy effectiveness tracking
         self.strategy_stats: Dict[str, Dict[str, Any]] = {
@@ -515,7 +505,6 @@ class ResearchDirectorAgent(BaseAgent):
         self._research_plan_lock = asyncio.Lock()
         self._strategy_stats_lock = asyncio.Lock()
         self._workflow_lock = asyncio.Lock()
-        self._agent_registry_lock = asyncio.Lock()
         # Keep threading locks for backwards compatibility in sync contexts
         self._research_plan_lock_sync = threading.RLock()
         self._strategy_stats_lock_sync = threading.Lock()
@@ -1863,42 +1852,6 @@ class ResearchDirectorAgent(BaseAgent):
         else:
             logger.info("[DOMAIN] No domain specified - using general research mode")
 
-    def _load_skills(self):
-        """Load domain-specific skills for enhanced prompts (Issue #51)."""
-        try:
-            skill_loader = SkillLoader()
-
-            # Load skills based on domain or default research skills
-            if self.domain:
-                self.skills = skill_loader.load_skills_for_task(
-                    task_type="research",
-                    domain=self.domain,
-                    include_examples=False,
-                    include_common=True
-                )
-                if self.skills:
-                    logger.info(f"Loaded skills for domain '{self.domain}'")
-                else:
-                    logger.debug(f"No specific skills found for domain '{self.domain}'")
-            else:
-                # Load common research skills
-                self.skills = skill_loader.load_skills_for_task(
-                    task_type="research",
-                    include_examples=False,
-                    include_common=True
-                )
-                if self.skills:
-                    logger.info("Loaded common research skills")
-        except Exception as e:
-            logger.warning(f"Failed to load skills: {e}. Continuing without skill injection.")
-            self.skills = None
-
-    def get_skills_context(self) -> str:
-        """Get skills context for prompt injection."""
-        if self.skills:
-            return f"\n{self.skills}\n"
-        return ""
-
     # ========================================================================
     # LIFECYCLE HOOKS
     # ========================================================================
@@ -2158,37 +2111,6 @@ class ResearchDirectorAgent(BaseAgent):
             logger.warning(f"Failed to add {rel_type} relationship: {e}")
 
     # ========================================================================
-    # MESSAGE HANDLING
-    # ========================================================================
-
-    async def process_message(self, message: AgentMessage):
-        """
-        Process incoming message from other agents.
-
-        Routes messages to appropriate handlers based on source agent.
-        """
-        # Extract sender agent type from message metadata or from_agent
-        sender_type = message.metadata.get("agent_type", "unknown")
-
-        logger.debug(f"Processing message from {sender_type} ({message.from_agent})")
-
-        # Route to appropriate handler
-        if sender_type == "HypothesisGeneratorAgent":
-            self._handle_hypothesis_generator_response(message)
-        elif sender_type == "ExperimentDesignerAgent":
-            self._handle_experiment_designer_response(message)
-        elif sender_type == "Executor":
-            self._handle_executor_response(message)
-        elif sender_type == "DataAnalystAgent":
-            self._handle_data_analyst_response(message)
-        elif sender_type == "HypothesisRefiner":
-            self._handle_hypothesis_refiner_response(message)
-        elif sender_type == "ConvergenceDetector":
-            self._handle_convergence_detector_response(message)
-        else:
-            logger.warning(f"No handler for agent type: {sender_type}")
-
-    # ========================================================================
     # ERROR RECOVERY
     # ========================================================================
 
@@ -2317,528 +2239,6 @@ class ResearchDirectorAgent(BaseAgent):
             )
         self._consecutive_errors = 0
 
-    # ========================================================================
-    # MESSAGE HANDLERS
-    # ========================================================================
-
-    def _handle_hypothesis_generator_response(self, message: AgentMessage):
-        """
-        Handle response from HypothesisGeneratorAgent.
-
-        Expected content:
-        - hypotheses: List of generated Hypothesis objects
-        - count: Number of hypotheses generated
-        """
-        content = message.content
-
-        if message.type == MessageType.ERROR:
-            recovery_action = self._handle_error_with_recovery(
-                error_source="HypothesisGeneratorAgent",
-                error_message=content.get('error', 'Unknown error'),
-                recoverable=True,
-                error_details={'hypothesis_count_before': len(self.research_plan.hypothesis_pool)}
-            )
-            if recovery_action:
-                self._execute_next_action(recovery_action)
-            return
-
-        # Success - reset error streak
-        self._reset_error_streak()
-
-        # Extract hypotheses
-        hypothesis_ids = content.get("hypothesis_ids", [])
-        count = content.get("count", 0)
-
-        logger.info(f"Received {count} hypotheses from generator")
-
-        # Update research plan (thread-safe)
-        with self._research_plan_context():
-            for hyp_id in hypothesis_ids:
-                self.research_plan.add_hypothesis(hyp_id)
-
-        # Persist hypotheses to knowledge graph
-        for hyp_id in hypothesis_ids:
-            self._persist_hypothesis_to_graph(hyp_id, agent_name="HypothesisGeneratorAgent")
-
-        # Update strategy stats (thread-safe)
-        with self._strategy_stats_context():
-            self.strategy_stats["hypothesis_generation"]["attempts"] += 1
-            if count > 0:
-                self.strategy_stats["hypothesis_generation"]["successes"] += 1
-
-        # Decide next action
-        next_action = self.decide_next_action()
-        self._execute_next_action(next_action)
-
-    def _handle_experiment_designer_response(self, message: AgentMessage):
-        """
-        Handle response from ExperimentDesignerAgent.
-
-        Expected content:
-        - protocol_id: ID of designed experiment protocol
-        - hypothesis_id: ID of hypothesis being tested
-        """
-        content = message.content
-
-        if message.type == MessageType.ERROR:
-            recovery_action = self._handle_error_with_recovery(
-                error_source="ExperimentDesignerAgent",
-                error_message=content.get('error', 'Unknown error'),
-                recoverable=True,
-                error_details={'untested_hypotheses': len(self.research_plan.get_untested_hypotheses())}
-            )
-            if recovery_action:
-                self._execute_next_action(recovery_action)
-            return
-
-        # Success - reset error streak
-        self._reset_error_streak()
-
-        protocol_id = content.get("protocol_id")
-        hypothesis_id = content.get("hypothesis_id")
-
-        logger.info(f"Received experiment design: {protocol_id} for hypothesis {hypothesis_id}")
-
-        # Update research plan (thread-safe)
-        with self._research_plan_context():
-            self.research_plan.add_experiment(protocol_id)
-
-        # Persist protocol to knowledge graph
-        if protocol_id and hypothesis_id:
-            self._persist_protocol_to_graph(protocol_id, hypothesis_id, agent_name="ExperimentDesignerAgent")
-
-        # Update strategy stats (thread-safe)
-        with self._strategy_stats_context():
-            self.strategy_stats["experiment_design"]["attempts"] += 1
-            if protocol_id:
-                self.strategy_stats["experiment_design"]["successes"] += 1
-
-        # Decide next action
-        next_action = self.decide_next_action()
-        self._execute_next_action(next_action)
-
-    def _handle_executor_response(self, message: AgentMessage):
-        """
-        Handle response from Executor.
-
-        Expected content:
-        - result_id: ID of experiment result
-        - protocol_id: ID of protocol executed
-        - status: SUCCESS/FAILURE/ERROR
-        """
-        content = message.content
-
-        if message.type == MessageType.ERROR:
-            recovery_action = self._handle_error_with_recovery(
-                error_source="Executor",
-                error_message=content.get('error', 'Unknown error'),
-                recoverable=True,
-                error_details={'experiments_queued': len(self.research_plan.experiment_queue)}
-            )
-            if recovery_action:
-                self._execute_next_action(recovery_action)
-            return
-
-        # Success - reset error streak
-        self._reset_error_streak()
-
-        result_id = content.get("result_id")
-        protocol_id = content.get("protocol_id")
-        status = content.get("status")
-        hypothesis_id = content.get("hypothesis_id")  # May not be present
-
-        logger.info(f"Received experiment result: {result_id} (status: {status})")
-
-        # Update research plan (thread-safe)
-        with self._research_plan_context():
-            self.research_plan.add_result(result_id)
-            self.research_plan.mark_experiment_complete(protocol_id)
-
-        # Persist result to knowledge graph (get hypothesis_id from protocol if needed)
-        if result_id and protocol_id:
-            if not hypothesis_id:
-                # Fetch hypothesis_id from protocol
-                try:
-                    with get_session() as session:
-                        protocol = get_experiment(session, protocol_id)
-                        if protocol:
-                            hypothesis_id = protocol.hypothesis_id
-                except Exception as e:
-                    logger.warning(f"Failed to fetch hypothesis_id from protocol: {e}")
-
-            if hypothesis_id:
-                self._persist_result_to_graph(result_id, protocol_id, hypothesis_id, agent_name="Executor")
-
-        # Transition to analyzing state (thread-safe)
-        with self._workflow_context():
-            self.workflow.transition_to(
-                WorkflowState.ANALYZING,
-                action=f"Analyze result {result_id}"
-            )
-
-        # Send to DataAnalystAgent for interpretation
-        next_action = NextAction.ANALYZE_RESULT
-        self._execute_next_action(next_action)
-
-    def _handle_data_analyst_response(self, message: AgentMessage):
-        """
-        Handle response from DataAnalystAgent.
-
-        Expected content:
-        - interpretation: ResultInterpretation object
-        - result_id: ID of analyzed result
-        - hypothesis_supported: bool
-        """
-        content = message.content
-
-        if message.type == MessageType.ERROR:
-            recovery_action = self._handle_error_with_recovery(
-                error_source="DataAnalystAgent",
-                error_message=content.get('error', 'Unknown error'),
-                recoverable=True,
-                error_details={'results_pending': len(self.research_plan.results)}
-            )
-            if recovery_action:
-                self._execute_next_action(recovery_action)
-            return
-
-        # Success - reset error streak
-        self._reset_error_streak()
-
-        result_id = content.get("result_id")
-        hypothesis_id = content.get("hypothesis_id")
-        hypothesis_supported = content.get("hypothesis_supported")
-        confidence = content.get("confidence", 0.8)  # Default confidence
-        p_value = content.get("p_value")
-        effect_size = content.get("effect_size")
-
-        logger.info(
-            f"Received result interpretation for {result_id}: "
-            f"hypothesis {hypothesis_id} supported={hypothesis_supported}"
-        )
-
-        # Update hypothesis status in research plan (thread-safe)
-        with self._research_plan_context():
-            if hypothesis_supported is True:
-                self.research_plan.mark_supported(hypothesis_id)
-            elif hypothesis_supported is False:
-                self.research_plan.mark_rejected(hypothesis_id)
-            else:
-                # A result exists but yielded no yes/no verdict: tested but
-                # inconclusive, not silently left as if never tested.
-                self.research_plan.mark_inconclusive(hypothesis_id)
-
-        # Add SUPPORTS/REFUTES relationship to knowledge graph
-        if result_id and hypothesis_id and hypothesis_supported is not None:
-            self._add_support_relationship(
-                result_id,
-                hypothesis_id,
-                supports=hypothesis_supported,
-                confidence=confidence,
-                p_value=p_value,
-                effect_size=effect_size
-            )
-
-        # Transition to refining state (thread-safe)
-        with self._workflow_context():
-            self.workflow.transition_to(
-                WorkflowState.REFINING,
-                action=f"Refine based on result {result_id}"
-            )
-
-        # Decide next action (may refine hypothesis, generate new ones, or converge)
-        next_action = self.decide_next_action()
-        self._execute_next_action(next_action)
-
-    def _handle_hypothesis_refiner_response(self, message: AgentMessage):
-        """
-        Handle response from HypothesisRefiner.
-
-        Expected content:
-        - refined_hypothesis_ids: List of refined/spawned hypothesis IDs
-        - retired_hypothesis_ids: List of retired hypothesis IDs
-        - action_taken: REFINED/RETIRED/SPAWNED
-        """
-        content = message.content
-
-        if message.type == MessageType.ERROR:
-            recovery_action = self._handle_error_with_recovery(
-                error_source="HypothesisRefiner",
-                error_message=content.get('error', 'Unknown error'),
-                recoverable=True,
-                error_details={
-                    'tested_hypotheses': len(self.research_plan.tested_hypotheses),
-                    'supported_hypotheses': len(self.research_plan.supported_hypotheses)
-                }
-            )
-            if recovery_action:
-                self._execute_next_action(recovery_action)
-            return
-
-        # Success - reset error streak
-        self._reset_error_streak()
-
-        refined_ids = content.get("refined_hypothesis_ids", [])
-        retired_ids = content.get("retired_hypothesis_ids", [])
-
-        logger.info(f"Hypothesis refinement: {len(refined_ids)} refined, {len(retired_ids)} retired")
-
-        # Add refined hypotheses to pool (thread-safe)
-        with self._research_plan_context():
-            for hyp_id in refined_ids:
-                self.research_plan.add_hypothesis(hyp_id)
-
-        # Persist refined hypotheses to knowledge graph
-        for hyp_id in refined_ids:
-            self._persist_hypothesis_to_graph(hyp_id, agent_name="HypothesisRefiner")
-
-        # Update strategy stats (thread-safe)
-        with self._strategy_stats_context():
-            self.strategy_stats["hypothesis_refinement"]["attempts"] += 1
-            if refined_ids:
-                self.strategy_stats["hypothesis_refinement"]["successes"] += 1
-
-        # Decide next action
-        next_action = self.decide_next_action()
-        self._execute_next_action(next_action)
-
-    def _handle_convergence_detector_response(self, message: AgentMessage):
-        """
-        Handle response from ConvergenceDetector.
-
-        DEPRECATED (Issue #76): This method is no longer called.
-        Convergence is now checked directly via _handle_convergence_action().
-        Kept for backwards compatibility if message-based approach is reintroduced.
-
-        Expected content:
-        - should_converge: bool
-        - reason: str (why convergence detected)
-        - metrics: ConvergenceMetrics
-        """
-        content = message.content
-
-        should_converge = content.get("should_converge", False)
-        reason = content.get("reason", "")
-
-        if should_converge:
-            logger.info(f"Convergence detected: {reason}")
-
-            # Update research plan (thread-safe)
-            with self._research_plan_context():
-                self.research_plan.has_converged = True
-                self.research_plan.convergence_reason = reason
-
-            # Add convergence annotation to research question in knowledge graph
-            if self.wm and self.question_entity_id:
-                try:
-                    from kosmos.world_model.models import Annotation
-                    convergence_annotation = Annotation(
-                        text=f"Research converged: {reason}",
-                        created_by="ConvergenceDetector"
-                    )
-                    self.wm.add_annotation(self.question_entity_id, convergence_annotation)
-                    logger.debug("Added convergence annotation to research question")
-                except Exception as e:
-                    logger.warning(f"Failed to add convergence annotation: {e}")
-
-            # Transition to converged state (thread-safe)
-            with self._workflow_context():
-                self.workflow.transition_to(
-                    WorkflowState.CONVERGED,
-                    action=f"Research converged: {reason}"
-                )
-
-            # Stop the director
-            self.stop()
-        else:
-            logger.debug("Convergence check: not yet converged")
-
-    # ========================================================================
-    # MESSAGE SENDING (to other agents)
-    # ========================================================================
-
-    async def _send_to_hypothesis_generator(
-        self,
-        action: str,
-        context: Optional[Dict[str, Any]] = None
-    ) -> AgentMessage:
-        """
-        Send request to HypothesisGeneratorAgent asynchronously.
-
-        Args:
-            action: Action to request (generate, refine)
-            context: Additional context (research_question, literature, etc.)
-
-        Returns:
-            AgentMessage: Sent message
-        """
-        content = {
-            "action": action,
-            "research_question": self.research_question,
-            "domain": self.domain,
-            "skills": self.get_skills_context(),  # Issue #51 - inject skills
-            "context": context or {}
-        }
-
-        target_agent = self.agent_registry.get("HypothesisGeneratorAgent", "hypothesis_generator")
-
-        message = await self.send_message(
-            to_agent=target_agent,
-            content=content,
-            message_type=MessageType.REQUEST
-        )
-
-        self.pending_requests[message.id] = {
-            "agent": "HypothesisGeneratorAgent",
-            "action": action,
-            "timestamp": datetime.now(timezone.utc)
-        }
-
-        # Track rollout (Issue #58)
-        self.rollout_tracker.increment("hypothesis_generation")
-
-        logger.debug(f"Sent {action} request to HypothesisGeneratorAgent")
-        return message
-
-    async def _send_to_experiment_designer(
-        self,
-        hypothesis_id: str,
-        context: Optional[Dict[str, Any]] = None
-    ) -> AgentMessage:
-        """Send request to ExperimentDesignerAgent to design protocol asynchronously."""
-        content = {
-            "action": "design_experiment",
-            "hypothesis_id": hypothesis_id,
-            "domain": self.domain,
-            "skills": self.get_skills_context(),  # Issue #51 - inject skills
-            "context": context or {}
-        }
-
-        target_agent = self.agent_registry.get("ExperimentDesignerAgent", "experiment_designer")
-
-        message = await self.send_message(
-            to_agent=target_agent,
-            content=content,
-            message_type=MessageType.REQUEST
-        )
-
-        self.pending_requests[message.id] = {
-            "agent": "ExperimentDesignerAgent",
-            "hypothesis_id": hypothesis_id,
-            "timestamp": datetime.now(timezone.utc)
-        }
-
-        # Track rollout (Issue #58)
-        self.rollout_tracker.increment("experiment_design")
-
-        logger.debug(f"Sent design request to ExperimentDesignerAgent for hypothesis {hypothesis_id}")
-        return message
-
-    async def _send_to_executor(
-        self,
-        protocol_id: str,
-        context: Optional[Dict[str, Any]] = None
-    ) -> AgentMessage:
-        """Send request to Executor to run experiment asynchronously."""
-        exec_context = context or {}
-        if self.data_path:
-            exec_context["data_path"] = self.data_path
-
-        content = {
-            "action": "execute_experiment",
-            "protocol_id": protocol_id,
-            "context": exec_context
-        }
-
-        target_agent = self.agent_registry.get("Executor", "executor")
-
-        message = await self.send_message(
-            to_agent=target_agent,
-            content=content,
-            message_type=MessageType.REQUEST
-        )
-
-        self.pending_requests[message.id] = {
-            "agent": "Executor",
-            "protocol_id": protocol_id,
-            "timestamp": datetime.now(timezone.utc)
-        }
-
-        # Track rollout (Issue #58)
-        self.rollout_tracker.increment("code_execution")
-
-        logger.debug(f"Sent execution request to Executor for protocol {protocol_id}")
-        return message
-
-    async def _send_to_data_analyst(
-        self,
-        result_id: str,
-        hypothesis_id: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None
-    ) -> AgentMessage:
-        """Send request to DataAnalystAgent to interpret results asynchronously."""
-        content = {
-            "action": "interpret_results",
-            "result_id": result_id,
-            "hypothesis_id": hypothesis_id,
-            "context": context or {}
-        }
-
-        target_agent = self.agent_registry.get("DataAnalystAgent", "data_analyst")
-
-        message = await self.send_message(
-            to_agent=target_agent,
-            content=content,
-            message_type=MessageType.REQUEST
-        )
-
-        self.pending_requests[message.id] = {
-            "agent": "DataAnalystAgent",
-            "result_id": result_id,
-            "timestamp": datetime.now(timezone.utc)
-        }
-
-        # Track rollout (Issue #58)
-        self.rollout_tracker.increment("data_analysis")
-
-        logger.debug(f"Sent interpretation request to DataAnalystAgent for result {result_id}")
-        return message
-
-    async def _send_to_hypothesis_refiner(
-        self,
-        hypothesis_id: str,
-        result_id: Optional[str] = None,
-        action: str = "evaluate",
-        context: Optional[Dict[str, Any]] = None
-    ) -> AgentMessage:
-        """Send request to HypothesisRefiner asynchronously."""
-        content = {
-            "action": action,
-            "hypothesis_id": hypothesis_id,
-            "result_id": result_id,
-            "context": context or {}
-        }
-
-        target_agent = self.agent_registry.get("HypothesisRefiner", "hypothesis_refiner")
-
-        message = await self.send_message(
-            to_agent=target_agent,
-            content=content,
-            message_type=MessageType.REQUEST
-        )
-
-        self.pending_requests[message.id] = {
-            "agent": "HypothesisRefiner",
-            "hypothesis_id": hypothesis_id,
-            "timestamp": datetime.now(timezone.utc)
-        }
-
-        # Track rollout - refinement is part of hypothesis lifecycle (Issue #58)
-        self.rollout_tracker.increment("hypothesis_generation")
-
-        logger.debug(f"Sent {action} request to HypothesisRefiner for hypothesis {hypothesis_id}")
-        return message
-
     def _check_convergence_direct(self) -> StoppingDecision:
         """
         Check convergence directly using ConvergenceDetector utility class.
@@ -2896,62 +2296,6 @@ class ResearchDirectorAgent(BaseAgent):
 
         return decision
 
-    def _apply_multiple_comparison_correction(self):
-        """
-        Apply Benjamini-Hochberg FDR correction to p-values from the current iteration.
-
-        When multiple hypotheses produce multiple p-values in the same iteration,
-        each must be corrected for family-wise error to avoid inflated Type I error.
-        """
-        from kosmos.execution.statistics import StatisticalValidator
-        from kosmos.db.operations import get_results_for_experiment
-
-        current_iteration = self.research_plan.iteration_count
-
-        # Collect p-values from recent results in DB
-        results_with_pvalues = []
-        try:
-            with get_session() as session:
-                for exp_id in self.research_plan.completed_experiments[-20:]:
-                    try:
-                        db_results = get_results_for_experiment(session, exp_id)
-                        for db_r in db_results:
-                            if db_r.p_value is not None:
-                                results_with_pvalues.append({
-                                    'result_id': db_r.id,
-                                    'p_value': db_r.p_value,
-                                    'supports_hypothesis': db_r.supports_hypothesis,
-                                })
-                    except Exception:
-                        continue
-        except Exception as e:
-            logger.warning(f"Failed to collect p-values for correction: {e}")
-            return
-
-        if len(results_with_pvalues) < 2:
-            return  # No correction needed for single test
-
-        p_values = [r['p_value'] for r in results_with_pvalues]
-        correction = StatisticalValidator.benjamini_hochberg_fdr(p_values)
-
-        corrections_applied = 0
-        for i, result_info in enumerate(results_with_pvalues):
-            was_sig = result_info['p_value'] < 0.05
-            now_sig = correction['significant'][i]
-            if was_sig and not now_sig:
-                corrections_applied += 1
-                logger.info(
-                    f"[FDR] Multiple comparison correction: result {result_info['result_id']} "
-                    f"p={result_info['p_value']:.4f} no longer significant after BH-FDR "
-                    f"(adjusted={correction['adjusted_p_values'][i]:.4f})"
-                )
-
-        if corrections_applied > 0:
-            logger.info(
-                f"[FDR] BH-FDR correction: {corrections_applied}/{len(p_values)} "
-                f"results lost significance"
-            )
-
     async def _handle_convergence_action(self):
         """
         Handle CONVERGE action by checking convergence directly.
@@ -2959,12 +2303,6 @@ class ResearchDirectorAgent(BaseAgent):
         Issue #76 fix: Replaces message-based convergence check with direct call.
         The ConvergenceDetector is a utility class, not an agent that can receive messages.
         """
-        # Apply multiple comparison correction before checking convergence
-        try:
-            self._apply_multiple_comparison_correction()
-        except Exception as e:
-            logger.warning(f"Multiple comparison correction failed (non-fatal): {e}")
-
         decision = self._check_convergence_direct()
 
         # Track rollout - convergence often involves literature review (Issue #58)
@@ -3160,7 +2498,6 @@ class ResearchDirectorAgent(BaseAgent):
         """
         from kosmos.execution.code_generator import ExperimentCodeGenerator
         from kosmos.execution.executor import CodeExecutor
-        from kosmos.execution.data_provider import DataProvider
         from kosmos.models.experiment import ExperimentProtocol
         from kosmos.db.operations import create_result
         from uuid import uuid4
@@ -3182,10 +2519,6 @@ class ResearchDirectorAgent(BaseAgent):
             # forever. The figures of an attempt that is being replaced are not
             # results.
             self._clear_figure_dir(self._code_executor.figure_dir)
-            if self._data_provider is None:
-                self._data_provider = DataProvider(
-                    default_data_dir=self.data_path
-                )
 
             logger.info(f"Executing experiment {protocol_id} via direct call")
 
@@ -4077,30 +3410,6 @@ class ResearchDirectorAgent(BaseAgent):
                 }
             )
 
-    async def _send_to_convergence_detector(
-        self,
-        context: Optional[Dict[str, Any]] = None
-    ) -> AgentMessage:
-        """
-        DEPRECATED (Issue #76): Use _handle_convergence_action() instead.
-
-        This method sent messages to a non-existent agent, causing infinite loops.
-        Kept for backwards compatibility but now calls the direct method.
-        """
-        logger.warning(
-            "[DEPRECATED] _send_to_convergence_detector is deprecated. "
-            "Using direct convergence check instead (Issue #76)."
-        )
-        await self._handle_convergence_action()
-
-        # Return a dummy message for compatibility
-        return AgentMessage(
-            type=MessageType.RESPONSE,
-            from_agent="convergence_detector",
-            to_agent=self.agent_id,
-            content={"deprecated": True, "handled_directly": True}
-        )
-
     # ========================================================================
     # PROMPT BUILDING
     # ========================================================================
@@ -4915,82 +4224,6 @@ Provide a structured, actionable plan in 2-3 paragraphs.
         return False
 
     # ========================================================================
-    # STRATEGY ADAPTATION
-    # ========================================================================
-
-    def select_next_strategy(self) -> str:
-        """
-        Select next strategy based on effectiveness tracking.
-
-        Strategies with higher success rates are favored.
-
-        Returns:
-            str: Selected strategy name
-        """
-        # Calculate effectiveness scores
-        scores = {}
-        for strategy, stats in self.strategy_stats.items():
-            attempts = stats["attempts"]
-            if attempts == 0:
-                # Favor unexplored strategies
-                scores[strategy] = 1.0
-            else:
-                success_rate = stats["successes"] / attempts
-                scores[strategy] = success_rate
-
-        # Select strategy with highest score
-        best_strategy = max(scores.items(), key=lambda x: x[1])[0]
-
-        logger.debug(f"Selected strategy: {best_strategy} (scores: {scores})")
-        return best_strategy
-
-    def update_strategy_effectiveness(self, strategy: str, success: bool, cost: float = 0.0):
-        """
-        Update strategy effectiveness tracking.
-
-        Args:
-            strategy: Strategy name
-            success: Whether strategy was successful
-            cost: Cost incurred (API tokens, compute time, etc.)
-        """
-        # Thread-safe strategy stats update
-        with self._strategy_stats_context():
-            if strategy in self.strategy_stats:
-                self.strategy_stats[strategy]["attempts"] += 1
-                if success:
-                    self.strategy_stats[strategy]["successes"] += 1
-                self.strategy_stats[strategy]["cost"] += cost
-
-                logger.debug(f"Updated strategy {strategy}: success={success}, cost={cost}")
-
-    # ========================================================================
-    # AGENT REGISTRY
-    # ========================================================================
-
-    def register_agent(self, agent_type: str, agent_id: str):
-        """
-        Register an agent for coordination.
-
-        Args:
-            agent_type: Type of agent (HypothesisGeneratorAgent, etc.)
-            agent_id: Unique agent ID
-        """
-        self.agent_registry[agent_type] = agent_id
-        logger.info(f"Registered {agent_type} with ID {agent_id}")
-
-    def get_agent_id(self, agent_type: str) -> Optional[str]:
-        """
-        Get agent ID for a given type.
-
-        Args:
-            agent_type: Agent type
-
-        Returns:
-            Optional[str]: Agent ID if registered
-        """
-        return self.agent_registry.get(agent_type)
-
-    # ========================================================================
     # EXECUTE (BaseAgent interface)
     # ========================================================================
 
@@ -5036,17 +4269,6 @@ Provide a structured, actionable plan in 2-3 paragraphs.
 
         else:
             raise ValueError(f"Unknown action: {action}")
-
-    def execute_sync(self, task: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Synchronous wrapper for execute (backwards compatibility).
-        """
-        try:
-            loop = asyncio.get_running_loop()
-            future = asyncio.run_coroutine_threadsafe(self.execute(task), loop)
-            return future.result(timeout=600)
-        except RuntimeError:
-            return asyncio.run(self.execute(task))
 
     # ========================================================================
     # STATUS & REPORTING
