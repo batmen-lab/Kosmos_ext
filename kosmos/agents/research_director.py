@@ -2378,9 +2378,7 @@ class ResearchDirectorAgent(BaseAgent):
                 domain=self.domain,
                 store_in_db=True,
                 data_context=data_context,
-                # Explore the dataset only when NO question was asked; when a
-                # real question was given, keep hypotheses focused on it.
-                data_driven=bool(self.config.get("data_driven", False)),
+                #data_driven=bool(self.config.get("data_driven", False)),
             )
 
             # Track rollout (Issue #58)
