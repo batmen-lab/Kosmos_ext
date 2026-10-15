@@ -1,0 +1,16 @@
+{
+  "objective": "gears",
+  "direction_lambda": 0.1,
+  "n_rows": 5000,
+  "query_rule": "one gold-training perturbation per supplementary control row, cycled",
+  "query_labels": [
+    "ATF2",
+    "IFNGR1"
+  ],
+  "label_source": "teacher-generated synthetic labels (never the source's measured expression)",
+  "target": "delta",
+  "evidence_weight": "uniform 1.0",
+  "sampling": "with replacement",
+  "ppi_lambda": 0.5,
+  "seed": 42
+}

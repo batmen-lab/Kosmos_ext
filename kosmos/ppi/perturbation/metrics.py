@@ -8,6 +8,11 @@ between two vectors of length G:
   * `mse`               -- all genes
   * `mse_deg`           -- the top-K genes by |observed Δ| (GEARS' `mse_de`)
   * `pearson`/`spearman` -- correlation of the Δ vectors across genes
+  * `pearson_specific`  -- pearson on the perturbation-specific part: each
+                           perturbation's Δ minus the mean Δ of the evaluated
+                           perturbations. A prediction that is the same for
+                           every perturbation scores NaN, however well that
+                           shared profile matches the common response.
   * `direction_accuracy` -- share of the top-K genes whose sign was predicted
   * `top_k_overlap`     -- |predicted top-K ∩ observed top-K| / K
 
@@ -137,6 +142,12 @@ def perturbation_metrics(
     if not shared:
         raise ValueError("no perturbation is in both the predictions and the observations")
     detail: dict[str, dict[str, float]] = {}
+    predicted_mean = np.mean(
+        [np.asarray(predictions[label], dtype=np.float64).reshape(-1) for label in shared], axis=0
+    )
+    observed_mean = np.mean(
+        [np.asarray(observations[label], dtype=np.float64).reshape(-1) for label in shared], axis=0
+    )
     for label in shared:
         predicted = np.asarray(predictions[label], dtype=np.float64).reshape(-1)
         observed = np.asarray(observations[label], dtype=np.float64).reshape(-1)
@@ -149,6 +160,11 @@ def perturbation_metrics(
             "mse_deg": float(np.mean((predicted[deg] - observed[deg]) ** 2)),
             "pearson": _pearson(predicted, observed),
             "pearson_deg": _pearson(predicted[deg], observed[deg]),
+            "pearson_specific": (
+                _pearson(predicted - predicted_mean, observed - observed_mean)
+                if len(shared) > 1
+                else float("nan")
+            ),
             "spearman": _spearman(predicted, observed),
             "direction_accuracy": float(
                 np.mean(np.sign(predicted[deg]) == np.sign(observed[deg]))
@@ -156,9 +172,13 @@ def perturbation_metrics(
             "top_k_overlap": float(len(set(deg.tolist()) & set(predicted_top.tolist())) / len(deg)),
             "n_deg": int(len(deg)),
         }
+    import warnings
+
     keys = sorted(next(iter(detail.values())).keys())
-    summary = {
-        key: float(np.nanmean([detail[label][key] for label in shared]))
-        for key in keys
-    }
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # an all-NaN column averages to NaN
+        summary = {
+            key: float(np.nanmean([detail[label][key] for label in shared]))
+            for key in keys
+        }
     return PerturbationMetrics(per_perturbation=detail, summary=summary, n_perturbations=len(shared))

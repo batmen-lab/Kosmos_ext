@@ -54,6 +54,104 @@ KEY_HINTS = (
 #: The name `_match` uses for the row index, which is not a column.
 INDEX_KEY = "__index__"
 
+#: A guide id like `STAT1g2`, `eGFPg1`, `ARID1A_NegCtrl0` -- the value a
+#: screen's condition column carries when the perturbation is named per guide.
+_GUIDE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]*g\d+$")
+#: Control spellings, lowercased, as a screen's condition column writes them.
+_CONTROL_TOKENS = frozenset(
+    {
+        "nt",
+        "nt1",
+        "nt2",
+        "nt3",
+        "nt4",
+        "nt5",
+        "negctrl",
+        "negctrl0",
+        "negctrl1",
+        "egfp",
+        "ctrl",
+        "control",
+        "non-targeting",
+        "non_targeting",
+        "nontargeting",
+        "unperturbed",
+    }
+)
+#: A condition naming a treated/control arm (`rep3_ctrl`, `PDL1g1_tx`).
+_ARM_RE = re.compile(r"(_|-)(ctrl|control|tx)$", re.IGNORECASE)
+#: Control spellings a guide library uses (`NT`, `NTg5`, `NegCtrl0`, `eGFPg1`).
+_CONTROL_RE = re.compile(
+    r"^(nt\d*|ntg\d+|negctrl\w*|ctrl\w*|control\w*|egfp\w*|non[-_]?targeting\w*)$",
+    re.IGNORECASE,
+)
+
+
+def _is_control(value: str) -> bool:
+    low = str(value).strip().lower()
+    return low in _CONTROL_TOKENS or "ctrl" in low or bool(_CONTROL_RE.match(low))
+
+
+def _identity_like(value: str) -> bool:
+    """Does this value name a perturbation (a guide) or a control arm?"""
+    text = str(value).strip()
+    if not text or text.lower().startswith("hto"):
+        # A hashtag-oligo tag is a sample/condition label, not a gene target.
+        return False
+    if _is_control(text):
+        return True
+    if _GUIDE_RE.match(text):
+        return True
+    if _ARM_RE.search(text):
+        return True
+    if "+" in text:  # `GENE+ctrl`: a guide delivered with a control second guide
+        return _identity_like(text.rsplit("+", 1)[1])
+    return False
+
+
+def label_half_condition(path: str | Path, *, rows: int = 500) -> tuple[str, list[str]] | None:
+    """The condition column of a screen's *label* table, when this is one.
+
+    A screen is routinely published as a barcode table beside its counts matrix:
+    narrow, often headerless, `[cell barcode, guide/condition]`. The per-cell
+    gate refuses that file for having no measurements, and its counts matrix for
+    having no condition column, so neither half is kept and the run ends with no
+    gold. Perturbation needs far less than a labeled table: a condition column
+    plus measurements, not necessarily in the same file. This recognises the
+    label half mechanically -- a narrow, mostly-categorical table whose values
+    look like perturbation identities with at least one control -- and returns
+    the column that holds them, so the caller keeps it as the gold's labels and
+    the backend joins its counts matrix on barcode.
+    """
+    try:
+        frame = read_table(path, nrows=rows)
+    except Exception:  # noqa: BLE001 - unreadable is not a label half
+        return None
+    if frame is None or len(frame) < 2 or frame.shape[1] < 2 or frame.shape[1] > 12:
+        return None
+    for column in frame.columns:
+        series = frame[column]
+        if not (pd.api.types.is_object_dtype(series) or pd.api.types.is_string_dtype(series)):
+            continue
+        values = [str(value).strip() for value in series.dropna().tolist() if str(value).strip()]
+        if not values:
+            continue
+        distinct = list(dict.fromkeys(values))
+        if len(distinct) < 2:
+            continue
+        # The barcode column is unique per row; the identity column holds guides
+        # (`CUL3g1`, `NTg5`) or condition arms (`rep3_ctrl`). A lookup table maps
+        # each barcode to one guide, so the identity column is not required to
+        # repeat within a sample -- its *values* are what identify it.
+        matched = sum(1 for value in distinct if _identity_like(value))
+        if matched < max(1, 0.5 * len(distinct)):
+            continue
+        if not any(_is_control(value) for value in distinct):
+            continue
+        return str(column), [value for value in distinct if _is_control(value)]
+    return None
+
+
 #: How many unnamed/identifier columns to test for a barcode before giving up.
 #: A per-cell table has a handful; a wide matrix has thousands of *measurement*
 #: columns and testing each of them is O(columns) work for no answer.

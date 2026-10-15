@@ -1,0 +1,31 @@
+{
+  "objective": "gears",
+  "direction_lambda": 0.1,
+  "n_rows": 7566,
+  "query_rule": "one gold-training perturbation per supplementary control row, cycled",
+  "query_labels": [
+    "ATF2",
+    "BRD4",
+    "CAV1",
+    "CD86",
+    "CMTM6",
+    "CUL3",
+    "ETV7",
+    "IFNGR1",
+    "JAK2",
+    "MARCH8",
+    "NFKBIA",
+    "PDCD1LG2",
+    "SPI1",
+    "STAT3",
+    "STAT5A",
+    "TNFRSF14",
+    "UBE2L6"
+  ],
+  "label_source": "teacher-generated synthetic labels (never the source's measured expression)",
+  "target": "delta",
+  "evidence_weight": "uniform 1.0",
+  "sampling": "with replacement",
+  "ppi_lambda": 0.5,
+  "seed": 42
+}

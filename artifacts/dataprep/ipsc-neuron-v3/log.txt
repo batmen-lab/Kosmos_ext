@@ -1,0 +1,47 @@
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+<frozen runpy>:128: RuntimeWarning: 'kosmos.ppi.perturbation.dataprep.survey' found in sys.modules after import of package 'kosmos.ppi.perturbation.dataprep', but prior to execution of 'kosmos.ppi.perturbation.dataprep.survey'; this may result in unpredictable behaviour
+# survey: spec {"cell_type": "iPSC-derived neurons", "cell_type_aliases": ["induced pluripotent stem cell-derived neurons", "human neurons", "iPSC neurons", "neuronal cells"], "organism": "human", "modality": "CRISPRi", "topic": "", "topic_aliases": [], "assays": ["Perturb-seq", "CROP-seq"]}
+# survey: search [gold] 'iPSC-derived neurons Perturb-seq': 10 hit(s)
+# survey: search [gold] 'iPSC-derived neurons CROP-seq': 14 hit(s)
+# survey: search [gold] 'iPSC-derived neurons CRISPR screen single-cell': 14 hit(s)
+# survey: search [gold] 'iPSC-derived neurons CRISPR screen': 29 hit(s)
+# survey: search [gold] 'iPSC-derived neurons CRISPRi': 35 hit(s)
+# survey: search [gold] 'iPSC neurons Perturb-seq': 13 hit(s)
+# survey: search [gold] 'iPSC neurons CROP-seq': 17 hit(s)
+# survey: search [gold] 'iPSC neurons CRISPR screen single-cell': 16 hit(s)
+# survey: search [gold] 'iPSC neurons CRISPR screen': 40 hit(s)
+# survey: search [gold] 'iPSC neurons CRISPRi': 39 hit(s)
+# survey: search [supplementary] 'iPSC-derived neurons single-cell RNA-seq': 38 hit(s)
+# survey: search [supplementary] 'iPSC-derived neurons scRNA-seq': 39 hit(s)
+# survey: search [supplementary] 'iPSC-derived neurons Perturb-seq': 10 hit(s)
+# survey: search [supplementary] 'iPSC neurons single-cell RNA-seq': 42 hit(s)
+# survey: search [supplementary] 'iPSC neurons scRNA-seq': 43 hit(s)
+# survey: search [supplementary] 'iPSC neurons Perturb-seq': 13 hit(s)
+# survey: describing 22 candidate(s)
+# survey: geo://GSE289235 (1 sample(s)) -> 1 kept
+# survey: geo://GSE124703 (14 sample(s)) -> 2 kept
+# survey: geo://GSE335939 (24 sample(s)) -> 24 kept
+# survey: geo://GSE299369 (6 sample(s)) -> 0 kept
+# survey: geo://GSE152988 (8 sample(s)) -> 6 kept
+# survey: geo://GSE319096 (24 sample(s)) -> 16 kept
+# survey: geo://GSE182307 (24 sample(s)) -> 0 kept
+# survey: geo://GSE255904 (3 sample(s)) -> 3 kept
+# survey: geo://GSE299976 (7 sample(s)) -> 0 kept
+# survey: geo://GSE299483 (9 sample(s)) -> 0 kept
+# survey: geo://GSE277602 (4 sample(s)) -> 4 kept
+# survey: geo://GSE325931 (17 sample(s)) -> 0 kept
+# survey: geo://GSE303735 (2 sample(s)) -> 2 kept
+# survey: geo://GSE244370 (7 sample(s)) -> 7 kept
+# survey: geo://GSE260498 (8 sample(s)) -> 6 kept
+# survey: geo://GSE322198 (24 sample(s)) -> 0 kept
+# survey: geo://GSE312664 (3 sample(s)) -> 0 kept
+# survey: geo://GSE277604 (5 sample(s)) -> 5 kept
+# survey: geo://GSE329848 (18 sample(s)) -> 0 kept
+# survey: geo://GSE307960 (1 sample(s)) -> 1 kept
+# survey: geo://GSE325828 (7 sample(s)) -> 0 kept
+# survey: geo://GSE312881 (24 sample(s)) -> 0 kept
+# survey: GSM8787485 GSM8787485_EXP224.h5ad: obs column 'guide' (90 values, e.g. ADAM10_i1, ADAM10_i2, AP2S1_i1)
+# survey: scBaseCount: 187 sample(s) name the cells ['iPSC-derived neurons', 'induced pluripotent stem cell-derived neurons', 'iPSC neurons', 'neuronal cells']
+# survey: scBaseCount: 10 sample(s) are the gold's own runs; dropped
+# survey: scBaseCount: 51 supplementary sample(s), 421,432 cells (42 not from screens)
+# survey: 7 gold and 93 supplementary sample(s) in 309s -> artifacts/dataprep/ipsc-neuron-v3/survey.md

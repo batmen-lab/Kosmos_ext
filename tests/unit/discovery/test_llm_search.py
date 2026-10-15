@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from kosmos.discovery import Proposal, propose_datasets, propose_evidence
@@ -268,4 +270,117 @@ def test_hints_and_context_reach_the_prompt():
     prompt = client.prompts[0]
     assert "bmmc" in prompt and "cite-seq" in prompt and "protocol says BMMC" in prompt
     # The instruction that costs downloads if ignored: name real, fetchable ids.
-    assert "geo://GSE194122" in prompt
+    # The example is a placeholder: a real accession there was copied into answers.
+    assert "geo://GSE<number>" in prompt
+    assert "GSE194122" not in prompt
+
+
+
+def test_a_search_tool_means_look_it_up_first():
+    with_search = FakeClient({"datasets": []})
+    propose_datasets("q", client=with_search, run_search=lambda call: "")
+    without = FakeClient({"datasets": []})
+    propose_datasets("q", client=without)
+    assert "look a series up before naming it" in with_search.prompts[0]
+    assert "look a series up before naming it" not in without.prompts[0]
+
+
+def test_search_first_runs_the_queries_before_the_model_names_datasets():
+    client = ScriptedClient(
+        [
+            {"queries": ["CROP-seq primary human T cells"]},
+            {"datasets": [{"identifier": "geo://GSE119450", "why": "the screen"}]},
+        ]
+    )
+    asked = []
+
+    def run_search(identifier):
+        asked.append(identifier)
+        return "  GSE119450 -> geo://GSE119450  CROP-Seq in Primary Human T Cells"
+
+    proposals = propose_datasets(
+        "q", client=client, run_search=run_search, search_first=True, max_items=2
+    )
+    assert asked and "CROP-seq primary human T cells" in asked[0]
+    assert "GSE119450" in client.prompts[1] and "search results" in client.prompts[1]
+    assert [p.identifier for p in proposals] == ["geo://GSE119450"]
+
+
+
+def test_search_keeps_the_topic_and_ranks_hits_seen_by_several_searches():
+    from kosmos.discovery.search import search_repositories
+
+    client = ScriptedClient(
+        [
+            {
+                "topic": "unfolded protein response",
+                "assay": "Perturb-seq",
+                "cell_type": "K562",
+                "queries": ["Perturb-seq K562 CRISPRi"],
+            }
+        ]
+    )
+    ran = []
+
+    def run_search(identifier):
+        query = json.loads(identifier.split("#", 1)[1])["query"]
+        ran.append(query)
+        if "unfolded protein response" in query:
+            return (
+                "  GSE90546 -> geo://GSE90546  dissection of the unfolded protein response\n"
+                "  hf://k562 -> hf://k562  k562"
+            )
+        return "  GSE220974 -> geo://GSE220974  CRISPRai Perturb-seq\n  hf://k562 -> hf://k562  k562"
+
+    hits = search_repositories("q", [], client=client, log=lambda *_: None, run_search=run_search)
+    # the model's generic query, plus the anchors it dropped
+    assert ran == [
+        "Perturb-seq K562 CRISPRi",
+        "unfolded protein response Perturb-seq",
+        "unfolded protein response K562",
+    ]
+    assert hits.index("GSE90546") < hits.index("search 'Perturb-seq K562 CRISPRi'")
+    assert "searches] GSE220974" not in hits.split("search '")[0]
+    # an off-topic repository returned by every search still ranks below the study
+    head = hits.split("search '")[0]
+    assert head.index("GSE90546") < head.index("hf://k562")
+
+
+def test_evidence_search_is_anchored_on_the_cell_type():
+    from kosmos.discovery.search import search_repositories
+
+    client = ScriptedClient([{"cell_type": "K562", "assay": "Perturb-seq", "queries": []}])
+    ran = []
+    search_repositories(
+        "q", [], client=client, log=lambda *_: None, purpose="evidence",
+        run_search=lambda identifier: ran.append(json.loads(identifier.split("#", 1)[1])["query"]) or "",
+    )
+    assert ran == ["K562 Perturb-seq", "K562 single-cell"]
+
+
+def test_gold_round_download_choice_is_told_to_take_the_screen():
+    from kosmos.discovery.preflight import choose_downloads
+
+    prompts = []
+
+    class Client:
+        def generate_structured(self, prompt, **_):
+            prompts.append(prompt)
+            return {"downloads": []}
+
+    listing = [{"reference": "geo://GSE1", "files": []}]
+    choose_downloads("q", listing, client=Client(), log=lambda *_: None)
+    choose_downloads("q", listing, client=Client(), log=lambda *_: None, screen_round=True)
+    assert "LABELED perturbation screen" not in prompts[0]
+    assert "LABELED perturbation screen" in prompts[1]
+
+
+def test_primary_gold_of_a_screen_is_asked_for_the_topic_and_cells():
+    from kosmos.discovery.gold import choose_primary_gold
+
+    client = FakeClient({"path": "a.csv", "why": "UPR screen"})
+    labeled = [{"path": "a.csv", "rows": 65257}, {"path": "b.csv", "rows": 24661}]
+    choice = choose_primary_gold("q", labeled, client=client, log=lambda *_: None, screen=True)
+    assert choice.path == "a.csv"
+    assert "rows are single cells" in client.prompts[0]
+    assert "question's subject" in client.prompts[0]

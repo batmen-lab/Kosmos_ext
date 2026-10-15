@@ -29,6 +29,8 @@ class GoldChoice:
 
 def _facts(entry: dict[str, Any]) -> str:
     bits = [f"rows={entry.get('rows')}", f"features={entry.get('n_features')}"]
+    if entry.get("sample_title"):
+        bits.append(f"sample={entry['sample_title']}")
     provenance = entry.get("provenance") or {}
     if provenance.get("reference"):
         bits.append(f"source={provenance['reference']}")
@@ -43,8 +45,12 @@ def choose_primary_gold(
     *,
     client: Any = None,
     log: Callable[[str], None] = print,
+    screen: bool = False,
 ) -> GoldChoice:
     """Pick the labeled table to train on; the rest become evidence.
+
+    `screen`: a perturbation task, whose gold is a screen's per-cell labels and
+    should match the question's topic.
 
     `labeled` entries are plan-style dicts with at least `path` and `rows`.
     """
@@ -98,7 +104,16 @@ def choose_primary_gold(
         "measurement and context actually match the question; the others are not "
         "discarded -- they will be used as unlabeled evidence, so their labels are "
         "not lost to the analysis either way.\n\n"
-        "Answer as JSON with 'path' (copied exactly from the list) and 'why' (one "
+        + (
+            "This is a perturbation screen: choose the table whose rows are single "
+            "cells labeled with the perturbation each carried, from the screen whose "
+            "perturbations are the question's subject (its genes, pathway or "
+            "process). A screen on another topic in the same cell line is evidence, "
+            "not the gold.\n\n"
+            if screen
+            else ""
+        )
+        + "Answer as JSON with 'path' (copied exactly from the list) and 'why' (one "
         "sentence)."
     )
     log(f"# primary gold: asking the model to choose among {len(labeled)} labeled table(s)")

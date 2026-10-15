@@ -3,7 +3,7 @@
 The division of labour is deliberate:
 
   * **Deciding what to get is a model's job.** It reads the question, names
-    concrete dataset identifiers (``geo://GSE194122``, ``hf://owner/name``, a
+    concrete dataset identifiers (``geo://GSE<number>``, ``hf://owner/name``, a
     URL) and says what it expects each to contain. Keyword search over repository
     metadata was the previous mechanism; it could only return what a repository
     happened to index, and it could not read the question.
@@ -125,7 +125,7 @@ def _harvest(
             _log(
                 log,
                 f"# retrieval: dropped {identifier!r} "
-                f"(not a fetchable identifier; expected e.g. geo://GSE194122)",
+                f"(not a fetchable identifier; expected e.g. geo://GSE<number>)",
             )
             continue
         scheme = identifier.split("://", 1)[0].lower()
@@ -205,8 +205,12 @@ def _tool_block(tools: Sequence[dict[str, Any]]) -> str:
 
 def _identifiers_block() -> str:
     return (
-        "Use identifiers a downloader can act on directly:\n"
-        "  geo://GSE194122            an NCBI GEO series\n"
+        # A placeholder, never a real accession: the model copied the real one
+        # that used to stand here into its answers (GSE194122, a bone-marrow
+        # atlas, proposed twice as "a CRISPR screen in T cells").
+        "Use identifiers a downloader can act on directly (the GEO number below "
+        "is a placeholder, not a suggestion):\n"
+        "  geo://GSE<number>          an NCBI GEO series\n"
         "  hf://owner/name            a HuggingFace dataset repository\n"
         "  hf://owner/name#test.csv   one file inside that repository\n"
         "  https://example.org/f.csv  a direct file URL\n"
@@ -292,6 +296,149 @@ def _run_retrieval(
     return proposals[:max_items]
 
 
+_QUERIES_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "topic": {"type": "string"},
+        "assay": {"type": "string"},
+        "cell_type": {"type": "string"},
+        "queries": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["queries"],
+}
+
+#: What each search-first purpose asks the model to look for.
+_SEARCH_PURPOSES = {
+    "gold": (
+        "the labeled data this question is about. Its most specific biological "
+        "topic (a pathway, process or gene family, e.g. `unfolded protein "
+        "response`) is what separates the right study from the many generic ones "
+        "on the same cell type: name it as 'topic'"
+    ),
+    "evidence": (
+        "LARGE single-cell datasets of the same cell type or tissue as the "
+        "question, with any perturbation or none -- unlabeled evidence for a model "
+        "trained on a small labeled screen. The topic does not matter here; the "
+        "cell type does: name it as 'cell_type'"
+    ),
+}
+
+
+def search_repositories(
+    objective: str,
+    hints: Sequence[str],
+    *,
+    client: Any,
+    log: Callable[[str], None],
+    run_search: Callable[[str], str],
+    most: int = 4,
+    purpose: str = "gold",
+) -> str:
+    """Ask the model for repository search queries, run them, return the hits.
+
+    The model names the question's topic, assay and cell type alongside its
+    queries, and the code adds the combinations it must not skip: told to keep
+    queries short, it dropped the topic (`unfolded protein response`) and the
+    generic queries it kept (`Perturb-seq K562 CRISPRi`) never returned the
+    study the question is about. Hits are then ranked by how many searches
+    returned them, so a study matching several angles rises above one that
+    only shares the cell type.
+    """
+    hint_block = "\n".join(f"  - {hint}" for hint in hints)
+    prompt = (
+        "Before choosing datasets, search the public repositories (GEO, ArrayExpress, "
+        "OmicsDI, HuggingFace).\n\n"
+        f"Research question:\n{objective}\n\n"
+        + (f"What the data has to be:\n{hint_block}\n\n" if hint_block else "")
+        + f"Look for {_SEARCH_PURPOSES.get(purpose, _SEARCH_PURPOSES['gold'])}.\n\n"
+        "Answer as JSON with:\n"
+        "  'topic'     the question's most specific biological subject, 1-4 words\n"
+        "  'assay'     the measurement, e.g. `Perturb-seq`, `CROP-seq`, `scRNA-seq`\n"
+        "  'cell_type' the cell line, cell type or tissue, e.g. `K562`\n"
+        f"  'queries'   2-{most} keyword queries worded like a repository title, "
+        "3-6 words each, no sentences or boolean syntax. Repository search "
+        "matches every word, so do not pile up qualifiers -- but never drop the "
+        "words that make this question specific."
+    )
+    try:
+        response = _ask(client, prompt, _QUERIES_SCHEMA, log)
+    except Exception as e:  # noqa: BLE001 - a failed step falls back to the plain prompt
+        _log(log, f"# retrieval: the search-first step failed ({e}); continuing without it")
+        return ""
+    response = response or {}
+    topic = str(response.get("topic") or "").strip()
+    assay = str(response.get("assay") or "").strip()
+    cell_type = str(response.get("cell_type") or "").strip()
+    queries = [str(q).strip() for q in (response.get("queries") or []) if str(q).strip()][:most]
+    # The anchors the model's own queries may have dropped.
+    anchors = (
+        [f"{topic} {assay}", f"{topic} {cell_type}"]
+        if purpose == "gold" and topic
+        else [f"{cell_type} {assay}", f"{cell_type} single-cell"]
+        if purpose == "evidence" and cell_type
+        else []
+    )
+    for anchor in anchors:
+        anchor = " ".join(anchor.split())
+        if anchor and not any(anchor.lower() == q.lower() for q in queries):
+            queries.append(anchor)
+    if topic or cell_type:
+        _log(log, f"# retrieval: topic {topic!r}, assay {assay!r}, cell type {cell_type!r}")
+    blocks: list[str] = []
+    seen_in: dict[str, list[str]] = {}
+    titles: dict[str, str] = {}
+    for query in queries:
+        _log(log, f"# retrieval: search first: {query!r}")
+        try:
+            text = run_search("tu://search#" + json.dumps({"query": query}))
+        except Exception as e:  # noqa: BLE001 - one failed search is not fatal
+            _log(log, f"# retrieval: that search failed: {e}")
+            continue
+        if not str(text).strip():
+            continue
+        blocks.append(f"search {query!r}:\n{text}")
+        for line in str(text).splitlines():
+            parts = line.strip().split(None, 1)
+            if not parts:
+                continue
+            accession = parts[0]
+            seen_in.setdefault(accession, [])
+            if query not in seen_in[accession]:
+                seen_in[accession].append(query)
+            titles.setdefault(accession, line.strip())
+    # A title that names the topic outranks one that only matched the cell
+    # type: HuggingFace returns the same K562 repositories for every query that
+    # says "K562", which tied them with the UPR screen on count alone.
+    key_words = [
+        word
+        for word in re.findall(r"[a-z0-9]+", (topic if purpose == "gold" else cell_type).lower())
+        if len(word) > 3 or word.isupper()
+    ]
+
+    def on_topic(accession: str) -> bool:
+        title = titles[accession].lower()
+        # most of the words, not one: `unfolded-veil` is not the unfolded protein response
+        return bool(key_words) and sum(word in title for word in key_words) >= max(1, len(key_words) - 1)
+
+    ranked = sorted(
+        (accession for accession in seen_in if len(seen_in[accession]) > 1 or on_topic(accession)),
+        key=lambda accession: (not on_topic(accession), -len(seen_in[accession])),
+    )
+    summary = ""
+    if ranked:
+        summary = (
+            "Strongest candidates -- titles naming the "
+            + ("topic" if purpose == "gold" else "cell type")
+            + " first, then by how many searches returned them:\n"
+            + "\n".join(
+                f"  [{len(seen_in[a])} searches{', on topic' if on_topic(a) else ''}] {titles[a]}"
+                for a in ranked[:12]
+            )
+            + "\n\n"
+        )
+    return summary + "\n\n".join(blocks)
+
+
 def propose_datasets(
     objective: str,
     *,
@@ -304,8 +451,14 @@ def propose_datasets(
     run_search: Callable[[str], str] | None = None,
     max_hops: int = 3,
     retry: str = "",
+    search_first: bool = False,
 ) -> list[Proposal]:
     """Let the model find and choose the datasets, in one conversation.
+
+    `search_first` (with `run_search`): before naming anything, the model writes
+    search queries, they are run, and it names datasets from the hits. Offered
+    the search tools as an option, it never used them and named accessions from
+    memory -- three T-cell runs proposed COVID atlases as "CRISPR screens".
 
     One round of "the model names datasets" was not enough -- it cannot name a
     dataset it does not know, and it cannot see what a keyword search found --
@@ -365,13 +518,29 @@ def propose_datasets(
         "`geo://GSE1#suppl/file`), check with a search tool that it exists: the "
         "repository alone is always safe to name, and the fetcher lists what it "
         "holds.\n\n"
-        "Answer as JSON with key 'datasets': a list of objects with\n"
+        + (
+            "A search tool is available: look a series up before naming it. An "
+            "accession recalled from memory is often a different study with a "
+            "similar topic, and the run then downloads the wrong data.\n\n"
+            if run_search is not None
+            else ""
+        )
+        + "Answer as JSON with key 'datasets': a list of objects with\n"
         "  'identifier' (as above), 'contains' (what data it holds),\n"
         "  'why' (why it fits this question), 'confidence' (0.0-1.0)."
     )
     _log(log, f"# retrieval: asking the model for candidate datasets "
               f"(max {max_items}, up to {max_hops} search hop(s), "
               f"client={type(client).__name__})")
+    if search_first and run_search is not None:
+        looked_up = search_repositories(objective, hints, client=client, log=log, run_search=run_search)
+        if looked_up:
+            prompt = (
+                f"{prompt}\n\nRepository search results for this question (run before "
+                "you answer; prefer accessions from these hits, and do not name an "
+                "accession that is not in them unless you are certain of it):\n\n"
+                f"{looked_up}"
+            )
     return _run_retrieval(
         prompt,
         client=client,
@@ -380,6 +549,12 @@ def propose_datasets(
         run_search=run_search,
         max_hops=max_hops,
     )
+
+
+#: The `--supp-size large` rule, shared by the evidence proposal and preflight.
+PREFER_LARGE_EVIDENCE = (
+    "this analysis is set up as a small labeled table plus as much unlabeled evidence as possible, so among sources that fit, prefer the one with the MOST rows (cells) -- a large atlas or a large screen of the same cell type beats a small one; relevance (same cell type, same measurement) still comes first"
+)
 
 
 def propose_evidence(
@@ -396,8 +571,11 @@ def propose_evidence(
     log: Callable[[str], None] = print,
     run_search: Callable[[str], str] | None = None,
     max_hops: int = 3,
+    prefer_large: bool = False,
 ) -> list[Proposal]:
     """Round two: other tables that carry the gold's columns, with other rows.
+
+    `prefer_large` asks for the sources with the most rows (`--supp-size large`).
 
     This is the search the first round could not do. Until a labeled table is
     chosen there is nothing to aim at: an "external" table has to supply the
@@ -441,7 +619,7 @@ def propose_evidence(
             else ""
         )
         + (
-            "A keyword search on those column names returned:\n"
+            "Repository searches for this evidence returned:\n"
             f"{search_hits[:4000]}\n\n"
             if search_hits
             else ""
@@ -465,7 +643,8 @@ def propose_evidence(
         "is a claim that the repository holds that file, and guessing the usual "
         "`train.csv`/`test.csv` layout for a repository that has one `person.csv` "
         "costs a round trip. Search first, or name the repository.\n"
-        f"{_identifiers_block()}"
+        + (f"- {PREFER_LARGE_EVIDENCE};\n" if prefer_large else "")
+        + f"{_identifiers_block()}"
         "Answer as JSON with key 'datasets': a list of objects with\n"
         "  'identifier' (as above), 'contains' (what data it holds),\n"
         "  'why' (why it fits -- say which columns it shares), "

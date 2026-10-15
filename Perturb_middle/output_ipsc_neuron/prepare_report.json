@@ -1,0 +1,933 @@
+{
+  "survey": "artifacts/dataprep/ipsc-neuron-v3/survey.json",
+  "decisions": {
+    "survey": "artifacts/dataprep/ipsc-neuron-v3/survey.json",
+    "out": "Perturb_middle/output_ipsc_neuron",
+    "min_umis": 1000,
+    "min_similarity": 0.6,
+    "max_samples_per_series": 2,
+    "supp_budget_gb": 8.0,
+    "supp_ratio": 5.0,
+    "n_hvg": 5000,
+    "target_sum": 10000.0,
+    "test_fraction": 0.25,
+    "validation_fraction": 0.2,
+    "batch_size": 32
+  },
+  "steps": [
+    [
+      "barcodes in the file",
+      1514144
+    ],
+    [
+      "cells (>= 1000 UMIs)",
+      18690
+    ],
+    [
+      "with a guide call",
+      10693
+    ]
+  ],
+  "study": {
+    "question": "In human iPSC-derived neurons, can the transcriptional response to CRISPRi knockdown of genes not seen in training be predicted from a small labeled screen, using large single-cell profiles of iPSC-derived neurons from other experiments, with their labels ignored, as supplementary evidence?",
+    "dataset": "GSE289235 (CRISPRi CROP-seq, day-21 iPSC-derived neurons)",
+    "held_out_unit": "perturbed genes never seen in training",
+    "condition_column": "condition",
+    "split_mode": "unseen_single",
+    "test_fraction": 0.25,
+    "validation_fraction": 0.2,
+    "batch_size": 32,
+    "max_panel_genes": 0,
+    "normalize": "log1p(CPM 10000)",
+    "target_sum": 10000.0,
+    "counts": {
+      "total_column": "total_counts",
+      "gold": "Perturb_middle/output_ipsc_neuron/gold_counts.parquet",
+      "supplementary": {
+        "Perturb_middle/output_ipsc_neuron/supp_ipsc_neuron_pooled.parquet": "Perturb_middle/output_ipsc_neuron/supp_ipsc_neuron_pooled_counts.parquet"
+      }
+    }
+  },
+  "gold": {
+    "sample": "GSM8787485",
+    "estimated_bytes": 1007681536,
+    "estimated_cells": null,
+    "actual_bytes": 1007226520,
+    "cells": 10693,
+    "controls": 522,
+    "perturbations": 44,
+    "cells_per_perturbation": {
+      "min": 3,
+      "median": 159.0,
+      "max": 1509
+    },
+    "genes_in_file": 36543,
+    "median_umis": 10067.5,
+    "ribosomal_fraction": 0.047481030225753784
+  },
+  "candidates": [
+    {
+      "sample": "GSM3543623",
+      "series": "geo://GSE124703",
+      "title": "CROP-seq_Day 7_neuron_10x_lane_2; Human iPSC-derived neuron; cell type",
+      "estimated_bytes": 224870195,
+      "estimated_cells": null,
+      "downloaded_bytes": 0,
+      "barcodes": 737280,
+      "cells": 11296,
+      "shared_genes": 7680,
+      "pearson": 0.784,
+      "spearman": 0.655,
+      "median_umis": 14808.0,
+      "median_genes": 4282.0,
+      "ribosomal_fraction": 0.117,
+      "decision": "pooled"
+    },
+    {
+      "sample": "GSM3543622",
+      "series": "geo://GSE124703",
+      "title": "CROP-seq_Day 7_neuron_10x_lane_1; Human iPSC-derived neuron; cell type",
+      "estimated_bytes": 239550259,
+      "estimated_cells": null,
+      "downloaded_bytes": 0,
+      "barcodes": 737280,
+      "cells": 11017,
+      "shared_genes": 7680,
+      "pearson": 0.853,
+      "spearman": 0.773,
+      "median_umis": 15485.0,
+      "median_genes": 4716.0,
+      "ribosomal_fraction": 0.104,
+      "decision": "pooled"
+    },
+    {
+      "sample": "GSM4632025",
+      "series": "geo://GSE152988",
+      "title": "CROP-seq_CRISPRi_10x_lane_3; Human iPSC-derived neuron; cell type: hum",
+      "estimated_bytes": 69206016,
+      "estimated_cells": null,
+      "downloaded_bytes": 0,
+      "barcodes": 11974,
+      "cells": 11195,
+      "shared_genes": 7882,
+      "pearson": 0.923,
+      "spearman": 0.88,
+      "median_umis": 16168.0,
+      "median_genes": 4964.0,
+      "ribosomal_fraction": 0.066,
+      "decision": "pooled"
+    },
+    {
+      "sample": "GSM4632023",
+      "series": "geo://GSE152988",
+      "title": "CROP-seq_CRISPRi_10x_lane_2; Human iPSC-derived neuron; cell type: hum",
+      "estimated_bytes": 77594624,
+      "estimated_cells": null,
+      "downloaded_bytes": 0,
+      "barcodes": 14408,
+      "cells": 13364,
+      "shared_genes": 7882,
+      "pearson": 0.92,
+      "spearman": 0.876,
+      "median_umis": 13322.0,
+      "median_genes": 4475.0,
+      "ribosomal_fraction": 0.065,
+      "decision": "pooled"
+    },
+    {
+      "sample": "GSM4632022",
+      "series": "geo://GSE152988",
+      "title": "CROP-seq_CRISPRi_10x_lane_1; Human iPSC-derived neuron; cell type: hum",
+      "estimated_bytes": 79691776,
+      "estimated_cells": null,
+      "decision": "skipped: 2 sample(s) of this series already pooled"
+    },
+    {
+      "sample": "GSM4632026",
+      "series": "geo://GSE152988",
+      "title": "CROP-seq_CRISPRi_10x_lane_4; Human iPSC-derived neuron; cell type: hum",
+      "estimated_bytes": 88080384,
+      "estimated_cells": null,
+      "decision": "skipped: 2 sample(s) of this series already pooled"
+    },
+    {
+      "sample": "GSM9510613",
+      "series": "geo://GSE319096",
+      "title": "iGLUTs_D7_3182_mRNA_R4; iPSC derived cell; tissue: iPSC derived cell; ",
+      "estimated_bytes": 345448448,
+      "estimated_cells": 35031,
+      "downloaded_bytes": 0,
+      "barcodes": 29595,
+      "cells": 27483,
+      "shared_genes": 7949,
+      "pearson": 0.764,
+      "spearman": 0.656,
+      "median_umis": 7331.0,
+      "median_genes": 3392.0,
+      "ribosomal_fraction": 0.093,
+      "decision": "pooled"
+    },
+    {
+      "sample": "GSM9510610",
+      "series": "geo://GSE319096",
+      "title": "iGLUTs_D7_3182_mRNA_R1; iPSC derived cell; tissue: iPSC derived cell; ",
+      "estimated_bytes": 374798336,
+      "estimated_cells": 32336,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM9510620",
+      "series": "geo://GSE319096",
+      "title": "iGLUTs_D21_3182_mRNA_R3; iPSC derived cell; tissue: iPSC derived cell;",
+      "estimated_bytes": 241627136,
+      "estimated_cells": 31797,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM9510611",
+      "series": "geo://GSE319096",
+      "title": "iGLUTs_D7_3182_mRNA_R2; iPSC derived cell; tissue: iPSC derived cell; ",
+      "estimated_bytes": 366406656,
+      "estimated_cells": 31528,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM9510615",
+      "series": "geo://GSE319096",
+      "title": "iGABAs_D36_553_mRNA_R2; iPSC derived cell; tissue: iPSC derived cell; ",
+      "estimated_bytes": 275179520,
+      "estimated_cells": 31258,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM8525895",
+      "series": "geo://GSE277604",
+      "title": "PGP1 ADNP Het; PGP1 (iPSC); cell line: PGP1 (iPSC); cell type: induced",
+      "estimated_bytes": 261898240,
+      "estimated_cells": 30720,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM9510612",
+      "series": "geo://GSE319096",
+      "title": "iGLUTs_D7_3182_mRNA_R3; iPSC derived cell; tissue: iPSC derived cell; ",
+      "estimated_bytes": 348576768,
+      "estimated_cells": 30450,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM9510616",
+      "series": "geo://GSE319096",
+      "title": "iGABAs_D36_553_mRNA_R3; iPSC derived cell; tissue: iPSC derived cell; ",
+      "estimated_bytes": 276216832,
+      "estimated_cells": 28294,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM9510614",
+      "series": "geo://GSE319096",
+      "title": "iGABAs_D36_553_mRNA_R1; iPSC derived cell; tissue: iPSC derived cell; ",
+      "estimated_bytes": 242642944,
+      "estimated_cells": 23174,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM9510621",
+      "series": "geo://GSE319096",
+      "title": "iGLUTs_D21_3182_mRNA_R4; iPSC derived cell; tissue: iPSC derived cell;",
+      "estimated_bytes": 159800320,
+      "estimated_cells": 21827,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM9234653",
+      "series": "geo://GSE307960",
+      "title": "AD3G2_GE01_IMR90_N8; Brain; tissue: Brain; cell line: iPSC-derived Bra",
+      "estimated_bytes": 531458048,
+      "estimated_cells": 20480,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM8525896",
+      "series": "geo://GSE277604",
+      "title": "PGP1 ADNP Homo; PGP1 (iPSC); cell line: PGP1 (iPSC); cell type: induce",
+      "estimated_bytes": 175870976,
+      "estimated_cells": 19132,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM8525898",
+      "series": "geo://GSE277604",
+      "title": "WTC11 ADNP Het; WTC11 (iPSC); cell line: WTC11 (iPSC); cell type: indu",
+      "estimated_bytes": 169576448,
+      "estimated_cells": 18324,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM9510617",
+      "series": "geo://GSE319096",
+      "title": "iGABAs_D36_553_mRNA_R4; iPSC derived cell; tissue: iPSC derived cell; ",
+      "estimated_bytes": 148251648,
+      "estimated_cells": 18054,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM8525857",
+      "series": "geo://GSE277602",
+      "title": "Dual-Smadi; PGP1 (iPSC); cell line: PGP1 (iPSC); cell type: induced GA",
+      "estimated_bytes": 92591104,
+      "estimated_cells": 17785,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM8525897",
+      "series": "geo://GSE277604",
+      "title": "WTC11 WT; WTC11 (iPSC); cell line: WTC11 (iPSC); cell type: induced GA",
+      "estimated_bytes": 149649408,
+      "estimated_cells": 17246,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM9510618",
+      "series": "geo://GSE319096",
+      "title": "iGLUTs_D21_3182_mRNA_R1; iPSC derived cell; tissue: iPSC derived cell;",
+      "estimated_bytes": 200673280,
+      "estimated_cells": 16168,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM8525854",
+      "series": "geo://GSE277602",
+      "title": "PSC-iNs; PGP1 (iPSC); cell line: PGP1 (iPSC); cell type: induced GABAe",
+      "estimated_bytes": 163272704,
+      "estimated_cells": 15090,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM8525855",
+      "series": "geo://GSE277602",
+      "title": "7DNPC-iNs; PGP1 (iPSC); cell line: PGP1 (iPSC); cell type: induced GAB",
+      "estimated_bytes": 108057600,
+      "estimated_cells": 14282,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM8525894",
+      "series": "geo://GSE277604",
+      "title": "PGP1 WT; PGP1 (iPSC); cell line: PGP1 (iPSC); cell type: induced GABAe",
+      "estimated_bytes": 108743680,
+      "estimated_cells": 14282,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM9510619",
+      "series": "geo://GSE319096",
+      "title": "iGLUTs_D21_3182_mRNA_R2; iPSC derived cell; tissue: iPSC derived cell;",
+      "estimated_bytes": 189130752,
+      "estimated_cells": 14012,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM8525856",
+      "series": "geo://GSE277602",
+      "title": "3DNPC-iNs; PGP1 (iPSC); cell line: PGP1 (iPSC); cell type: induced GAB",
+      "estimated_bytes": 42328064,
+      "estimated_cells": 13473,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM8082452",
+      "series": "geo://GSE255904",
+      "title": "Alice_1; iPSC-derived neurons; cell line: iPSC-derived neurons; age: D",
+      "estimated_bytes": 56950784,
+      "estimated_cells": 5928,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM8082453",
+      "series": "geo://GSE255904",
+      "title": "Alice_2; iPSC-derived neurons; cell line: iPSC-derived neurons; age: D",
+      "estimated_bytes": 55900160,
+      "estimated_cells": 5389,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM8082454",
+      "series": "geo://GSE255904",
+      "title": "Alice_3; iPSC-derived neurons; cell line: iPSC-derived neurons; age: D",
+      "estimated_bytes": 43314176,
+      "estimated_cells": 4581,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSE335939",
+      "series": "geo://GSE335939",
+      "title": "Integration of cell-specific gene expression and chromatin accessibili",
+      "estimated_bytes": 149894358627,
+      "estimated_cells": null,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM4632027",
+      "series": "geo://GSE152988",
+      "title": "CROP-seq_CRISPRa_10x_lane_1; Human iPSC-derived neuron; cell type: hum",
+      "estimated_bytes": 89128960,
+      "estimated_cells": null,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM4632028",
+      "series": "geo://GSE152988",
+      "title": "CROP-seq_CRISPRa_10x_lane_2; Human iPSC-derived neuron; cell type: hum",
+      "estimated_bytes": 72351744,
+      "estimated_cells": null,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM9510626",
+      "series": "geo://GSE319096",
+      "title": "iGLUTs_D7_3182_gRNA_R1; iPSC derived cell; tissue: iPSC derived cell; ",
+      "estimated_bytes": 32505856,
+      "estimated_cells": null,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM9510627",
+      "series": "geo://GSE319096",
+      "title": "iGLUTs_D7_3182_gRNA_R2; iPSC derived cell; tissue: iPSC derived cell; ",
+      "estimated_bytes": 28311552,
+      "estimated_cells": null,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM9510628",
+      "series": "geo://GSE319096",
+      "title": "iGLUTs_D7_3182_gRNA_R3; iPSC derived cell; tissue: iPSC derived cell; ",
+      "estimated_bytes": 31457280,
+      "estimated_cells": null,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM9510629",
+      "series": "geo://GSE319096",
+      "title": "iGLUTs_D7_3182_gRNA_R4; iPSC derived cell; tissue: iPSC derived cell; ",
+      "estimated_bytes": 31352422,
+      "estimated_cells": null,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM9134885",
+      "series": "geo://GSE303735",
+      "title": "1046-GWI-Vehicle, 1046-GWI-Toxicant, 1039-Control-Vehicle, 1039-Contro",
+      "estimated_bytes": 82837504,
+      "estimated_cells": null,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM9134886",
+      "series": "geo://GSE303735",
+      "title": "1024-GWI-Vehicle, 1024-GWI-Toxicant, 1083-Control-Vehicle, 1083-Contro",
+      "estimated_bytes": 82837504,
+      "estimated_cells": null,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM7814309",
+      "series": "geo://GSE244370",
+      "title": "iP11N-d28-DM-Rep1; NGN2-iN; cell type: NGN2-iN; day: iP11N; media: d28",
+      "estimated_bytes": 2202009,
+      "estimated_cells": null,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM7814310",
+      "series": "geo://GSE244370",
+      "title": "iP11N-d28-DM-Rep2; NGN2-iN; cell type: NGN2-iN; day: iP11N; media: d28",
+      "estimated_bytes": 6815744,
+      "estimated_cells": null,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM7814311",
+      "series": "geo://GSE244370",
+      "title": "G12-d28-DM-Rep1; NGN2-iN; cell type: NGN2-iN; day: G12; media: d28",
+      "estimated_bytes": 1153433,
+      "estimated_cells": null,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM7814312",
+      "series": "geo://GSE244370",
+      "title": "G12-d28-DM-Rep2; NGN2-iN; cell type: NGN2-iN; day: G12; media: d28",
+      "estimated_bytes": 1992294,
+      "estimated_cells": null,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM7814313",
+      "series": "geo://GSE244370",
+      "title": "iP11N-d42-DM-Rep2; NGN2-iN; cell type: NGN2-iN; day: iP11N; media: d42",
+      "estimated_bytes": 2516582,
+      "estimated_cells": null,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM7814314",
+      "series": "geo://GSE244370",
+      "title": "iP11N-d56-DM-Rep1; NGN2-iN; cell type: NGN2-iN; day: iP11N; media: d56",
+      "estimated_bytes": 1887436,
+      "estimated_cells": null,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSM7814315",
+      "series": "geo://GSE244370",
+      "title": "iP11N-d56-DM-Rep2; NGN2-iN; cell type: NGN2-iN; day: iP11N; media: d56",
+      "estimated_bytes": 3670016,
+      "estimated_cells": null,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "GSE260498",
+      "series": "geo://GSE260498",
+      "title": "Insights for disease modeling from single cell transcriptomics of iPSC",
+      "estimated_bytes": 58720256,
+      "estimated_cells": null,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX11541629",
+      "series": "scbasecount",
+      "title": "iPSC-derived neurons (NLGN3 R451C genotype) | iPSC-derived neurons (mi",
+      "estimated_bytes": null,
+      "estimated_cells": 15462,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX10657844",
+      "series": "scbasecount",
+      "title": "SA005 | hiPSC-derived GABAergic neurons | unsure",
+      "estimated_bytes": null,
+      "estimated_cells": 13707,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX26057557",
+      "series": "scbasecount",
+      "title": "SF2019-227 | hiPSC-derived neuron | Papain dissociation solution; 10 \u00b5",
+      "estimated_bytes": null,
+      "estimated_cells": 13543,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX10657842",
+      "series": "scbasecount",
+      "title": "SA005 | hiPSC-derived GABAergic neurons | trazodone hydrochloride (Trz",
+      "estimated_bytes": null,
+      "estimated_cells": 13167,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX10657841",
+      "series": "scbasecount",
+      "title": "SA005 | hiPSC-derived GABAergic neurons | Testing FDA-approved small m",
+      "estimated_bytes": null,
+      "estimated_cells": 11721,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX15406697",
+      "series": "scbasecount",
+      "title": "iPSC-derived neuron culture | excitatory neurons | ethanol exposure",
+      "estimated_bytes": null,
+      "estimated_cells": 11347,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX17782703",
+      "series": "scbasecount",
+      "title": "HPSI0114ikolf2-clone1 | neurons differentiated from iPSCs | NOTCH inhi",
+      "estimated_bytes": null,
+      "estimated_cells": 11228,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX26240592",
+      "series": "scbasecount",
+      "title": "iPSC lines | iPSC-derived neuronal cell lines | Genetic modification Y",
+      "estimated_bytes": null,
+      "estimated_cells": 11155,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX12478851",
+      "series": "scbasecount",
+      "title": "human iPSC line 2131 | iPSC-derived neural cells (dopaminergic neuron ",
+      "estimated_bytes": null,
+      "estimated_cells": 10485,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX12478850",
+      "series": "scbasecount",
+      "title": "2131 | iPSC-derived neural cells (dopaminergic neurons, neural co-cult",
+      "estimated_bytes": null,
+      "estimated_cells": 9428,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX12478853",
+      "series": "scbasecount",
+      "title": "human iPSC line 2131 (TH-P2A-tdTomato) | iPSC-derived neurons | direct",
+      "estimated_bytes": null,
+      "estimated_cells": 7214,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX10657831",
+      "series": "scbasecount",
+      "title": "SA005 | hiPSC-derived GABAergic neurons | Trazodone (Trzd) added to cu",
+      "estimated_bytes": null,
+      "estimated_cells": 6826,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX10657832",
+      "series": "scbasecount",
+      "title": "SA005 | hiPSC-derived GABAergic neurons | Trazodone (Trzd) added to cu",
+      "estimated_bytes": null,
+      "estimated_cells": 6648,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX10657846",
+      "series": "scbasecount",
+      "title": "SA005 | hiPSC-derived GABAergic neurons | Trazodone (Trzd) added to cu",
+      "estimated_bytes": null,
+      "estimated_cells": 6367,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX22066416",
+      "series": "scbasecount",
+      "title": "Human iPSC neurons | GABAergic Cortical Neurons | GABAAR receptor agon",
+      "estimated_bytes": null,
+      "estimated_cells": 6182,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX26240591",
+      "series": "scbasecount",
+      "title": "iPSC lines | iPSC-derived neuronal cell lines | Complete mesocolic exc",
+      "estimated_bytes": null,
+      "estimated_cells": 5818,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "ERX4791270",
+      "series": "scbasecount",
+      "title": "SC102A1 | induced neurons from pluripotent stem cells | neuronal diffe",
+      "estimated_bytes": null,
+      "estimated_cells": 5176,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX10657829",
+      "series": "scbasecount",
+      "title": "NC3-1 | hiPSC-derived GABAergic neurons | Trazodone hydrochloride (Trz",
+      "estimated_bytes": null,
+      "estimated_cells": 3628,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX10657830",
+      "series": "scbasecount",
+      "title": "NC3-1 | hiPSC-derived GABAergic neurons | Trazodone hydrochloride (Trz",
+      "estimated_bytes": null,
+      "estimated_cells": 3573,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX10657840",
+      "series": "scbasecount",
+      "title": "NC3-1 | hiPSC-derived GABAergic neurons | Trazodone hydrochloride (Trz",
+      "estimated_bytes": null,
+      "estimated_cells": 3548,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX10657839",
+      "series": "scbasecount",
+      "title": "NC3-1 (hiPSC-derived GABAergic neurons) | hiPSC-derived GABAergic neur",
+      "estimated_bytes": null,
+      "estimated_cells": 3538,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX14780583",
+      "series": "scbasecount",
+      "title": "297-1 (human induced pluripotent stem cells) | stem cell-derived neuro",
+      "estimated_bytes": null,
+      "estimated_cells": 3099,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX21770098",
+      "series": "scbasecount",
+      "title": "KOLF2.1J, iPSC-derived neurons, clone: FLD0006 | differentiated hypoth",
+      "estimated_bytes": null,
+      "estimated_cells": 2592,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX13009786",
+      "series": "scbasecount",
+      "title": "iPSC-derived neurons | iPSC-derived neurons | NEUROG2 induction with s",
+      "estimated_bytes": null,
+      "estimated_cells": 2505,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX24595006",
+      "series": "scbasecount",
+      "title": "hiPSC-derived motor neurons | motor neuron | unsure",
+      "estimated_bytes": null,
+      "estimated_cells": 1276,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX6917529",
+      "series": "scbasecount",
+      "title": "CS6ZLDiALS-n1 | iPSC-derived motor neurons | none reported",
+      "estimated_bytes": null,
+      "estimated_cells": 1127,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX6917525",
+      "series": "scbasecount",
+      "title": "CS0179iCTR-n1 | iPSC-derived motor neurons | none reported",
+      "estimated_bytes": null,
+      "estimated_cells": 834,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX6917531",
+      "series": "scbasecount",
+      "title": "CS52iALS-C9n6.ISO | iPSC-derived motor neurons | disease status (ALS v",
+      "estimated_bytes": null,
+      "estimated_cells": 826,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX6917530",
+      "series": "scbasecount",
+      "title": "CS83iCTR-33n1, CS0179iCTR-n1, CS2XWCiALS-n1, CS29iALS-C9n1, CS52iALS-C",
+      "estimated_bytes": null,
+      "estimated_cells": 752,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX6917524",
+      "series": "scbasecount",
+      "title": "CS29iALS-C9n1 | iPSC-derived motor neurons | none reported",
+      "estimated_bytes": null,
+      "estimated_cells": 735,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX14847038",
+      "series": "scbasecount",
+      "title": "hiPSCs | NGN2-induced glutamatergic neurons from hiPSCs | CRISPRa acti",
+      "estimated_bytes": null,
+      "estimated_cells": 3205,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX14847043",
+      "series": "scbasecount",
+      "title": "human-induced pluripotent stem cell | NPC-derived NGN2 Neurons | CRISP",
+      "estimated_bytes": null,
+      "estimated_cells": 240,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX27325577",
+      "series": "scbasecount",
+      "title": "iPS cell\u2013derived neurons | Cultured glutamatergic and GABAergic neuron",
+      "estimated_bytes": null,
+      "estimated_cells": 20171,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX27532794",
+      "series": "scbasecount",
+      "title": "Neurons derived from hiPSCs | Cultured neurons derived from human indu",
+      "estimated_bytes": null,
+      "estimated_cells": 18084,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX27325578",
+      "series": "scbasecount",
+      "title": "hiPSC-derived neurons | neuronal cells from iPSCs | KCl depolarization",
+      "estimated_bytes": null,
+      "estimated_cells": 16864,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX27532313",
+      "series": "scbasecount",
+      "title": "Derived from iPSC cell lines (e.g., CW20063, CW20079, CW20112, CW20137",
+      "estimated_bytes": null,
+      "estimated_cells": 15365,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX27532803",
+      "series": "scbasecount",
+      "title": "hiPSC-derived neurons | cultured glutamatergic and GABAergic neurons d",
+      "estimated_bytes": null,
+      "estimated_cells": 15170,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX27325572",
+      "series": "scbasecount",
+      "title": "cultured neurons from human iPS cells | neurons (glutamatergic and GAB",
+      "estimated_bytes": null,
+      "estimated_cells": 15039,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX27325575",
+      "series": "scbasecount",
+      "title": "Neurons cultured and differentiated from human iPS cells | Cultured gl",
+      "estimated_bytes": null,
+      "estimated_cells": 14482,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX27325189",
+      "series": "scbasecount",
+      "title": "iPSC-derived neurons | cultured neurons (excitatory/glutamatergic and ",
+      "estimated_bytes": null,
+      "estimated_cells": 13480,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX27532322",
+      "series": "scbasecount",
+      "title": "hiPSC-derived neurons | cultured neurons (glutamatergic and GABAergic)",
+      "estimated_bytes": null,
+      "estimated_cells": 12521,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX27325193",
+      "series": "scbasecount",
+      "title": "hiPSC-derived neurons | cultured glutamatergic and GABAergic neurons d",
+      "estimated_bytes": null,
+      "estimated_cells": 11968,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX27325183",
+      "series": "scbasecount",
+      "title": "iPS cell-derived neuronal cultures | cultured glutamatergic and GABAer",
+      "estimated_bytes": null,
+      "estimated_cells": 11800,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "ERX9138820",
+      "series": "scbasecount",
+      "title": "HC1 (healthy control iPSC line) | iPSC-derived GABAergic interneurons ",
+      "estimated_bytes": null,
+      "estimated_cells": 4025,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX14847034",
+      "series": "scbasecount",
+      "title": "hiPSC-derived NGN2 neurons | hiPSC-derived NGN2 neurons | CRISPRa-base",
+      "estimated_bytes": null,
+      "estimated_cells": 28413,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX14847033",
+      "series": "scbasecount",
+      "title": "hiPSC | NGN2-induced glutamatergic neurons derived from human induced ",
+      "estimated_bytes": null,
+      "estimated_cells": 9977,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX14847035",
+      "series": "scbasecount",
+      "title": "hiPSC-derived neurons (NGN2-induced) | hiPSC-derived neurons | CRISPRa",
+      "estimated_bytes": null,
+      "estimated_cells": 7461,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX14847036",
+      "series": "scbasecount",
+      "title": "human-induced pluripotent stem cell | human-induced pluripotent stem c",
+      "estimated_bytes": null,
+      "estimated_cells": 3432,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX14847037",
+      "series": "scbasecount",
+      "title": "hiPSC-derived neurons | hiPSC-derived glutamatergic NGN2-neurons | CRI",
+      "estimated_bytes": null,
+      "estimated_cells": 2768,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX14847039",
+      "series": "scbasecount",
+      "title": "human-induced pluripotent stem cells (iPSCs) | NPC-derived NGN2 Neuron",
+      "estimated_bytes": null,
+      "estimated_cells": 2323,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    },
+    {
+      "sample": "SRX14847042",
+      "series": "scbasecount",
+      "title": "hiPSCs | Glutamatergic neurons derived from hiPSCs (NGN2-neurons) | CR",
+      "estimated_bytes": null,
+      "estimated_cells": 1137,
+      "decision": "not needed: 74,355 cells pooled (>= 5x gold)"
+    }
+  ],
+  "supplementary": {
+    "sources": [
+      "GSM3543623",
+      "GSM3543622",
+      "GSM4632025",
+      "GSM4632023",
+      "GSM9510613"
+    ],
+    "cells": 74355,
+    "ratio": 6.95,
+    "panel_coverage": {
+      "GSM3543623": 4844,
+      "GSM3543622": 4844,
+      "GSM4632025": 4964,
+      "GSM4632023": 4964,
+      "GSM9510613": 5004
+    }
+  },
+  "panel": {
+    "genes": 5005,
+    "forced_perturbed": 5,
+    "missing_perturbed": [
+      "H2AFZ"
+    ]
+  },
+  "download_gb": 0.0
+}

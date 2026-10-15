@@ -28,6 +28,7 @@ of the same genes.
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass, field
@@ -63,14 +64,36 @@ class PerturbationTask:
     condition_column: str
     control_labels: tuple[str, ...]
     delta_scale: float = 1.0
+    #: Genes a perturbation can name (GEARS' `pert_names`: the GO graph's
+    #: genes), independent of which genes are measured. Empty = the panel.
+    perturbation_genes: tuple[str, ...] = ()
 
     @property
     def n_genes(self) -> int:
         return len(self.genes)
 
+    @property
+    def perturbation_vocabulary(self) -> tuple[str, ...]:
+        return self.perturbation_genes or self.genes
+
+    @property
+    def perturbation_to_index(self) -> dict[str, int]:
+        if not self.perturbation_genes:
+            return self.gene_to_index
+        cached = self.__dict__.get("_perturbation_to_index")
+        if cached is None:
+            cached = {gene: index for index, gene in enumerate(self.perturbation_genes)}
+            object.__setattr__(self, "_perturbation_to_index", cached)
+        return cached
+
+    @property
+    def n_perturbation_genes(self) -> int:
+        return len(self.perturbation_vocabulary)
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "n_genes": self.n_genes,
+            "n_perturbation_genes": self.n_perturbation_genes,
             "condition_column": self.condition_column,
             "control_labels": list(self.control_labels),
             "delta_scale": self.delta_scale,
@@ -100,13 +123,17 @@ def parse_condition(value: Any, *, separators: Sequence[str] = CONDITION_SEPARAT
 
     Everything that is not a separator is kept as the gene's own name, so names
     with hyphens (`ARMCX5-GPRASP2`) survive; only the separators above split.
+    GEARS writes a single perturbation as `'UBL5+ctrl'`: the `ctrl` slot is a
+    placeholder, not a gene, so it is dropped (`('UBL5',)`).
     """
     text = str(value).strip()
     if not text:
         return ()
     for separator in separators:
         if separator in text:
-            return tuple(part for part in text.split(separator) if part)
+            parts = tuple(part for part in text.split(separator) if part)
+            genes = tuple(part for part in parts if part.lower() != "ctrl")
+            return genes or parts
     return (text,)
 
 
@@ -185,8 +212,14 @@ def build_task(
     gene_columns: Sequence[str],
     control_labels: Sequence[str] = DEFAULT_CONTROL_LABELS,
     delta_scale: float = 1.0,
+    perturbation_vocabulary: Sequence[str] | None = None,
 ) -> PerturbationTask:
-    """The panel and the vocabularies, from the table that has the labels."""
+    """The panel and the vocabularies, from the table that has the labels.
+
+    `perturbation_vocabulary` is the set of genes a perturbation may name (the
+    GO graph's genes, as in GEARS); without it a perturbation must be a measured
+    gene.
+    """
     genes = tuple(str(gene) for gene in gene_columns)
     if not genes:
         raise ValueError("a perturbation task needs the measured genes as columns")
@@ -196,6 +229,7 @@ def build_task(
         condition_column=str(condition_column),
         control_labels=tuple(control_labels),
         delta_scale=float(delta_scale or 1.0),
+        perturbation_genes=tuple(str(gene) for gene in (perturbation_vocabulary or ())),
     )
 
 
@@ -224,16 +258,7 @@ def build_examples(
     context = {column: frame[column].to_numpy() for column in context_columns if column in frame.columns}
 
     control_mask = conditions.map(lambda value: is_control(value, task.control_labels)).to_numpy()
-    group_key = None
-    if context:
-        columns = [column for column in ("cell_type", "donor", "batch") if column in context]
-        if columns:
-            group_key = np.array(
-                [
-                    "|".join(str(context[column][index]) for column in columns)
-                    for index in range(len(frame))
-                ]
-            )
+    group_key = _group_key(frame, context_columns)
     groups: dict[str, np.ndarray] = {}
     if control_mask.any():
         if group_key is not None:
@@ -251,6 +276,7 @@ def build_examples(
 
     examples: list[PerturbationExample] = []
     counts: dict[str, int] = {}
+    outside: dict[str, int] = {}
     fallbacks = 0
     for index in range(len(frame)):
         if control_mask[index]:
@@ -259,14 +285,17 @@ def build_examples(
         # `ATF2g1` is the guide that targets `ATF2`: two guides of one gene are
         # one perturbation, and it can only be encoded if the panel measures the
         # gene rather than the guide.
-        perturbation = tuple(
-            to_perturbed_gene(gene, task.gene_to_index) for gene in perturbation
-        )
+        vocabulary = task.perturbation_to_index
+        perturbation = tuple(to_perturbed_gene(gene, vocabulary) for gene in perturbation)
         if not perturbation:
             continue
-        unknown = [gene for gene in perturbation if gene not in task.gene_to_index]
+        unknown = [gene for gene in perturbation if gene not in vocabulary]
         if unknown:
-            continue  # a perturbation whose gene is not in the panel cannot be encoded
+            # a gene outside the perturbation vocabulary cannot be encoded (GEARS
+            # drops perturbations outside its GO graph too); counted, not silent
+            label = "+".join(perturbation)
+            outside[label] = outside.get(label, 0) + 1
+            continue
         key = str(group_key[index]) if group_key is not None else "global"
         baseline = groups.get(key, global_control)
         if key != "global" and key not in groups:
@@ -303,8 +332,51 @@ def build_examples(
         "dropped_perturbations": dropped[:20],
         "dropped_count": len(dropped),
         "min_cells_per_perturbation": int(min_cells_per_perturbation),
+        "outside_vocabulary": sorted(outside),
+        "outside_vocabulary_cells": int(sum(outside.values())),
     }
     return kept, report
+
+
+def _group_key(frame: pd.DataFrame, context_columns: Sequence[str]) -> np.ndarray | None:
+    """Per-row control group (`cell_type|donor|batch`), or None for one global group."""
+    columns = [
+        column
+        for column in ("cell_type", "donor", "batch")
+        if column in context_columns and column in frame.columns
+    ]
+    if not columns:
+        return None
+    values = [frame[column].to_numpy() for column in columns]
+    return np.array(["|".join(str(column[index]) for column in values) for index in range(len(frame))])
+
+
+def control_cells(
+    frame: pd.DataFrame,
+    task: PerturbationTask,
+    *,
+    context_columns: Sequence[str] = (),
+) -> dict[str, np.ndarray]:
+    """The gold's control cells, one `(n, G)` array per control group.
+
+    Training pairs each perturbed cell with one of these, drawn from the same
+    group as its `control_group` (or `"global"`, every control cell), so the
+    model's input is a real cell rather than the group mean.
+    """
+    values = frame[list(task.genes)].to_numpy(dtype=np.float32, na_value=0.0)
+    control_mask = (
+        frame[task.condition_column]
+        .map(lambda value: is_control(value, task.control_labels))
+        .to_numpy()
+    )
+    if not control_mask.any():
+        return {}
+    pool = {"global": values[control_mask]}
+    group_key = _group_key(frame, context_columns)
+    if group_key is not None:
+        for key in np.unique(group_key[control_mask]):
+            pool[str(key)] = values[control_mask & (group_key == key)]
+    return pool
 
 
 def perturbation_splits(
@@ -314,15 +386,24 @@ def perturbation_splits(
     test_fraction: float = 0.2,
     validation_fraction: float = 0.1,
     seed: int = 42,
+    holdout: Sequence[str] = (),
 ) -> dict[str, list[str]]:
     """Split **perturbation identities**, not cells.
 
     Singles and combinations are separated first, because the two regimes ask
     different questions: can the model transfer a single gene's effect from
     other perturbations, and can it compose two effects it has seen apart.
+
+    `holdout` names perturbations that must land in **test**, whatever the
+    fraction would have picked -- how a question about one specific gene ("can
+    the IRF1 response be predicted?") is asked: train on the rest, test on it.
     """
     singles = sorted({p for p in perturbations if len(parse_condition(p)) == 1})
     combos = sorted({p for p in perturbations if len(parse_condition(p)) > 1})
+    forced = sorted({p for p in perturbations if str(p) in {str(n) for n in holdout}})
+    if forced:
+        singles = [p for p in singles if p not in forced]
+        combos = [p for p in combos if p not in forced]
     rng = np.random.default_rng(seed)
 
     def carve(pool: list[str], share: float) -> tuple[list[str], list[str]]:
@@ -336,11 +417,11 @@ def perturbation_splits(
     if mode == "unseen_single":
         test, singles = carve(singles, test_fraction)
         validation, singles = carve(singles, validation_fraction)
-        result.update(train=singles + combos, validation=validation, test=test)
+        result.update(train=singles + combos, validation=validation, test=test + forced)
     elif mode == "unseen_combination":
         test, combos = carve(combos, test_fraction)
         validation, combos = carve(combos, validation_fraction)
-        result.update(train=singles + combos, validation=validation, test=test)
+        result.update(train=singles + combos, validation=validation, test=test + forced)
     elif mode == "mixed":
         test_singles, singles = carve(singles, test_fraction)
         test_combos, combos = carve(combos, test_fraction)
@@ -349,12 +430,17 @@ def perturbation_splits(
         result.update(
             train=singles + combos,
             validation=validation_singles + validation_combos,
-            test=test_singles + test_combos,
+            test=test_singles + test_combos + forced,
         )
     else:
         raise ValueError(
             f"unknown split mode {mode!r}; use unseen_single, unseen_combination or mixed"
         )
+    if not result.get("validation") and len(result.get("train", [])) >= 2:
+        # A small screen can leave validation empty (round(4 * 0.1) == 0). The
+        # arms then score NaN every epoch and the report shows a blank column;
+        # move one training perturbation over so the held-out signal exists.
+        result["validation"] = [result["train"].pop()]
     return result
 
 
@@ -398,3 +484,26 @@ def write_contract(
     path = out / "perturbation_contract.json"
     path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
     return path
+
+
+#: Supplementary cells a stage-3 run keeps per source (0 = all). A million-cell
+#: atlas is ~20 GB dense on a 5,000-gene panel, and both the co-expression graph
+#: and the PerturbNet cell VAE are well served by a few hundred thousand cells.
+DEFAULT_MAX_SUPPLEMENTARY_CELLS = 200_000
+
+
+def max_supplementary_cells() -> int:
+    raw = os.getenv("KOSMOS_PERTURBATION_MAX_SUPP_CELLS", "").strip()
+    return int(raw) if raw else DEFAULT_MAX_SUPPLEMENTARY_CELLS
+
+
+def supplementary_rows(n_rows: int, cap: int, seed: int) -> np.ndarray | None:
+    """The rows kept from an `n_rows` supplementary source, or None for all.
+
+    Seeded and sorted, so every consumer of the same source -- the normalised
+    table and its raw-count twin -- keeps exactly the same cells.
+    """
+    if not cap or n_rows <= cap:
+        return None
+    return np.sort(np.random.default_rng(seed).choice(n_rows, size=cap, replace=False))
+

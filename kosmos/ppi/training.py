@@ -8,9 +8,9 @@ optimisers that keep the correction's step small are the same for a cell-type
 classifier and a perturbation-response model.
 
 This module is deliberately torch-level and task-free. `PPILoss` (the column
-task) and `ppi_signed_correction` (the perturbation backend) are both thin
-callers of `signed_correction`; both trainers ask the same `correction_stage`
-predicate.
+task) calls `signed_correction`; both the column trainer and the perturbation
+trainer (`perturbation/train.py`, whose stage 2 is `L_u − λ·L_pg` on two
+optimisers) ask the same `correction_stage` predicate.
 """
 
 from __future__ import annotations

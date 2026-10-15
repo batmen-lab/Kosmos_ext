@@ -172,6 +172,10 @@ def _still_on_disk(record: FetchResult, *, verify: bool) -> str | None:
                 return None
         except OSError:
             return None
+        # A 0-byte file is a failed download that an older fetcher recorded as
+        # a success; never "reuse" it.
+        if file.bytes == 0:
+            return None
         if not verify or file.bytes > REUSE_HASH_MAX_BYTES:
             continue
         if sha256_file(path) != file.sha256:

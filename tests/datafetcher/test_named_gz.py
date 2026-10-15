@@ -59,6 +59,9 @@ def test_header_normalisation_does_not_name_plain_text_gz(tmp_path):
     source.write_text("1,2\n3,4\n", encoding="utf-8")
     target = tmp_path / "normalized" / source.name
 
-    assert module.write_with_header(str(source), ["a", "b"], target) is True
-    written = sorted(p.name for p in (tmp_path / "normalized").iterdir())
-    assert written == ["raw.csv"], written    # not `raw.csv.gz`
+    written_path = module.write_with_header(str(source), ["a", "b"], target)
+    # The returned path is what exists, so a caller can record it in the plan
+    # instead of the `.gz` name it asked for (which never got written).
+    assert written_path is not None and written_path.name == "raw.csv"
+    listed = sorted(p.name for p in (tmp_path / "normalized").iterdir())
+    assert listed == ["raw.csv"], listed    # not `raw.csv.gz`

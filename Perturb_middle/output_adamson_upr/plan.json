@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "task": {
+    "objective": "In K562 cells, can the transcriptional response to CRISPRi knockdown of unfolded protein response (UPR) genes not seen in training be predicted from the other knockdowns, using single-cell profiles of K562 cells from independent Perturb-seq experiments as supplementary evidence?",
+    "target_column": "condition",
+    "target_source": "cli",
+    "target_confidence": "exact_match",
+    "feature_columns": [
+      "read count",
+      "UMI count",
+      "coverage",
+      "good coverage",
+      "number of cells"
+    ],
+    "feature_prefixes": [],
+    "exclude_columns": [],
+    "sample_id_column": null,
+    "task_type": "classification",
+    "evaluation_metric": "balanced_accuracy",
+    "backend": "perturbation",
+    "multi_gold_policy": "external",
+    "test_fraction": 0.2,
+    "validation_fraction": 0.2,
+    "seed": 42
+  },
+  "study": {
+    "question": "In K562 cells, can the transcriptional response to CRISPRi knockdown of unfolded protein response (UPR) genes not seen in training be predicted from the other knockdowns, using single-cell profiles of K562 cells from independent Perturb-seq experiments as supplementary evidence?",
+    "dataset": "GSE90546 GSM2406681_10X010 (Adamson 2016 UPR Perturb-seq)",
+    "held_out_unit": "perturbed genes never seen in training",
+    "condition_column": "condition",
+    "split_mode": "unseen_single",
+    "test_fraction": 0.25,
+    "validation_fraction": 0.2,
+    "batch_size": 128,
+    "max_panel_genes": 0,
+    "normalize": "log1p(CPM 10000)",
+    "target_sum": 10000.0,
+    "counts": {
+      "total_column": "total_counts",
+      "gold": "Perturb_middle/output_adamson_upr/gold_counts.parquet",
+      "supplementary": {
+        "Perturb_middle/output_adamson_upr/supp_dixit_k562_wt.parquet": "Perturb_middle/output_adamson_upr/supp_dixit_k562_wt_counts.parquet"
+      }
+    }
+  },
+  "gold": [
+    {
+      "path": "Perturb_middle/output_adamson_upr/gold.parquet",
+      "role": "gold",
+      "reason": "GSM2406681_10X010: single-guide, good-coverage cells"
+    }
+  ],
+  "supplementary": [
+    {
+      "path": "Perturb_middle/output_adamson_upr/supp_dixit_k562_wt.parquet",
+      "role": "supplementary",
+      "reason": "GSE90063 K562 wild type (Dixit 2016): 5,409 cells, 5,014 of 5,014 panel genes measured"
+    }
+  ],
+  "unusable": []
+}

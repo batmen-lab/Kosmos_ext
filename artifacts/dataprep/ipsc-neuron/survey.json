@@ -1,0 +1,1749 @@
+{
+  "question": "In human iPSC-derived neurons, can the transcriptional response to CRISPRi knockdown of genes not seen in training be predicted from a small labeled screen, using large single-cell profiles of iPSC-derived neurons from other experiments, with their labels ignored, as supplementary evidence?",
+  "spec": {
+    "question": "In human iPSC-derived neurons, can the transcriptional response to CRISPRi knockdown of genes not seen in training be predicted from a small labeled screen, using large single-cell profiles of iPSC-derived neurons from other experiments, with their labels ignored, as supplementary evidence?",
+    "cell_type": "iPSC-derived neurons",
+    "cell_type_aliases": [
+      "induced pluripotent stem cell-derived neurons",
+      "human neurons",
+      "iPSC neurons",
+      "neuronal cells"
+    ],
+    "organism": "human",
+    "modality": "CRISPRi",
+    "topic": "",
+    "topic_aliases": [],
+    "assays": [
+      "Perturb-seq",
+      "CROP-seq"
+    ]
+  },
+  "gold": [
+    {
+      "series": "geo://GSE124703",
+      "series_title": "CRISPR-based multimodal genetic screens in human iPSC-derived neurons",
+      "sample": "GSM3543623",
+      "sample_title": "CROP-seq_Day 7_neuron_10x_lane_2; Human iPSC-derived neuron; cell type: Day 7 neuron",
+      "role": "gold",
+      "proposed_role": "gold",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "iPSC-derived neuron",
+      "topic_match": 1,
+      "bytes": 224870195,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM3543625",
+      "files": [
+        {
+          "name": "GSM3543623_neuron_2_barcodes.tsv.gz",
+          "bytes": 2306867
+        },
+        {
+          "name": "GSM3543623_neuron_2_genes.tsv.gz",
+          "bytes": 265216
+        },
+        {
+          "name": "GSM3543623_neuron_2_matrix.mtx.gz",
+          "bytes": 222298112
+        }
+      ],
+      "why": "CROP-seq CRISPRi screen in iPSC-derived neurons, lane2."
+    },
+    {
+      "series": "geo://GSE124703",
+      "series_title": "CRISPR-based multimodal genetic screens in human iPSC-derived neurons",
+      "sample": "GSM3543622",
+      "sample_title": "CROP-seq_Day 7_neuron_10x_lane_1; Human iPSC-derived neuron; cell type: Day 7 neuron",
+      "role": "gold",
+      "proposed_role": "gold",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "iPSC-derived neuron",
+      "topic_match": 1,
+      "bytes": 239550259,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM3543624",
+      "files": [
+        {
+          "name": "GSM3543622_neuron_1_barcodes.tsv.gz",
+          "bytes": 2306867
+        },
+        {
+          "name": "GSM3543622_neuron_1_genes.tsv.gz",
+          "bytes": 265216
+        },
+        {
+          "name": "GSM3543622_neuron_1_matrix.mtx.gz",
+          "bytes": 236978176
+        }
+      ],
+      "why": "CROP-seq CRISPRi screen in iPSC-derived neurons, lane1."
+    }
+  ],
+  "supplementary": [
+    {
+      "series": "geo://GSE277602",
+      "series_title": "Elucidating ADNP Syndrome Gene Dysregulation through a Novel Approach in iPSC-Derived GABAergic Neuron Development [scRNA-seq]",
+      "sample": "GSM8525857",
+      "sample_title": "Dual-Smadi; PGP1 (iPSC); cell line: PGP1 (iPSC); cell type: induced GABAergic neurons; treatment: small molecules",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "induced GABAergic neurons",
+      "topic_match": 0.3,
+      "bytes": 92591104,
+      "cells_estimate": 17785,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM8525857_dual_smad_metadata.csv.gz",
+      "files": [
+        {
+          "name": "GSM8525857_dual_smad_barcodes.tsv.gz",
+          "bytes": 67584
+        },
+        {
+          "name": "GSM8525857_dual_smad_counts_matrix.txt.gz",
+          "bytes": 593920
+        },
+        {
+          "name": "GSM8525857_dual_smad_features.tsv.gz",
+          "bytes": 686080
+        },
+        {
+          "name": "GSM8525857_dual_smad_matrix.mtx.gz",
+          "bytes": 91226112
+        },
+        {
+          "name": "GSM8525857_dual_smad_metadata.csv.gz",
+          "bytes": 17408
+        }
+      ],
+      "why": "Single-cell human iPSC-derived neurons, unlabeled; supplementary expression evidence."
+    },
+    {
+      "series": "geo://GSE277602",
+      "series_title": "Elucidating ADNP Syndrome Gene Dysregulation through a Novel Approach in iPSC-Derived GABAergic Neuron Development [scRNA-seq]",
+      "sample": "GSM8525854",
+      "sample_title": "PSC-iNs; PGP1 (iPSC); cell line: PGP1 (iPSC); cell type: induced GABAergic neurons; treatment: Ascl1 + Dlx2",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "induced GABAergic neurons",
+      "topic_match": 0.3,
+      "bytes": 163272704,
+      "cells_estimate": 15090,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8525854_wk4_barcodes.tsv.gz",
+          "bytes": 57344
+        },
+        {
+          "name": "GSM8525854_wk4_features.tsv.gz",
+          "bytes": 686080
+        },
+        {
+          "name": "GSM8525854_wk4_matrix.mtx.gz",
+          "bytes": 162529280
+        }
+      ],
+      "why": "Single-cell human iPSC-derived neurons, no perturbation labels; useful unlabeled supplementary expression."
+    },
+    {
+      "series": "geo://GSE277602",
+      "series_title": "Elucidating ADNP Syndrome Gene Dysregulation through a Novel Approach in iPSC-Derived GABAergic Neuron Development [scRNA-seq]",
+      "sample": "GSM8525855",
+      "sample_title": "7DNPC-iNs; PGP1 (iPSC); cell line: PGP1 (iPSC); cell type: induced GABAergic neurons; treatment: small molecules and Ascl1 + Dlx2",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "induced GABAergic neurons",
+      "topic_match": 0.3,
+      "bytes": 108057600,
+      "cells_estimate": 14282,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8525855_PGP1_WT2_barcodes.tsv.gz",
+          "bytes": 54272
+        },
+        {
+          "name": "GSM8525855_PGP1_WT2_matrix.mtx.gz",
+          "bytes": 108003328
+        }
+      ],
+      "why": "Single-cell human iPSC-derived neurons, unlabeled; supplementary expression evidence."
+    },
+    {
+      "series": "geo://GSE277602",
+      "series_title": "Elucidating ADNP Syndrome Gene Dysregulation through a Novel Approach in iPSC-Derived GABAergic Neuron Development [scRNA-seq]",
+      "sample": "GSM8525856",
+      "sample_title": "3DNPC-iNs; PGP1 (iPSC); cell line: PGP1 (iPSC); cell type: induced GABAergic neurons; treatment: small molecules and Ascl1 + Dlx2",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "induced GABAergic neurons",
+      "topic_match": 0.3,
+      "bytes": 42328064,
+      "cells_estimate": 13473,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8525856_AD3_barcodes.tsv.gz",
+          "bytes": 51200
+        },
+        {
+          "name": "GSM8525856_AD3_features.tsv.gz",
+          "bytes": 333824
+        },
+        {
+          "name": "GSM8525856_AD3_matrix.mtx.gz",
+          "bytes": 41943040
+        }
+      ],
+      "why": "Single-cell human iPSC-derived neurons, unlabeled; supplementary expression evidence."
+    },
+    {
+      "series": "geo://GSE69790",
+      "series_title": "Single cell transcriptomics analysis of induced pluripotent stem cell-derived cortical neurons reveals frequent dual layer identity",
+      "sample": "GSE69790",
+      "sample_title": "Single cell transcriptomics analysis of induced pluripotent stem cell-derived cortical neurons reveals frequent dual layer identity (series-level files; samples: GSM1708815, ... 16 total)",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived cortical neuron",
+      "topic_match": 0,
+      "bytes": 557056,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE69790_normalizationforGSE67835_neurons_vs_AH017_7_filtered_expr_iPSC.counts.txt.gz",
+          "bytes": 557056
+        }
+      ],
+      "why": "Single-cell iPSC-derived neurons, no perturbation; useful unlabeled expression evidence.",
+      "samples": [
+        "GSM1708815",
+        "GSM1708816",
+        "GSM1708817",
+        "GSM1708818",
+        "GSM1708819",
+        "GSM1708820",
+        "GSM1708821",
+        "GSM1708822",
+        "GSM1708823",
+        "GSM1708824",
+        "GSM1708825",
+        "GSM1708826",
+        "GSM1708827",
+        "GSM1708828",
+        "GSM1708829",
+        "GSM1708830"
+      ]
+    },
+    {
+      "series": "geo://GSE244370",
+      "series_title": "All-defined NGN2 neuron protocol reveals multifaceted signatures of neuronal maturation [scRNA-seq]",
+      "sample": "GSM7814309",
+      "sample_title": "iP11N-d28-DM-Rep1; NGN2-iN; cell type: NGN2-iN; day: iP11N; media: d28",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived neurons (NGN2-iN)",
+      "topic_match": 0,
+      "bytes": 2202009,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM7814309_iP11N-d28-DM-Rep1.mtx.gz",
+          "bytes": 2202009
+        }
+      ],
+      "why": "Single-cell human iPSC-derived neurons, no perturbation; useful unlabeled expression evidence."
+    },
+    {
+      "series": "geo://GSE244370",
+      "series_title": "All-defined NGN2 neuron protocol reveals multifaceted signatures of neuronal maturation [scRNA-seq]",
+      "sample": "GSM7814310",
+      "sample_title": "iP11N-d28-DM-Rep2; NGN2-iN; cell type: NGN2-iN; day: iP11N; media: d28",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived neurons (NGN2-iN)",
+      "topic_match": 0,
+      "bytes": 6815744,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM7814310_iP11N-d28-DM-Rep2.mtx.gz",
+          "bytes": 6815744
+        }
+      ],
+      "why": "Single-cell human iPSC-derived neurons, no perturbation; useful unlabeled expression evidence."
+    },
+    {
+      "series": "geo://GSE244370",
+      "series_title": "All-defined NGN2 neuron protocol reveals multifaceted signatures of neuronal maturation [scRNA-seq]",
+      "sample": "GSM7814311",
+      "sample_title": "G12-d28-DM-Rep1; NGN2-iN; cell type: NGN2-iN; day: G12; media: d28",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived neurons (NGN2-iN)",
+      "topic_match": 0,
+      "bytes": 1153433,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM7814311_G12-d28-DM-Rep1.mtx.gz",
+          "bytes": 1153433
+        }
+      ],
+      "why": "Single-cell human iPSC-derived neurons, no perturbation; useful unlabeled expression evidence."
+    },
+    {
+      "series": "geo://GSE244370",
+      "series_title": "All-defined NGN2 neuron protocol reveals multifaceted signatures of neuronal maturation [scRNA-seq]",
+      "sample": "GSM7814312",
+      "sample_title": "G12-d28-DM-Rep2; NGN2-iN; cell type: NGN2-iN; day: G12; media: d28",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived neurons (NGN2-iN)",
+      "topic_match": 0,
+      "bytes": 1992294,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM7814312_G12-d28-DM-Rep2.mtx.gz",
+          "bytes": 1992294
+        }
+      ],
+      "why": "Single-cell human iPSC-derived neurons, no perturbation; useful unlabeled expression evidence."
+    },
+    {
+      "series": "geo://GSE244370",
+      "series_title": "All-defined NGN2 neuron protocol reveals multifaceted signatures of neuronal maturation [scRNA-seq]",
+      "sample": "GSM7814313",
+      "sample_title": "iP11N-d42-DM-Rep2; NGN2-iN; cell type: NGN2-iN; day: iP11N; media: d42",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived neurons (NGN2-iN)",
+      "topic_match": 0,
+      "bytes": 2516582,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM7814313_iP11N-d42-DM-Rep2.mtx.gz",
+          "bytes": 2516582
+        }
+      ],
+      "why": "Single-cell human iPSC-derived neurons, no perturbation; useful unlabeled expression evidence."
+    },
+    {
+      "series": "geo://GSE244370",
+      "series_title": "All-defined NGN2 neuron protocol reveals multifaceted signatures of neuronal maturation [scRNA-seq]",
+      "sample": "GSM7814314",
+      "sample_title": "iP11N-d56-DM-Rep1; NGN2-iN; cell type: NGN2-iN; day: iP11N; media: d56",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived neurons (NGN2-iN)",
+      "topic_match": 0,
+      "bytes": 1887436,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM7814314_iP11N-d56-DM-Rep1.mtx.gz",
+          "bytes": 1887436
+        }
+      ],
+      "why": "Single-cell human iPSC-derived neurons, no perturbation; useful unlabeled expression evidence."
+    },
+    {
+      "series": "geo://GSE244370",
+      "series_title": "All-defined NGN2 neuron protocol reveals multifaceted signatures of neuronal maturation [scRNA-seq]",
+      "sample": "GSM7814315",
+      "sample_title": "iP11N-d56-DM-Rep2; NGN2-iN; cell type: NGN2-iN; day: iP11N; media: d56",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived neurons (NGN2-iN)",
+      "topic_match": 0,
+      "bytes": 3670016,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM7814315_iP11N-d56-DM-Rep2.mtx.gz",
+          "bytes": 3670016
+        }
+      ],
+      "why": "Single-cell human iPSC-derived neurons, no perturbation; useful unlabeled expression evidence."
+    }
+  ],
+  "rejected": [
+    {
+      "series": "hf://Boom5426/iPSC-CRISPRi-PerturbSeq",
+      "series_title": "Boom5426/iPSC-CRISPRi-PerturbSeq",
+      "sample": "hf://Boom5426/iPSC-CRISPRi-PerturbSeq",
+      "sample_title": "Boom5426/iPSC-CRISPRi-PerturbSeq",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": null,
+      "cell_type": null,
+      "topic_match": null,
+      "bytes": 267632576259,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file doctor2024_kolf2.1j_atlas/KOLF_Chromatin_Modifiers_Strong_Perturbations.h5ad",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 2557
+        },
+        {
+          "name": "README.md",
+          "bytes": 12046
+        },
+        {
+          "name": "doctor2024_kolf2.1j_atlas/KOLF_Chromatin_Modifiers_QC_Filtered.h5ad",
+          "bytes": 4635611222
+        },
+        {
+          "name": "doctor2024_kolf2.1j_atlas/KOLF_Chromatin_Modifiers_Strong_Perturbations.h5ad",
+          "bytes": 1528903380
+        },
+        {
+          "name": "doctor2024_kolf2.1j_atlas/KOLF_Metabolic_Enzymes_QC_Filtered.h5ad",
+          "bytes": 6984432788
+        },
+        {
+          "name": "doctor2024_kolf2.1j_atlas/KOLF_Metabolic_Enzymes_Strong_Perturbations.h5ad",
+          "bytes": 1326348118
+        },
+        {
+          "name": "doctor2024_kolf2.1j_atlas/KOLF_Pan_Genome_QC_Filtered.h5ad",
+          "bytes": 189393177972
+        },
+        {
+          "name": "doctor2024_kolf2.1j_atlas/KOLF_Strong_Perturbations.h5ad",
+          "bytes": 46718752086
+        },
+        {
+          "name": "doctor2024_kolf2.1j_atlas/checksums.md5",
+          "bytes": 450
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/counts/GenomeWideScreen_FitnessGenes_Cell-Metadata.tsv.gz",
+          "bytes": 3607490
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/counts/GenomeWideScreen_FitnessGenes_Guide-UMI-Counts.csv.gz",
+          "bytes": 50267344
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/counts/GenomeWideScreen_FitnessGenes_RNA-UMI-Counts.csv.gz",
+          "bytes": 1445924890
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/counts/GenomeWideScreen_NonFitnessGenes_Cell-Metadata.tsv.gz",
+          "bytes": 4238782
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/counts/GenomeWideScreen_NonFitnessGenes_Guide-UMI-Counts.csv.gz",
+          "bytes": 104663390
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/counts/GenomeWideScreen_NonFitnessGenes_RNA-UMI-Counts.csv.gz",
+          "bytes": 1748940996
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/counts/TargetedScreen_Cell-Metadata.tsv.gz",
+          "bytes": 13491635
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/counts/TargetedScreen_Guide-UMI-Counts.csv.gz",
+          "bytes": 73778450
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/counts/TargetedScreen_RNA-UMI-Counts.csv.gz",
+          "bytes": 4480969391
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/counts/checksums.md5",
+          "bytes": 741
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/counts/figshare_27989294_v1_metadata.json",
+          "bytes": 6299
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/lfc/00_raw_data_id_mapping.csv",
+          "bytes": 122631
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/lfc/GenomeWideScreen_Coperturbation-Expressed-Gene-Correlation.tsv.gz",
+          "bytes": 529575408
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/lfc/GenomeWideScreen_Coregulation-Target-Correlation.tsv.gz",
+          "bytes": 155213386
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/lfc/GenomeWideScreen_LFC_byGene.tsv.gz",
+          "bytes": 794610300
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/lfc/GenomeWideScreen_LFC_byGuide.tsv.gz",
+          "bytes": 1812579303
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/lfc/Peer Review.pdf",
+          "bytes": 2453785
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/lfc/TargetedScreen_LFC_byGene-perLine.tsv.gz",
+          "bytes": 1919661029
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/lfc/TargetedScreen_LFC_byGene.tsv.gz",
+          "bytes": 77563731
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/lfc/TargetedScreen_LFC_byGuide-perLine.tsv.gz",
+          "bytes": 3592732872
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/lfc/TargetedScreen_LFC_byGuide.tsv.gz",
+          "bytes": 231621570
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/lfc/checksums.md5",
+          "bytes": 772
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/lfc/figshare_26819743_v1_metadata.json",
+          "bytes": 7954
+        },
+        {
+          "name": "feng2026_ipsc_crispri_map/lfc/scripts.zip",
+          "bytes": 3303491
+        }
+      ],
+      "why": "not judged"
+    },
+    {
+      "series": "hf://Mooooooooonie1/nhp-ipsc-degs",
+      "series_title": "Mooooooooonie1/nhp-ipsc-degs",
+      "sample": "hf://Mooooooooonie1/nhp-ipsc-degs",
+      "sample_title": "Mooooooooonie1/nhp-ipsc-degs",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": null,
+      "cell_type": null,
+      "topic_match": null,
+      "bytes": 9970584,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 2504
+        },
+        {
+          "name": "A1_deg.csv",
+          "bytes": 1250241
+        },
+        {
+          "name": "A1_expression_long.csv",
+          "bytes": 861354
+        },
+        {
+          "name": "A2_deg.csv",
+          "bytes": 3784328
+        },
+        {
+          "name": "A2_expression_long.csv",
+          "bytes": 4071183
+        },
+        {
+          "name": "nhp_stats.json",
+          "bytes": 974
+        }
+      ],
+      "why": "not judged"
+    },
+    {
+      "series": "geo://GSE124703",
+      "series_title": "CRISPR-based multimodal genetic screens in human iPSC-derived neurons",
+      "sample": "GSM3543612",
+      "sample_title": "Quant-seq_Day 14_neuron_rep1; Human iPSC-derived neuron; cell type: Day 14 neuron",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived neuron",
+      "topic_match": 0,
+      "bytes": 188416,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM3543620, GSM3543621, GSM3543624",
+      "files": [
+        {
+          "name": "GSM3543612_D14_C1_read_counts.txt.gz",
+          "bytes": 188416
+        }
+      ],
+      "why": "Bulk Quant-seq, not single-cell expression."
+    },
+    {
+      "series": "geo://GSE124703",
+      "series_title": "CRISPR-based multimodal genetic screens in human iPSC-derived neurons",
+      "sample": "GSM3543613",
+      "sample_title": "Quant-seq_Day 14_neuron_rep2; Human iPSC-derived neuron; cell type: Day 14 neuron",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived neuron",
+      "topic_match": 0,
+      "bytes": 190464,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM3543620, GSM3543621, GSM3543624",
+      "files": [
+        {
+          "name": "GSM3543613_D14_C2_read_counts.txt.gz",
+          "bytes": 190464
+        }
+      ],
+      "why": "Bulk Quant-seq, not single-cell expression."
+    },
+    {
+      "series": "geo://GSE124703",
+      "series_title": "CRISPR-based multimodal genetic screens in human iPSC-derived neurons",
+      "sample": "GSM3543614",
+      "sample_title": "Quant-seq_Day 21_neuron_rep1; Human iPSC-derived neuron; cell type: Day 21 neuron",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived neuron",
+      "topic_match": 0,
+      "bytes": 188416,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM3543620, GSM3543621, GSM3543624",
+      "files": [
+        {
+          "name": "GSM3543614_D21_C1_read_counts.txt.gz",
+          "bytes": 188416
+        }
+      ],
+      "why": "Bulk Quant-seq, not single-cell expression."
+    },
+    {
+      "series": "geo://GSE124703",
+      "series_title": "CRISPR-based multimodal genetic screens in human iPSC-derived neurons",
+      "sample": "GSM3543615",
+      "sample_title": "Quant-seq_Day 21_neuron_rep2; Human iPSC-derived neuron; cell type: Day 21 neuron",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived neuron",
+      "topic_match": 0,
+      "bytes": 188416,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM3543620, GSM3543621, GSM3543624",
+      "files": [
+        {
+          "name": "GSM3543615_D21_C2_read_counts.txt.gz",
+          "bytes": 188416
+        }
+      ],
+      "why": "Bulk Quant-seq, not single-cell expression."
+    },
+    {
+      "series": "geo://GSE124703",
+      "series_title": "CRISPR-based multimodal genetic screens in human iPSC-derived neurons",
+      "sample": "GSM3543616",
+      "sample_title": "Quant-seq_Day 28_neuron_rep1; Human iPSC-derived neuron; cell type: Day 28 neuron",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived neuron",
+      "topic_match": 0,
+      "bytes": 187392,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM3543620, GSM3543621, GSM3543624",
+      "files": [
+        {
+          "name": "GSM3543616_D28_C1_read_counts.txt.gz",
+          "bytes": 187392
+        }
+      ],
+      "why": "Bulk Quant-seq, not single-cell expression."
+    },
+    {
+      "series": "geo://GSE124703",
+      "series_title": "CRISPR-based multimodal genetic screens in human iPSC-derived neurons",
+      "sample": "GSM3543617",
+      "sample_title": "Quant-seq_Day 28_neuron_rep2; Human iPSC-derived neuron; cell type: Day 28 neuron",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived neuron",
+      "topic_match": 0,
+      "bytes": 190464,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM3543620, GSM3543621, GSM3543624",
+      "files": [
+        {
+          "name": "GSM3543617_D28_C2_read_counts.txt.gz",
+          "bytes": 190464
+        }
+      ],
+      "why": "Bulk Quant-seq, not single-cell expression."
+    },
+    {
+      "series": "geo://GSE124703",
+      "series_title": "CRISPR-based multimodal genetic screens in human iPSC-derived neurons",
+      "sample": "GSM3543618",
+      "sample_title": "CROP-seq_iPSC_10x_lane_1; Human iPSC; cell type: iPSC",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "iPSC",
+      "topic_match": 0.3,
+      "bytes": 291979059,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM3543620, GSM3543624",
+      "files": [
+        {
+          "name": "GSM3543618_iPSC_1_barcodes.tsv.gz",
+          "bytes": 2306867
+        },
+        {
+          "name": "GSM3543618_iPSC_1_genes.tsv.gz",
+          "bytes": 265216
+        },
+        {
+          "name": "GSM3543618_iPSC_1_matrix.mtx.gz",
+          "bytes": 289406976
+        }
+      ],
+      "why": "CROP-seq but iPSC, not iPSC-derived neurons."
+    },
+    {
+      "series": "geo://GSE124703",
+      "series_title": "CRISPR-based multimodal genetic screens in human iPSC-derived neurons",
+      "sample": "GSM3543619",
+      "sample_title": "CROP-seq_iPSC_10x_lane_2; Human iPSC; cell type: iPSC",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "iPSC",
+      "topic_match": 0.3,
+      "bytes": 280444723,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM3543621, GSM3543625",
+      "files": [
+        {
+          "name": "GSM3543619_iPSC_2_barcodes.tsv.gz",
+          "bytes": 2306867
+        },
+        {
+          "name": "GSM3543619_iPSC_2_genes.tsv.gz",
+          "bytes": 265216
+        },
+        {
+          "name": "GSM3543619_iPSC_2_matrix.mtx.gz",
+          "bytes": 277872640
+        }
+      ],
+      "why": "CROP-seq but iPSC, not iPSC-derived neurons."
+    },
+    {
+      "series": "geo://GSE124703",
+      "series_title": "CRISPR-based multimodal genetic screens in human iPSC-derived neurons",
+      "sample": "GSM3543620",
+      "sample_title": "CROP-seq_iPSC_sgRNA_enrichment_for_lane1; Human iPSC; cell type: iPSC",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "iPSC",
+      "topic_match": 0.3,
+      "bytes": 14680064,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM3543620_iPSC_1_sgRNA_mapping.txt.gz",
+      "files": [
+        {
+          "name": "GSM3543620_iPSC_1_sgRNA_mapping.txt.gz",
+          "bytes": 14680064
+        }
+      ],
+      "why": "sgRNA mapping file for iPSC lane1 screen."
+    },
+    {
+      "series": "geo://GSE124703",
+      "series_title": "CRISPR-based multimodal genetic screens in human iPSC-derived neurons",
+      "sample": "GSM3543621",
+      "sample_title": "CROP-seq_iPSC_sgRNA_enrichment_for_lane2; Human iPSC; cell type: iPSC",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "iPSC",
+      "topic_match": 0.3,
+      "bytes": 16777216,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM3543621_iPSC_2_sgRNA_mapping.txt.gz",
+      "files": [
+        {
+          "name": "GSM3543621_iPSC_2_sgRNA_mapping.txt.gz",
+          "bytes": 16777216
+        }
+      ],
+      "why": "sgRNA mapping file for iPSC lane2 screen."
+    },
+    {
+      "series": "geo://GSE124703",
+      "series_title": "CRISPR-based multimodal genetic screens in human iPSC-derived neurons",
+      "sample": "GSM3543624",
+      "sample_title": "CROP-seq_Day 7_sgRNA_enrichment_for_lane1; Human iPSC-derived neuron; cell type: Day 7 neuron",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "iPSC-derived neuron",
+      "topic_match": 1,
+      "bytes": 12582912,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM3543624_neuron_1_sgRNA_mapping.txt.gz",
+      "files": [
+        {
+          "name": "GSM3543624_neuron_1_sgRNA_mapping.txt.gz",
+          "bytes": 12582912
+        }
+      ],
+      "why": "sgRNA mapping file for neuron lane1 screen."
+    },
+    {
+      "series": "geo://GSE124703",
+      "series_title": "CRISPR-based multimodal genetic screens in human iPSC-derived neurons",
+      "sample": "GSM3543625",
+      "sample_title": "CROP-seq_Day 7_sgRNA_enrichment_for_lane2; Human iPSC-derived neuron; cell type: Day 7 neuron",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "iPSC-derived neuron",
+      "topic_match": 1,
+      "bytes": 10485760,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM3543625_neuron_2_sgRNA_mapping.txt.gz",
+      "files": [
+        {
+          "name": "GSM3543625_neuron_2_sgRNA_mapping.txt.gz",
+          "bytes": 10485760
+        }
+      ],
+      "why": "sgRNA mapping file for neuron lane2 screen."
+    },
+    {
+      "series": "geo://GSE318782",
+      "series_title": "Post-transcriptional Regulation Maintains Neurogenic Potential of Human Neural Progenitor Cells",
+      "sample": "GSE318782",
+      "sample_title": "Post-transcriptional Regulation Maintains Neurogenic Potential of Human Neural Progenitor Cells (series-level files; samples: GSM9503228, ... 24 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "Neuronal Progenitor",
+      "topic_match": 0,
+      "bytes": 5138022,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE318782_All_Samples_TPM.xlsx",
+          "bytes": 5138022
+        }
+      ],
+      "why": "Bulk TPM, NPC not iPSC-derived neurons, no single-cell perturbation screen",
+      "samples": [
+        "GSM9503228",
+        "GSM9503229",
+        "GSM9503230",
+        "GSM9503231",
+        "GSM9503232",
+        "GSM9503233",
+        "GSM9503234",
+        "GSM9503235",
+        "GSM9503236",
+        "GSM9503237",
+        "GSM9503238",
+        "GSM9503239",
+        "GSM9503240",
+        "GSM9503241",
+        "GSM9503242",
+        "GSM9503243",
+        "GSM9503244",
+        "GSM9503245",
+        "GSM9503246",
+        "GSM9503247",
+        "GSM9503248",
+        "GSM9503249",
+        "GSM9503250",
+        "GSM9503251"
+      ]
+    },
+    {
+      "series": "geo://GSE349562",
+      "series_title": "Autonomic neurons are intrinsically hyperexcitable in a Friedreich ataxia iPSC model",
+      "sample": "GSE349562",
+      "sample_title": "Autonomic neurons are intrinsically hyperexcitable in a Friedreich ataxia iPSC model (series-level files; samples: GSM10097922, ... 18 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-Autonomic neurons",
+      "topic_match": 0,
+      "bytes": 1572864,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE349562_Lees_FRDA_AN_RNAseq_GeneCounts_AllSamples.tsv.gz",
+          "bytes": 1572864
+        }
+      ],
+      "why": "Bulk RNA-seq, not single-cell; no perturbation screen.",
+      "samples": [
+        "GSM10097922",
+        "GSM10097923",
+        "GSM10097924",
+        "GSM10097925",
+        "GSM10097926",
+        "GSM10097927",
+        "GSM10097928",
+        "GSM10097929",
+        "GSM10097930",
+        "GSM10097931",
+        "GSM10097932",
+        "GSM10097933",
+        "GSM10097934",
+        "GSM10097935",
+        "GSM10097936",
+        "GSM10097937",
+        "GSM10097938",
+        "GSM10097939"
+      ]
+    },
+    {
+      "series": "geo://GSE349281",
+      "series_title": "Live-cell monitoring and transcriptomic profiling identify distinct temporal patterns of cell-cycle activity and maturation in human iPSC-derived cardiomyocytes",
+      "sample": "GSE349281",
+      "sample_title": "Live-cell monitoring and transcriptomic profiling identify distinct temporal patterns of cell-cycle activity and maturation in human iPSC-derived cardiomyocytes (series-level files; samples: GSM10090670, ... 12 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived cardiomyocyte",
+      "topic_match": 0,
+      "bytes": 2097152,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE349281_normalized_counts.csv.gz",
+          "bytes": 2097152
+        }
+      ],
+      "why": "Bulk RNA-seq of cardiomyocytes, not neurons; wrong cell type and not single-cell.",
+      "samples": [
+        "GSM10090670",
+        "GSM10090671",
+        "GSM10090672",
+        "GSM10090673",
+        "GSM10090674",
+        "GSM10090675",
+        "GSM10090676",
+        "GSM10090677",
+        "GSM10090678",
+        "GSM10090679",
+        "GSM10090680",
+        "GSM10090681"
+      ]
+    },
+    {
+      "series": "geo://GSE285967",
+      "series_title": "Gene expression profile of human iPSC-derived hippocampal organoids at four developmental stages",
+      "sample": "GSE285967",
+      "sample_title": "Gene expression profile of human iPSC-derived hippocampal organoids at four developmental stages (series-level files; samples: GSM8714111, ... 24 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "brain organoid",
+      "topic_match": 0,
+      "bytes": 2202009,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE285967_HippocampalOrganoid_4stage_gene_expr_matrix.tsv.gz",
+          "bytes": 2202009
+        }
+      ],
+      "why": "Bulk RNA-seq of organoids, not single-cell iPSC-derived neurons.",
+      "samples": [
+        "GSM8714111",
+        "GSM8714112",
+        "GSM8714113",
+        "GSM8714114",
+        "GSM8714115",
+        "GSM8714116",
+        "GSM8714117",
+        "GSM8714118",
+        "GSM8714119",
+        "GSM8714120",
+        "GSM8714121",
+        "GSM8714122",
+        "GSM8714123",
+        "GSM8714124",
+        "GSM8714125",
+        "GSM8714126",
+        "GSM8714127",
+        "GSM8714128",
+        "GSM8714129",
+        "GSM8714130",
+        "GSM8714131",
+        "GSM8714132",
+        "GSM8714133",
+        "GSM8714134"
+      ]
+    },
+    {
+      "series": "geo://GSE315127",
+      "series_title": "iPSC-derived forebrain organoid bulk RNA-seq",
+      "sample": "GSE315127",
+      "sample_title": "iPSC-derived forebrain organoid bulk RNA-seq (series-level files; samples: GSM9421732, ... 24 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived forebrain organoid",
+      "topic_match": 0,
+      "bytes": 930816,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE315127_counts.txt.gz",
+          "bytes": 930816
+        }
+      ],
+      "why": "Bulk RNA-seq, not single-cell; drug treatment not CRISPRi perturbation screen.",
+      "samples": [
+        "GSM9421732",
+        "GSM9421733",
+        "GSM9421734",
+        "GSM9421735",
+        "GSM9421736",
+        "GSM9421737",
+        "GSM9421738",
+        "GSM9421739",
+        "GSM9421740",
+        "GSM9421741",
+        "GSM9421742",
+        "GSM9421743",
+        "GSM9421744",
+        "GSM9421745",
+        "GSM9421746",
+        "GSM9421747",
+        "GSM9421748",
+        "GSM9421749",
+        "GSM9421750",
+        "GSM9421751",
+        "GSM9421752",
+        "GSM9421753",
+        "GSM9421754",
+        "GSM9421755"
+      ]
+    },
+    {
+      "series": "geo://GSE315126",
+      "series_title": "iPSC-derived forebrain neurons RNA-seq",
+      "sample": "GSE315126",
+      "sample_title": "iPSC-derived forebrain neurons RNA-seq (series-level files; samples: GSM9421711, ... 21 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived forebrain neurons",
+      "topic_match": 0,
+      "bytes": 824320,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE315126_counts.txt.gz",
+          "bytes": 824320
+        }
+      ],
+      "why": "Bulk RNA-seq drug treatment, not single-cell CRISPRi perturbation screen.",
+      "samples": [
+        "GSM9421711",
+        "GSM9421712",
+        "GSM9421713",
+        "GSM9421714",
+        "GSM9421715",
+        "GSM9421716",
+        "GSM9421717",
+        "GSM9421718",
+        "GSM9421719",
+        "GSM9421720",
+        "GSM9421721",
+        "GSM9421722",
+        "GSM9421723",
+        "GSM9421724",
+        "GSM9421725",
+        "GSM9421726",
+        "GSM9421727",
+        "GSM9421728",
+        "GSM9421729",
+        "GSM9421730",
+        "GSM9421731"
+      ]
+    },
+    {
+      "series": "geo://GSE299369",
+      "series_title": "Human microglia remove intraneuronal a-synuclein aggregates in a stem cell model of Parkinson\u2019s disease [bulk RNA-Seq]",
+      "sample": "GSM9038101",
+      "sample_title": "DAN_NSC_1; hiPSC; cell line: hiPSC; cell type: Induced pluripotent stem cell derived dopaminergic neurons; genotype: SNCA Triplication (SFC831-03-05); treatment: Non-seeded control (NSC)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived dopaminergic neurons",
+      "topic_match": 0,
+      "bytes": 72980889,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9038101_DAN_NSC1_abundance.h5",
+          "bytes": 70254592
+        },
+        {
+          "name": "GSM9038101_DAN_NSC1_abundance.tsv.gz",
+          "bytes": 2726297
+        }
+      ],
+      "why": "Bulk RNA-seq, no CRISPRi perturbation screen"
+    },
+    {
+      "series": "geo://GSE299369",
+      "series_title": "Human microglia remove intraneuronal a-synuclein aggregates in a stem cell model of Parkinson\u2019s disease [bulk RNA-Seq]",
+      "sample": "GSM9038102",
+      "sample_title": "DAN_NSC_2; hiPSC; cell line: hiPSC; cell type: Induced pluripotent stem cell derived dopaminergic neurons; genotype: SNCA Triplication (SFC831-03-05); treatment: Non-seeded control (NSC)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived dopaminergic neurons",
+      "topic_match": 0,
+      "bytes": 74029465,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9038102_DAN_NSC2_abundance.h5",
+          "bytes": 71303168
+        },
+        {
+          "name": "GSM9038102_DAN_NSC2_abundance.tsv.gz",
+          "bytes": 2726297
+        }
+      ],
+      "why": "Bulk RNA-seq, no CRISPRi perturbation screen"
+    },
+    {
+      "series": "geo://GSE299369",
+      "series_title": "Human microglia remove intraneuronal a-synuclein aggregates in a stem cell model of Parkinson\u2019s disease [bulk RNA-Seq]",
+      "sample": "GSM9038103",
+      "sample_title": "DAN_NSC_3; hiPSC; cell line: hiPSC; cell type: Induced pluripotent stem cell derived dopaminergic neurons; genotype: SNCA Triplication (SFC831-03-05); treatment: Non-seeded control (NSC)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived dopaminergic neurons",
+      "topic_match": 0,
+      "bytes": 68786585,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9038103_DAN_NSC3_abundance.h5",
+          "bytes": 66060288
+        },
+        {
+          "name": "GSM9038103_DAN_NSC3_abundance.tsv.gz",
+          "bytes": 2726297
+        }
+      ],
+      "why": "Bulk RNA-seq, no CRISPRi perturbation screen"
+    },
+    {
+      "series": "geo://GSE299369",
+      "series_title": "Human microglia remove intraneuronal a-synuclein aggregates in a stem cell model of Parkinson\u2019s disease [bulk RNA-Seq]",
+      "sample": "GSM9038104",
+      "sample_title": "Coc_NSC_1; hiPSC; cell line: hiPSC; cell type: Induced pluripotent stem cell derived dopaminergic neurons and microglia; genotype: SNCA Triplication (SFC831-03-05) and HC  (AH017-13); treatment: Non-seeded control (NSC)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived dopaminergic neurons and microglia",
+      "topic_match": 0,
+      "bytes": 58091110,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9038104_Coc_NSC1_abundance.h5",
+          "bytes": 55574528
+        },
+        {
+          "name": "GSM9038104_Coc_NSC1_abundance.tsv.gz",
+          "bytes": 2516582
+        }
+      ],
+      "why": "Bulk RNA-seq, mixed cell type, no CRISPRi"
+    },
+    {
+      "series": "geo://GSE299369",
+      "series_title": "Human microglia remove intraneuronal a-synuclein aggregates in a stem cell model of Parkinson\u2019s disease [bulk RNA-Seq]",
+      "sample": "GSM9038105",
+      "sample_title": "Coc_NSC_2; hiPSC; cell line: hiPSC; cell type: Induced pluripotent stem cell derived dopaminergic neurons and microglia; genotype: SNCA Triplication (SFC831-03-05) and HC  (AH017-13); treatment: Non-seeded control (NSC)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived dopaminergic neurons and microglia",
+      "topic_match": 0,
+      "bytes": 74029465,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9038105_Coc_NSC2_abundance.h5",
+          "bytes": 71303168
+        },
+        {
+          "name": "GSM9038105_Coc_NSC2_abundance.tsv.gz",
+          "bytes": 2726297
+        }
+      ],
+      "why": "Bulk RNA-seq, mixed cell type, no CRISPRi"
+    },
+    {
+      "series": "geo://GSE299369",
+      "series_title": "Human microglia remove intraneuronal a-synuclein aggregates in a stem cell model of Parkinson\u2019s disease [bulk RNA-Seq]",
+      "sample": "GSM9038106",
+      "sample_title": "Coc_NSC_3; hiPSC; cell line: hiPSC; cell type: Induced pluripotent stem cell derived dopaminergic neurons and microglia; genotype: SNCA Triplication (SFC831-03-05) and HC  (AH017-13); treatment: Non-seeded control (NSC)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived dopaminergic neurons and microglia",
+      "topic_match": 0,
+      "bytes": 75078041,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9038106_Coc_NSC3_abundance.h5",
+          "bytes": 72351744
+        },
+        {
+          "name": "GSM9038106_Coc_NSC3_abundance.tsv.gz",
+          "bytes": 2726297
+        }
+      ],
+      "why": "Bulk RNA-seq, mixed cell type, no CRISPRi"
+    },
+    {
+      "series": "geo://GSE349277",
+      "series_title": "Interpreting variants associated with congenital heart disease with a regulatory map of the human fetal heart [hiPSC-VICbulkMEIS2KD]",
+      "sample": "GSE349277",
+      "sample_title": "Interpreting variants associated with congenital heart disease with a regulatory map of the human fetal heart [hiPSC-VICbulkMEIS2KD] (series-level files; samples: GSM10090634, ... 24 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "Valvular interstitial cells",
+      "topic_match": 0,
+      "bytes": 7025458,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE349277_2SZ9JF-expression-matrix.csv.gz",
+          "bytes": 3460300
+        },
+        {
+          "name": "GSE349277_9YFNNW-expression-matrix.csv.gz",
+          "bytes": 3565158
+        }
+      ],
+      "why": "Bulk RNA-seq, wrong cell type (VIC not iPSC-derived neurons)",
+      "samples": [
+        "GSM10090634",
+        "GSM10090635",
+        "GSM10090636",
+        "GSM10090637",
+        "GSM10090638",
+        "GSM10090639",
+        "GSM10090640",
+        "GSM10090641",
+        "GSM10090642",
+        "GSM10090643",
+        "GSM10090644",
+        "GSM10090645",
+        "GSM10090646",
+        "GSM10090647",
+        "GSM10090648",
+        "GSM10090649",
+        "GSM10090650",
+        "GSM10090651",
+        "GSM10090652",
+        "GSM10090653",
+        "GSM10090654",
+        "GSM10090655",
+        "GSM10090656",
+        "GSM10090657"
+      ]
+    },
+    {
+      "series": "geo://GSE58933",
+      "series_title": "Hyper-excitability of Neurons generated from Patients with Bipolar Disorder",
+      "sample": "GSE58933",
+      "sample_title": "Hyper-excitability of Neurons generated from Patients with Bipolar Disorder (series-level files; samples: GSM1422445, ... 18 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "iPSC-derived hippocampal dentate gyrus granule neurons",
+      "topic_match": 0,
+      "bytes": 4421427,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE58933_cpm.txt.gz",
+          "bytes": 541696
+        },
+        {
+          "name": "GSE58933_Jun_All_Data.txt.gz",
+          "bytes": 3879731
+        }
+      ],
+      "why": "Bulk RNA-seq, no CRISPRi perturbation screen",
+      "samples": [
+        "GSM1422445",
+        "GSM1422446",
+        "GSM1422447",
+        "GSM1422448",
+        "GSM1422449",
+        "GSM1422450",
+        "GSM1422451",
+        "GSM1422452",
+        "GSM1422453",
+        "GSM1422454",
+        "GSM1422455",
+        "GSM1422456",
+        "GSM1422457",
+        "GSM1422458",
+        "GSM1422459",
+        "GSM1422460",
+        "GSM1857097",
+        "GSM1857098"
+      ]
+    },
+    {
+      "series": "geo://GSE322198",
+      "series_title": "Female iPSC X-chromosome inactivation (XCI) erosion and its transcriptomic effects during CRISPR gene editing and neural differentiation",
+      "sample": "GSE322198",
+      "sample_title": "Female iPSC X-chromosome inactivation (XCI) erosion and its transcriptomic effects during CRISPR gene editing and neural differentiation (series-level files; samples: GSM9551546, ... 24 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "iPSC",
+      "topic_match": 0.1,
+      "bytes": 9227468,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE322198_iPSC_B4-B13_rawCounts.tsv.gz",
+          "bytes": 9227468
+        }
+      ],
+      "why": "Bulk iPSC CRISPRko, not single-cell iPSC-derived neurons",
+      "samples": [
+        "GSM9551546",
+        "GSM9551547",
+        "GSM9551548",
+        "GSM9551549",
+        "GSM9551550",
+        "GSM9551551",
+        "GSM9551552",
+        "GSM9551553",
+        "GSM9551554",
+        "GSM9551555",
+        "GSM9551556",
+        "GSM9551557",
+        "GSM9551558",
+        "GSM9551559",
+        "GSM9551560",
+        "GSM9551561",
+        "GSM9551562",
+        "GSM9551563",
+        "GSM9551564",
+        "GSM9551565",
+        "GSM9551566",
+        "GSM9551568",
+        "GSM9551569",
+        "GSM9551570"
+      ]
+    }
+  ],
+  "candidates": [
+    {
+      "reference": "hf://Boom5426/iPSC-CRISPRi-PerturbSeq",
+      "title": "Boom5426/iPSC-CRISPRi-PerturbSeq",
+      "queries": [
+        "iPSC neurons Perturb-seq",
+        "iPSC neurons CROP-seq",
+        "iPSC neurons CRISPR screen single-cell",
+        "iPSC neurons CRISPR screen",
+        "iPSC neurons CRISPRi",
+        "iPSC neurons single-cell RNA-seq",
+        "iPSC neurons scRNA-seq"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "hf://Mooooooooonie1/nhp-ipsc-degs",
+      "title": "Mooooooooonie1/nhp-ipsc-degs",
+      "queries": [
+        "iPSC neurons Perturb-seq",
+        "iPSC neurons CROP-seq",
+        "iPSC neurons CRISPR screen single-cell",
+        "iPSC neurons CRISPR screen",
+        "iPSC neurons CRISPRi",
+        "iPSC neurons single-cell RNA-seq",
+        "iPSC neurons scRNA-seq"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE124703",
+      "title": "CRISPR-based multimodal genetic screens in human iPSC-derived neurons",
+      "queries": [
+        "iPSC-derived neurons CRISPR screen single-cell",
+        "iPSC-derived neurons CRISPR screen",
+        "iPSC-derived neurons CRISPRi",
+        "iPSC neurons CRISPR screen single-cell",
+        "iPSC neurons CRISPR screen"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "geo://GSE318782",
+      "title": "Post-transcriptional Regulation Maintains Neurogenic Potential of Human Neural Progenitor Cells",
+      "queries": [
+        "iPSC-derived neurons Perturb-seq",
+        "iPSC-derived neurons CRISPR screen single-cell",
+        "iPSC neurons Perturb-seq",
+        "iPSC neurons CRISPR screen single-cell"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE349562",
+      "title": "Autonomic neurons are intrinsically hyperexcitable in a Friedreich ataxia iPSC model",
+      "queries": [
+        "iPSC-derived neurons Perturb-seq",
+        "iPSC-derived neurons CRISPR screen single-cell",
+        "iPSC neurons Perturb-seq",
+        "iPSC neurons CRISPR screen single-cell"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE349281",
+      "title": "Live-cell monitoring and transcriptomic profiling identify distinct temporal patterns of cell-cycle activity and maturation in human iPSC-derived cardiomyocytes",
+      "queries": [
+        "iPSC-derived neurons Perturb-seq",
+        "iPSC-derived neurons CRISPR screen single-cell",
+        "iPSC neurons Perturb-seq",
+        "iPSC neurons CRISPR screen single-cell"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE285967",
+      "title": "Gene expression profile of human iPSC-derived hippocampal organoids at four developmental stages",
+      "queries": [
+        "iPSC-derived neurons Perturb-seq",
+        "iPSC-derived neurons CRISPR screen single-cell",
+        "iPSC neurons Perturb-seq",
+        "iPSC neurons CRISPR screen single-cell"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE315127",
+      "title": "iPSC-derived forebrain organoid bulk RNA-seq",
+      "queries": [
+        "iPSC-derived neurons Perturb-seq",
+        "iPSC-derived neurons CRISPR screen single-cell",
+        "iPSC neurons Perturb-seq",
+        "iPSC neurons CRISPR screen single-cell"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE69790",
+      "title": "Single cell transcriptomics analysis of induced pluripotent stem cell-derived cortical neurons reveals frequent dual layer identity",
+      "queries": [
+        "iPSC-derived neurons single-cell RNA-seq",
+        "iPSC-derived neurons scRNA-seq",
+        "iPSC neurons single-cell RNA-seq",
+        "iPSC neurons scRNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE277602",
+      "title": "Elucidating ADNP Syndrome Gene Dysregulation through a Novel Approach in iPSC-Derived GABAergic Neuron Development [scRNA-seq]",
+      "queries": [
+        "iPSC-derived neurons single-cell RNA-seq",
+        "iPSC-derived neurons scRNA-seq",
+        "iPSC neurons single-cell RNA-seq",
+        "iPSC neurons scRNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE244370",
+      "title": "All-defined NGN2 neuron protocol reveals multifaceted signatures of neuronal maturation [scRNA-seq]",
+      "queries": [
+        "iPSC-derived neurons single-cell RNA-seq",
+        "iPSC-derived neurons scRNA-seq",
+        "iPSC neurons scRNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE315126",
+      "title": "iPSC-derived forebrain neurons RNA-seq",
+      "queries": [
+        "iPSC-derived neurons Perturb-seq",
+        "iPSC-derived neurons CRISPR screen single-cell"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE299369",
+      "title": "Human microglia remove intraneuronal a-synuclein aggregates in a stem cell model of Parkinson\u2019s disease [bulk RNA-Seq]",
+      "queries": [
+        "iPSC-derived neurons Perturb-seq",
+        "iPSC-derived neurons CRISPR screen single-cell"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE349277",
+      "title": "Interpreting variants associated with congenital heart disease with a regulatory map of the human fetal heart [hiPSC-VICbulkMEIS2KD]",
+      "queries": [
+        "iPSC neurons Perturb-seq",
+        "iPSC neurons CRISPR screen single-cell"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE58933",
+      "title": "Hyper-excitability of Neurons generated from Patients with Bipolar Disorder",
+      "queries": [
+        "iPSC-derived neurons single-cell RNA-seq",
+        "iPSC neurons single-cell RNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE322198",
+      "title": "Female iPSC X-chromosome inactivation (XCI) erosion and its transcriptomic effects during CRISPR gene editing and neural differentiation",
+      "queries": [
+        "iPSC-derived neurons single-cell RNA-seq",
+        "iPSC neurons single-cell RNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    }
+  ],
+  "seconds": 273.5
+}

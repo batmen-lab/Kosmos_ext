@@ -262,6 +262,7 @@ def _cmd_plan(args: argparse.Namespace) -> int:
         validation_fraction=args.validation_fraction,
         seed=args.seed,
         multi_gold_policy=args.multi_gold,
+        supplementary_order=args.supp_order,
     )
     plan = build_plan(
         paths,
@@ -485,6 +486,13 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("external", "pool", "error"),
         help="with several labeled tables: one gold and the rest as evidence "
         "(external, default), pool them all, or refuse (error)",
+    )
+    p.add_argument(
+        "--supp-order",
+        default="planned",
+        choices=("planned", "rows"),
+        help="order of the supplementary tables: as planned (default) or most "
+        "rows first (the first is the one a single-source backend uses)",
     )
     p.add_argument(
         "--labeled-path",

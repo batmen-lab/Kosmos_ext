@@ -113,12 +113,14 @@ def test_the_per_cell_review_is_unchanged():
     assert "is_screen" not in client.schemas[0]["properties"]
 
 
-def test_a_screen_without_expression_is_refused():
+def test_a_label_half_without_expression_keeps_the_golds_labels():
     """A cell metadata table has the perturbation but not the transcriptome.
 
-    GSE153056_ECCITE_metadata.tsv.gz was gated as `gold` -- condition column
-    `gene`, controls `NT` -- and then nothing could be trained, because its
-    other columns are QC metrics, not genes.
+    GSE153056_ECCITE_metadata.tsv.gz carries the condition column `gene` and
+    controls `NT` but no genes; a screen is routinely published this way, with
+    the counts matrix beside it. Perturbation needs a condition column plus
+    measurements, not necessarily in one file: the label half is the gold, and
+    the backend joins it to its counts matrix on the barcode.
     """
     client = FakeClient(
         {
@@ -137,7 +139,8 @@ def test_a_screen_without_expression_is_refused():
 
     assert review.is_screen is True
     assert review.has_expression is False
-    assert review.role == "unusable"
+    assert review.role == "gold"
+    assert review.condition_column == "condition"
 
 
 def test_a_screen_with_expression_is_kept():

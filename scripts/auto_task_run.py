@@ -151,6 +151,23 @@ def datafetcher_cli(*args: str) -> list[str]:
     return [PYTHON, "-m", "datafetcher", *args]
 
 
+def _retrieval_hints(args) -> list[str]:
+    """What the retrieval prompt is told: hints, the caller's `--intent`, and the
+    task profile's own ask (`--retrieval-ask`).
+
+    One place, so a run asks for the same thing whether or not it was handed
+    candidates to judge. `--intent` turns the search on; `--retrieval-ask` only
+    adds wording, which is what lets `--candidate` skip the search without also
+    changing the retrieval question.
+    """
+    hints = list(getattr(args, "hint", None) or [])
+    for extra in (getattr(args, "intent", ""), getattr(args, "retrieval_ask", "")):
+        text = str(extra or "").strip()
+        if text:
+            hints.append(text)
+    return hints
+
+
 #: Extensions worth screening as tables. An archive's extracted contents are
 #: candidates in their own right; a `.zip` is not.
 TABLE_SUFFIXES = (".csv", ".tsv", ".txt", ".parquet", ".arrow", ".json", ".jsonl", ".data", ".arff")
@@ -409,6 +426,53 @@ def _prefer_data_over_index(
     return kept
 
 
+#: Words a perturbation screen's repository description uses. A gold-round
+#: candidate whose title and summary use none of them is not the screen: three
+#: T-cell runs downloaded COVID-19 atlases the model had called "CRISPR screens".
+_SCREEN_TERMS = re.compile(
+    r"crispr|perturb|crop-?seq|sgrna|\bgrna|guide rna|knock-?out|knock-?down|"
+    r"\bscreens?\b|screening|mosaic-?seq|eccite|shrna|sirna|cas9|cas12",
+    re.IGNORECASE,
+)
+
+
+#: ... and a single-cell readout: a pooled screen read out by bulk sequencing
+#: (guide counts after sorting, bulk RNA-seq) has no per-cell transcriptomes.
+_SINGLE_CELL_TERMS = re.compile(
+    r"single[- ]?cell|scrna|sc-rna|perturb-?seq|crop-?seq|eccite|mosaic-?seq|"
+    r"cite-?seq|10x|chromium|drop-?seq|droplet|per[- ]cell",
+    re.IGNORECASE,
+)
+
+
+def _not_a_screen(listing: dict) -> str:
+    """Why this candidate is not a single-cell perturbation screen, or "" when it
+    may be.
+
+    Judged from the repository's own description; a listing without one (a
+    HuggingFace repository, a bare URL) is not refused on this ground.
+    """
+    about = str(listing.get("about") or "").strip()
+    if not about:
+        return ""
+    if not _SCREEN_TERMS.search(about):
+        return (
+            "its repository description names no perturbation screen (no CRISPR, "
+            "Perturb-seq, CROP-seq, guide or knockout/knockdown); it reads: "
+            f"{about[:200]!r}. This round needs the labeled screen; an unperturbed "
+            "atlas is supplementary evidence, searched for once the screen is chosen"
+        )
+    if not _SINGLE_CELL_TERMS.search(about):
+        return (
+            "it is a perturbation screen but its description names no single-cell "
+            "readout (a pooled screen read out by bulk sequencing has no per-cell "
+            f"transcriptomes); it reads: {about[:200]!r}. Name a single-cell screen "
+            "(Perturb-seq, CROP-seq, ECCITE-seq), or the single-cell SubSeries of a "
+            "SuperSeries"
+        )
+    return ""
+
+
 def _prefer_expression_file(
     listing: dict, chosen: list[dict], args, log: PipelineLog
 ) -> list[dict]:
@@ -425,18 +489,32 @@ def _prefer_expression_file(
     profile = profile_for(getattr(args, "task_kind", "per_cell"))
     if not profile.expression_markers:
         return chosen
+    def expression_like(entry: dict) -> bool:
+        text = str(entry.get("path") or entry.get("reference") or "").lower()
+        return any(marker in text for marker in profile.expression_markers)
+
+    # A measurements file is already on the list (the model chose the matrix):
+    # adding the series' multi-GB archive as well only fails the byte cap.
+    if any(expression_like(entry) for entry in chosen):
+        return chosen
+    cap = int(getattr(args, "max_bytes", 0) or 0)
     candidates = [
         entry
         for entry in (listing.get("files") or [])
-        if any(
-            marker in str(entry.get("path") or "").lower()
-            for marker in profile.expression_markers
-        )
+        if expression_like(entry)
         and str(entry.get("reference") or "")
+        and not (cap and int(entry.get("bytes") or 0) > cap)
     ]
     if not candidates:
         return chosen
-    best = max(candidates, key=lambda entry: int(entry.get("bytes") or 0))
+    # a matrix the reader can open beats an archive that may hold one
+    best = max(
+        candidates,
+        key=lambda entry: (
+            not str(entry.get("path") or "").lower().endswith((".tar", ".tar.gz", ".zip")),
+            int(entry.get("bytes") or 0),
+        ),
+    )
     reference = str(best.get("reference"))
     already = [str(entry.get("reference") or "") for entry in chosen]
     if any(reference.startswith(existing) or existing.startswith(reference) for existing in already):
@@ -450,6 +528,49 @@ def _prefer_expression_file(
         why="the measurements this screen's gold needs",
     )
     return [*chosen, {"reference": reference, "why": "the measurements file"}]
+
+
+def _keep_matrix_companions(listing: dict, chosen: list[dict], log: PipelineLog) -> list[dict]:
+    """A matrix-market file is unreadable without its companions: keep them.
+
+    `GSE133344_filtered_matrix.mtx.gz` needs `GSE133344_filtered_barcodes.tsv.gz`
+    and `..._genes.tsv.gz` (and its cell-identity table, which carries the
+    labels); a Dixit-style `*.mtx.txt.gz` needs `*_cellnames.csv.gz`,
+    `*_genenames.csv.gz` and the `*_cbc_gbc_dict*.csv.gz` label map. The model
+    chooses files one at a time and kept only the matrix.
+    """
+    from datafetcher.singlecell import MTX_SUFFIXES, companion_kind, mtx_prefixes
+
+    files = [entry for entry in (listing.get("files") or []) if str(entry.get("reference") or "")]
+    chosen_refs = {str(entry.get("reference")) for entry in chosen}
+    matrices = [
+        entry
+        for entry in files
+        if str(entry.get("reference")) in chosen_refs
+        and Path(str(entry.get("path") or "")).name.lower().endswith(MTX_SUFFIXES)
+    ]
+    added = list(chosen)
+    for matrix in matrices:
+        name = Path(str(matrix.get("path"))).name
+        prefixes = [p.lower() for p in mtx_prefixes(name) if p]
+        labels: list[dict] = []
+        for entry in files:
+            other = Path(str(entry.get("path") or "")).name
+            reference = str(entry.get("reference"))
+            if reference in {str(e.get("reference")) for e in added}:
+                continue
+            if companion_kind(other, name):
+                added.append({"reference": reference, "why": f"the companion of {name}"})
+                log.event("preflight", f"# preflight: keeping {other} -- {name} cannot be read without it", reference=reference)
+            elif any(other.lower().startswith(p) for p in prefixes) and any(
+                word in other.lower() for word in ("identities", "metadata", "annotation", "cbc_gbc_dict", "cell_info")
+            ):
+                labels.append(entry)
+        if labels:
+            best = max(labels, key=lambda e: ("lenient" not in str(e.get("path")).lower(), "raw" not in str(e.get("path")).lower(), -int(e.get("bytes") or 0)))
+            added.append({"reference": str(best.get("reference")), "why": f"the cell labels of {name}"})
+            log.event("preflight", f"# preflight: keeping {Path(str(best.get('path'))).name} -- the cell labels of {name}", reference=str(best.get("reference")))
+    return added
 
 
 def _prefer_annotated_file(
@@ -521,6 +642,8 @@ def preflight(
     max_downloads: int | None = None,
     exclude_refs: set[str] | None = None,
     exclude_names: set[str] | None = None,
+    prefer_large: bool = False,
+    require_screen: bool = False,
 ) -> tuple[list[DownloadChoice], list[dict]]:
     """Which proposals to download, decided from what they cost.
 
@@ -592,6 +715,16 @@ def preflight(
     kept: list[dict] = []
     for listing in listings:
         reference = str(listing.get("reference") or "")
+        not_a_screen = _not_a_screen(listing) if require_screen else ""
+        if not_a_screen:
+            refusals.append({"reference": reference, "error": not_a_screen})
+            log.event(
+                "preflight",
+                f"# preflight: {reference} -> refused before download: {not_a_screen}",
+                reference=reference,
+                skipped="not a perturbation screen",
+            )
+            continue
         cost = _cost_line(listing)
         smallest = _smallest_bytes(listing)
         missing = _missing_selector(listing)
@@ -712,19 +845,33 @@ def preflight(
         log=log.raw,
         max_downloads=max_downloads,
         used=sorted(exclude_refs | exclude_names),
+        prefer_large=prefer_large,
+        screen_round=require_screen,
     )
-    offered = {str(listing.get("reference") or "") for listing in kept}
     chosen: list[DownloadChoice] = []
     # The model's choices, before the index/data check below: the check needs to
     # know what it picked, and the log should show both.
     picked: list[tuple[DownloadChoice, dict]] = []
     for decision in decisions:
         reference = str(decision.get("reference"))
-        if reference not in offered and not any(
-            reference == str(entry.get("reference"))
-            for listing in kept
-            for entry in listing.get("files") or []
-        ):
+        # The listing that *owns* this reference: either the series itself or a
+        # file inside it. Pairing a decision with the leftover `listing` of the
+        # previous loop paired it with the wrong series -- so the annotated
+        # sibling and the measurements were looked for in whatever listing was
+        # examined last, and a screen's label table was never kept.
+        owner = next(
+            (
+                listing
+                for listing in kept
+                if reference == str(listing.get("reference") or "")
+                or any(
+                    reference == str(entry.get("reference"))
+                    for entry in listing.get("files") or []
+                )
+            ),
+            None,
+        )
+        if owner is None:
             continue
         already = _already_used(reference, exclude_refs, exclude_names)
         if already:
@@ -744,7 +891,7 @@ def preflight(
                 DownloadChoice(
                     reference=reference, why=str(decision.get("why") or "")
                 ),
-                listing,
+                owner,
             )
         )
         log.event(
@@ -760,6 +907,7 @@ def preflight(
         for replacement in _prefer_annotated_file(listing, replaced, args, log):
             if not any(item.get("reference") == replacement["reference"] for item in replaced):
                 replaced.append(replacement)
+        replaced = _keep_matrix_companions(listing, replaced, log)
         for replacement in replaced:
             chosen.append(
                 DownloadChoice(
@@ -783,6 +931,10 @@ def preflight(
             "downloaded for this round",
         )
     return chosen, refusals
+
+
+#: reference -> error, for downloads that failed earlier in this process
+_FAILED_REFERENCES: dict[str, str] = {}
 
 
 def fetch_selected(
@@ -812,6 +964,9 @@ def fetch_selected(
     base = ["--root", root] if root else []
     fetched: list[str] = []
     failures: list[dict] = []
+    # Within one run, a reference that failed (too big, HTTP error) fails again:
+    # the evidence round re-proposed a 4 GB RAW.tar three times.
+    failed_before = _FAILED_REFERENCES
     # Shared across rounds when the caller passes one: the evidence round often
     # re-proposes the very file the gold round already downloaded, and paying for
     # it twice (download, profile, hash, log line) buys nothing.
@@ -821,6 +976,15 @@ def fetch_selected(
         # `reference`. Both mean "the thing to download".
         reference = getattr(candidate, "identifier", None) or getattr(candidate, "reference", None)
         if not reference:
+            continue
+        if reference in failed_before:
+            log.event(
+                "download",
+                f"#   not retried: {reference} already failed in this run ({failed_before[reference]})",
+                reference=reference,
+                ok=False,
+            )
+            failures.append({"reference": reference, "error": failed_before[reference]})
             continue
         if budget is not None and budget.spent_out:
             log.event(
@@ -857,6 +1021,7 @@ def fetch_selected(
                 error=detail,
             )
             failures.append({"reference": reference, "error": detail})
+            failed_before[reference] = detail
             continue
         payload = json.loads(result.stdout)
         candidates = _candidate_records(payload, max_files=max_files)
@@ -1081,6 +1246,87 @@ def _write_data_report(
     )
 
 
+#: Per-file cap for the evidence round under `--supp-size large`: the fetcher's
+#: default (2 GiB) refused every large K562 source (GSE146194's RAW.tar), so the
+#: "large" preference ended up with the small ones.
+SUPP_LARGE_MAX_BYTES = 10 * 1024**3
+
+
+def _supplementary_max_bytes(args) -> int | None:
+    """An explicit `--max-bytes` wins; `--supp-size large` raises the default."""
+    if getattr(args, "max_bytes", None):
+        return int(args.max_bytes)
+    if getattr(args, "supp_size", "any") == "large":
+        return SUPP_LARGE_MAX_BYTES
+    return None
+
+
+def _has_search(tools: list[dict]) -> bool:
+    return any(str(tool.get("kind")) == "search" for tool in tools)
+
+
+#: A column that names the cell: `cell BC` (Adamson), `Cell.BC` (Shifrut),
+#: `cell`, `barcode`, `cell_barcode`.
+_CELL_COLUMN = re.compile(r"(^|[^a-z])(cells?|barcodes?|cbc)([^a-z]|$)")
+
+
+def _per_cell_labels(entry: dict) -> bool:
+    """Whether a labeled table's rows are cells (a screen's labels), not guides.
+
+    GSE132080's `sgRNA_barcode_sequences_and_phenotypes.csv` has a `gene`
+    column and 128 rows -- one per guide -- and was chosen as the gold of a UPR
+    question over Adamson's 65,257-cell identity table.
+    """
+    if (entry.get("rows") or 0) >= 1000:
+        return True
+    names = list(entry.get("features") or []) + list(entry.get("features_sample") or [])
+    path = Path(str(entry.get("path") or ""))
+    if path.exists():
+        try:
+            import pandas as pd
+
+            names += [str(c) for c in pd.read_csv(path, nrows=5, sep=None, engine="python").columns]
+        except Exception:  # noqa: BLE001 - unreadable: judged on what is known
+            pass
+    return any(_CELL_COLUMN.search(str(name).lower()) for name in names)
+
+
+_GSE_IN_PATH = re.compile(r"(GSE\d+)")
+_GSM_IN_NAME = re.compile(r"(GSM\d+)")
+
+
+def _attach_sample_titles(entries: list[dict], log: PipelineLog) -> None:
+    """Give each GEO sample's table its sample title, for the primary-gold choice.
+
+    Adamson's GSE90546 holds three screens, `GSM..._10X001/005/010`; without the
+    titles the model chose the pilot TF screen for a UPR question.
+    """
+    from datafetcher.config import DataFetcherConfig
+    from datafetcher.sources.geo import sample_titles
+
+    by_series: dict[str, dict[str, str]] = {}
+    for entry in entries:
+        path = str(entry.get("path") or "")
+        series, sample = _GSE_IN_PATH.search(path), _GSM_IN_NAME.search(Path(path).name)
+        if not series or not sample:
+            continue
+        if series.group(1) not in by_series:
+            by_series[series.group(1)] = sample_titles(series.group(1), DataFetcherConfig())
+        title = by_series[series.group(1)].get(sample.group(1))
+        if title:
+            entry["sample_title"] = title
+            log.event(
+                "primary_gold",
+                f"# primary gold: {Path(path).name} is GEO sample {sample.group(1)}: {title}",
+                path=path,
+            )
+
+
+def _wants_screen(args) -> bool:
+    """The gold round of a perturbation task is looking for a screen."""
+    return str(getattr(args, "task_kind", "per_cell")) == "perturbation"
+
+
 def run_model_search(identifier: str, args, log: PipelineLog) -> str:
     """Run a search the model asked for, through the fetcher's own search tools.
 
@@ -1120,7 +1366,9 @@ def _mechanical_query_search(text: str, args, log: PipelineLog) -> str:
         return ""
     hits = (json.loads(result.stdout).get("hits") or []) if result.stdout.strip() else []
     lines = [
-        f"  {hit.get('accession')} -> {hit.get('reference')}  {(hit.get('title') or '')[:90]}"
+        # 200, not 90: a study's distinguishing words are often at the end of
+        # its title ("...dissection of the unfolded protein response").
+        f"  {hit.get('accession')} -> {hit.get('reference')}  {(hit.get('title') or '')[:200]}"
         for hit in hits
     ]
     log.event("retrieval", f"# search {text!r}: {len(lines)} hit(s)", query=text, hits=lines)
@@ -1154,6 +1402,7 @@ def retry_refused(
     """Ask the model once more, with the refusals in front of it."""
     if not failures or client is None or args.fetch_retries <= 0:
         return []
+    evidence = round_name.startswith("supplementary")
     from kosmos.discovery import propose_datasets
 
     log.event(
@@ -1163,16 +1412,18 @@ def retry_refused(
         failures=failures,
     )
     try:
+        tools = download_tools(args.root, log)
         proposals = propose_datasets(
             args.objective,
             client=client,
             max_items=args.fetch_limit,
-            hints=list(args.hint or []) + ([args.intent] if args.intent else []),
-            tools=download_tools(args.root, log),
+            hints=_retrieval_hints(args),
+            tools=tools,
             log=log.raw,
             run_search=lambda identifier: run_model_search(identifier, args, log),
             max_hops=args.search_hops,
             retry=failure_report(failures),
+            search_first=_has_search(tools),
         )
     except Exception as e:  # noqa: BLE001 - a failed retry is not a failed run
         log.event("retrieval", f"# retrieval: the correction call failed: {e}", ok=False)
@@ -1184,11 +1435,13 @@ def retry_refused(
         log,
         budget=budget,
         max_downloads=args.fetch_limit,
+        # the evidence round's correction looks for evidence, not the screen
+        require_screen=_wants_screen(args) and not evidence,
     )
     arrived, _ = fetch_selected(
         wanted,
         args.root,
-        args.max_bytes,
+        _supplementary_max_bytes(args) if evidence else args.max_bytes,
         args.objective,
         log,
         round_name=f"{round_name}-retry",
@@ -1240,6 +1493,48 @@ def _distinctive_columns(columns: list[str], limit: int = 4) -> list[str]:
     return picked[:limit]
 
 
+def _perturbation_evidence_columns(
+    gold: str, used: Sequence[str], log: PipelineLog
+) -> list[str]:
+    """The gene panel a perturbation screen's evidence should share.
+
+    A perturbation task's supplementary is *measured transcriptome* -- control
+    cells, or a second screen -- not more labels. The per-cell rule ("an
+    external table must supply the gold's own measured columns") is meaningless
+    here: the gold is the screen's label table, whose columns are QC counters
+    (`nCount_RNA`, `percent.mito`, ...), so a search on them finds nothing and
+    the round returns no evidence at all. Match on the genes the screen measures
+    instead, taken from the counts matrix the label table joins to.
+    """
+    from kosmos.ppi.perturbation.assemble import (
+        is_measurement_table,
+        measurement_features,
+        pick_expression_partner,
+    )
+
+    candidates = [str(path) for path in used if path]
+    partner = pick_expression_partner(gold, candidates) if candidates else None
+    if partner is None:
+        measured = [path for path in candidates if is_measurement_table(path)]
+        if measured:
+            partner = max(measured, key=lambda path: len(measurement_features(path)))
+    if partner is None:
+        return []
+    genes = sorted(measurement_features(partner))
+    if not genes:
+        return []
+    log.event(
+        "supplementary",
+        f"# supplementary: matching on the {len(genes)} gene(s) "
+        f"{Path(str(partner)).name} measures -- a perturbation screen's evidence "
+        f"is measured transcriptome, not the label table's own columns",
+        partner=str(partner),
+        genes=genes[:20],
+    )
+    # The prompt only needs enough names to recognise the panel.
+    return genes[:400]
+
+
 def find_supplementary(
     args,
     log: PipelineLog,
@@ -1261,20 +1556,35 @@ def find_supplementary(
     """
     from kosmos.discovery import propose_evidence
 
-    roles = run_command(
-        datafetcher_cli(
-            *(["--root", args.root] if args.root else []),
-            "roles",
-            gold,
-            "--target-column",
-            target,
-            "--json",
-        ),
-        check=False,
-    )
     columns: list[str] = []
-    if roles.returncode == 0 and roles.stdout.strip():
-        columns = list(json.loads(roles.stdout).get("features") or [])
+    if str(getattr(args, "task_kind", "per_cell")) == "perturbation":
+        columns = _perturbation_evidence_columns(gold, used, log)
+        if not columns:
+            # The label table's own columns (barcode, guide, UMI count) are not
+            # what evidence for a screen shares; a search on them found
+            # `sample.name UMI.count` hits and no atlas. Say so instead.
+            log.event(
+                "supplementary",
+                "# supplementary: no measured gene panel was found beside the "
+                f"screen's label table {Path(gold).name}, so there is nothing to "
+                "match an atlas against; skipping the evidence round",
+                ok=False,
+            )
+            return []
+    if not columns:
+        roles = run_command(
+            datafetcher_cli(
+                *(["--root", args.root] if args.root else []),
+                "roles",
+                gold,
+                "--target-column",
+                target,
+                "--json",
+            ),
+            check=False,
+        )
+        if roles.returncode == 0 and roles.stdout.strip():
+            columns = list(json.loads(roles.stdout).get("features") or [])
     if not columns:
         log.event(
             "supplementary",
@@ -1331,7 +1641,22 @@ def find_supplementary(
             )
 
     terms = _distinctive_columns(columns)
-    hits = _mechanical_query_search(" ".join(terms), args, log) if terms else ""
+    if str(getattr(args, "task_kind", "per_cell")) == "perturbation" and client is not None:
+        # A screen's evidence is more cells of the same cell type; a keyword
+        # search on its gene names (`sample.name UMI.count`, or 400 symbols)
+        # finds nothing of the kind. Search by cell type and assay instead.
+        from kosmos.discovery.search import search_repositories
+
+        hits = search_repositories(
+            args.objective,
+            [],
+            client=client,
+            log=log.raw,
+            run_search=lambda identifier: run_model_search(identifier, args, log),
+            purpose="evidence",
+        )
+    else:
+        hits = _mechanical_query_search(" ".join(terms), args, log) if terms else ""
 
     proposals = propose_evidence(
         args.objective,
@@ -1346,6 +1671,7 @@ def find_supplementary(
         log=log.raw,
         run_search=lambda identifier: run_model_search(identifier, args, log),
         max_hops=args.search_hops,
+        prefer_large=getattr(args, "supp_size", "any") == "large",
     )
     if not proposals:
         log.event("supplementary", "# supplementary: the model named nothing to add")
@@ -1359,11 +1685,12 @@ def find_supplementary(
         max_downloads=args.supp_limit,
         exclude_refs=used_references,
         exclude_names=used_names,
+        prefer_large=getattr(args, "supp_size", "any") == "large",
     )
     fetched, refused = fetch_selected(
         wanted,
         args.root,
-        args.max_bytes,
+        _supplementary_max_bytes(args),
         args.objective,
         log,
         round_name="supplementary",
@@ -1627,14 +1954,18 @@ def review_candidates(
         reviews[path] = entry
         if not review.header_present and review.header_names:
             target = out_dir / "normalized" / Path(path).name
-            if write_with_header(path, review.header_names, target):
-                normalized[path] = str(target)
+            written = write_with_header(path, review.header_names, target)
+            if written is not None:
+                # Record the path that was actually written: a `.gz` source
+                # becomes a plain `.csv`, and recording the requested name put a
+                # missing file into the plan (`FileNotFoundError`).
+                normalized[path] = str(written)
                 log.event(
                     "review",
                     f"# review: {Path(path).name} has no header; wrote a normalized "
-                    f"copy with the names the model supplied -> {target}",
+                    f"copy with the names the model supplied -> {written}",
                     path=path,
-                    normalized=str(target),
+                    normalized=str(written),
                     header_names=review.header_names,
                     source=review.source,
                 )
@@ -1669,12 +2000,14 @@ def sample_packet(path: str, args, log: PipelineLog) -> dict | None:
     return packet
 
 
-def write_with_header(path: str, names: list[str], target: Path) -> bool:
+def write_with_header(path: str, names: list[str], target: Path) -> Path | None:
     """Copy a headerless table with `names` as its header, mechanically checked.
 
     The names come from the model, so the shape has to agree exactly: one name
     per column, all non-empty and distinct. A mismatch is a rejected review, not
-    a rewritten file.
+    a rewritten file. Returns the path actually written -- the `.gz` suffix is
+    dropped because the copy is plain text, and the caller must record *that*
+    path, not the name it asked for.
     """
     import csv
 
@@ -1683,10 +2016,10 @@ def write_with_header(path: str, names: list[str], target: Path) -> bool:
         reader = csv.reader(handle)
         rows = list(reader)
     if not rows:
-        return False
+        return None
     width = len(rows[0])
     if len(names) != width or len(set(names)) != width or any(not n.strip() for n in names):
-        return False
+        return None
     target.parent.mkdir(parents=True, exist_ok=True)
     # This writes plain text, so a `.gz` name would be a lie -- and a downstream
     # `gzip.open` on it aborted the whole plan. Keep the honest extension.
@@ -1696,7 +2029,7 @@ def write_with_header(path: str, names: list[str], target: Path) -> bool:
         writer = csv.writer(handle)
         writer.writerow(names)
         writer.writerows(rows)
-    return True
+    return target
 
 
 def mechanical_role(
@@ -1820,13 +2153,49 @@ def dual_review(
         # `cell_type` in it -- and a model refusal silently overruling a rule
         # that is demonstrably right is how a run ends with no data at all.
         perturbation_task = str(getattr(args, "task_kind", "per_cell")) == "perturbation"
-        if (
-            perturbation_task
-            and role == "unusable"
-            and model_role == "unusable"
-            and mechanical.get("role") == "gold"
-            and review.get("condition_column")
-        ):
+        detected_label: tuple[str, list[str]] | None = None
+        if perturbation_task and not review.get("condition_column"):
+            # A headerless `barcode -> guide/condition` table: the model cannot
+            # name a column it has no header for, so the label half is recovered
+            # from the data instead. Perturbation needs a condition column and a
+            # counts matrix, not a fully annotated single table.
+            try:
+                from kosmos.ppi.perturbation.assemble import label_half_condition
+
+                detected_label = label_half_condition(path)
+            except Exception as err:  # noqa: BLE001 - a failed probe is not fatal
+                log.event(
+                    "review",
+                    f"# review: label-half probe failed for {Path(path).name}: {err}",
+                    ok=False,
+                )
+                detected_label = None
+            if detected_label is not None:
+                column, controls = detected_label
+                review["condition_column"] = column
+                review["target_column"] = column
+                review["is_screen"] = True
+                review["role"] = "gold"
+                review["control_labels"] = list(review.get("control_labels") or []) or controls
+                log.event(
+                    "review",
+                    f"# review: {Path(path).name} is a headerless barcode table "
+                    f"whose column {column!r} carries the perturbation identity; "
+                    f"keeping it as the screen's label half",
+                    path=path,
+                    condition_column=column,
+                    control_labels=controls,
+                )
+        # A perturbation screen's *label half*: a per-cell condition column with
+        # no measurements. It is the gold's labels whatever the mechanical rules
+        # made of a table they cannot encode, and whether the review came from
+        # the model or the label-half probe above. The counts matrix is joined at
+        # training time, so requiring both halves in one file is what left a
+        # whole screen with zero gold.
+        label_half = bool(review.get("condition_column")) and not review.get(
+            "has_expression", False
+        )
+        if perturbation_task and (detected_label is not None or label_half):
             # A screen is published as two files, and the model is looking at
             # one of them. It read this table correctly -- it names the
             # perturbation (`gene`, `guide`) and carries no measurements -- and
@@ -1837,7 +2206,15 @@ def dual_review(
             # as a disagreement is what sent a perfectly good label table to a
             # human and left the run with nothing to train on.
             role = "gold"
-            decided_by = "mechanical+model (screen labels; measurements joined at training time)"
+            if detected_label is not None or review.get("condition_column"):
+                review["is_screen"] = True
+                review["role"] = "gold"
+                review["target_column"] = review.get("condition_column")
+            decided_by = (
+                "mechanical (label half detected; measurements joined at training time)"
+                if detected_label is not None
+                else "mechanical+model (screen label half; measurements joined at training time)"
+            )
             log.event(
                 "review",
                 f"# review: {Path(path).name} holds the perturbation column "
@@ -2030,6 +2407,16 @@ def main() -> int:
         help="a term the model should consider when choosing datasets (optional)",
     )
     parser.add_argument(
+        "--retrieval-ask",
+        help=(
+            "extra wording for the retrieval prompt that does NOT turn a search "
+            "on by itself (unlike --intent). The task profile's own ask -- 'a "
+            "screen with control cells', say -- rides here, so naming candidates "
+            "skips the search without changing what the search would have been "
+            "asked for."
+        ),
+    )
+    parser.add_argument(
         "--fetch-limit",
         type=int,
         default=3,
@@ -2038,7 +2425,8 @@ def main() -> int:
     parser.add_argument(
         "--max-bytes",
         type=int,
-        help="size cap for one fetched dataset (default: the fetcher's 8 GiB)",
+        help="size cap for one fetched file (default: the fetcher's 2 GiB; 10 GiB in "
+        "the evidence round under --supp-size large)",
     )
     parser.add_argument("--root", help="fetcher staging root (default: data/fetched)")
     parser.add_argument("--hint", action="append", help="a name the label might have")
@@ -2079,6 +2467,15 @@ def main() -> int:
         help=(
             "how many supplementary tables the evidence round may download "
             "(default: 3; the gold round is capped by --fetch-limit)"
+        ),
+    )
+    parser.add_argument(
+        "--supp-size",
+        default="any",
+        choices=("any", "large"),
+        help=(
+            "'large': the evidence round prefers supplementary sources with the "
+            "most cells and the plan orders them largest first (default: any)"
         ),
     )
     parser.add_argument(
@@ -2268,15 +2665,17 @@ def main() -> int:
                 "the datasets; ToolUniverse is used to download them, and the "
                 "model may still call a search tool itself",
             )
+        tools = download_tools(args.root, log)
         proposals = propose_datasets(
             args.objective,
             client=client,
             max_items=args.fetch_limit,
-            hints=list(args.hint or []) + ([args.intent] if args.intent else []),
-            tools=download_tools(args.root, log),
+            hints=_retrieval_hints(args),
+            tools=tools,
             log=log.raw,
             run_search=lambda identifier: run_model_search(identifier, args, log),
             max_hops=args.search_hops,
+            search_first=_has_search(tools),
         )
         trace["proposals"] = [p.__dict__ for p in proposals]
         log.event(
@@ -2294,6 +2693,7 @@ def main() -> int:
             log,
             budget=budget,
             max_downloads=args.fetch_limit,
+            require_screen=_wants_screen(args),
         )
         chosen, refused = fetch_selected(
             wanted,
@@ -2444,10 +2844,31 @@ def main() -> int:
                     role="gold (different target)",
                     decided_by=entry["decided_by"],
                 )
+    if len(gold_entries) > 1 and _wants_screen(args):
+        per_cell = [entry for entry in gold_entries if _per_cell_labels(entry)]
+        if per_cell and len(per_cell) < len(gold_entries):
+            for entry in gold_entries:
+                if entry not in per_cell:
+                    log.event(
+                        "primary_gold",
+                        f"# primary gold: {Path(entry['path']).name} is not per-cell "
+                        f"({entry.get('rows')} rows, no cell-barcode column); a "
+                        f"screen's labels name the perturbation of each cell",
+                        path=entry["path"],
+                    )
+            gold_entries = per_cell
+    if len(gold_entries) > 1:
+        _attach_sample_titles(gold_entries, log)
     if len(gold_entries) > 1:
         from kosmos.discovery import choose_primary_gold
 
-        choice = choose_primary_gold(args.objective, gold_entries, client=client, log=log.raw)
+        choice = choose_primary_gold(
+            args.objective,
+            gold_entries,
+            client=client,
+            log=log.raw,
+            screen=_wants_screen(args),
+        )
         trace["primary_gold"] = choice.__dict__
         primary_labeled_args = ["--labeled-path", normalized.get(choice.path, choice.path)]
         target = str(decisions.get(choice.path, {}).get("target_column") or target)
@@ -2521,6 +2942,12 @@ def main() -> int:
     # trained on" is one of them.
     trace_path.write_text(json.dumps(trace, indent=2, default=str), encoding="utf-8")
     print(f"\n# search trace: {trace_path}")
+    # A target inference can carry a numeric confidence (0.5) where the plan
+    # expects a word; map anything unrecognised to `inferred` rather than
+    # handing argv a float or an invalid choice (both crash the plan step).
+    target_confidence = str(decision.get("confidence") or "").strip()
+    if target_confidence not in {"declared", "exact_match", "inferred"}:
+        target_confidence = "inferred"
     # Always pass the staging root: it is what lets the plan attach each
     # table's provenance (reference, sha256, retrieved_at) from the manifests.
     plan_args = datafetcher_cli(
@@ -2537,7 +2964,7 @@ def main() -> int:
         "--target-source",
         plan_source(decision["source"], list(args.hint or [])),
         "--target-confidence",
-        decision["confidence"],
+        target_confidence,
         "--objective",
         args.objective,
         "--search-trace",
@@ -2553,6 +2980,8 @@ def main() -> int:
             plan_args += [flag, value]
     if args.sample_id_column:
         plan_args += ["--sample-id-column", args.sample_id_column]
+    if getattr(args, "supp_size", "any") == "large":
+        plan_args += ["--supp-order", "rows"]
     run_command(plan_args)
 
     plan = json.loads(plan_path.read_text())

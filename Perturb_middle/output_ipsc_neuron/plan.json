@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "task": {
+    "objective": "In human iPSC-derived neurons, can the transcriptional response to CRISPRi knockdown of genes not seen in training be predicted from a small labeled screen, using large single-cell profiles of iPSC-derived neurons from other experiments, with their labels ignored, as supplementary evidence?",
+    "target_column": "condition",
+    "backend": "perturbation"
+  },
+  "study": {
+    "question": "In human iPSC-derived neurons, can the transcriptional response to CRISPRi knockdown of genes not seen in training be predicted from a small labeled screen, using large single-cell profiles of iPSC-derived neurons from other experiments, with their labels ignored, as supplementary evidence?",
+    "dataset": "GSE289235 (CRISPRi CROP-seq, day-21 iPSC-derived neurons)",
+    "held_out_unit": "perturbed genes never seen in training",
+    "condition_column": "condition",
+    "split_mode": "unseen_single",
+    "test_fraction": 0.25,
+    "validation_fraction": 0.2,
+    "batch_size": 32,
+    "max_panel_genes": 0,
+    "normalize": "log1p(CPM 10000)",
+    "target_sum": 10000.0,
+    "counts": {
+      "total_column": "total_counts",
+      "gold": "Perturb_middle/output_ipsc_neuron/gold_counts.parquet",
+      "supplementary": {
+        "Perturb_middle/output_ipsc_neuron/supp_ipsc_neuron_pooled.parquet": "Perturb_middle/output_ipsc_neuron/supp_ipsc_neuron_pooled_counts.parquet"
+      }
+    }
+  },
+  "gold": [
+    {
+      "path": "Perturb_middle/output_ipsc_neuron/gold.parquet",
+      "role": "gold",
+      "reason": "GSE289235 CRISPRi CROP-seq, day-21 iPSC-derived neurons"
+    }
+  ],
+  "supplementary": [
+    {
+      "path": "Perturb_middle/output_ipsc_neuron/supp_ipsc_neuron_pooled.parquet",
+      "role": "supplementary",
+      "reason": "5 iPSC-neuron sample(s) pooled by similarity to the gold controls (GSM3543623, GSM3543622, GSM4632025, GSM4632023, GSM9510613), labels ignored"
+    }
+  ],
+  "unusable": []
+}

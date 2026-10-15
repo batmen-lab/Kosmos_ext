@@ -24,11 +24,14 @@ from .contract import (
     to_perturbed_gene,
     DEFAULT_CONTROL_LABELS,
     build_examples,
+    control_cells as gold_control_cells,
     build_task,
     is_control as is_control_value,
+    max_supplementary_cells,
     parse_condition,
     perturbation_splits,
     split_examples,
+    supplementary_rows,
     write_contract,
 )
 from .graphs import (
@@ -36,6 +39,7 @@ from .graphs import (
     coexpression_graph,
     edge_overlap,
     go_graph,
+    go_vocabulary,
     identity_graph,
     one_hot,
     residualize,
@@ -50,7 +54,7 @@ CONTEXT_HINTS = ("cell_type", "celltype", "donor", "donor_id", "batch", "batch_i
 from .modality import CONDITION_HINTS  # noqa: E402
 
 
-def supplementary_requirement_text() -> str:
+def supplementary_requirement_text(*, prefer_large: bool = False) -> str:
     """What a supplementary source has to provide for the augmented arm.
 
     This is the sentence the retrieval stage should carry for a perturbation
@@ -66,6 +70,18 @@ def supplementary_requirement_text() -> str:
         "unperturbed atlas qualifies). Its perturbations do not need to match "
         "the gold's and it does not need the gold's label column; it only has to "
         "measure the same gene panel."
+        + (
+            # This text steers the FIRST round, whose job is the labeled screen.
+            # Asking it for "the largest source" made the model spend that round
+            # on an atlas; the large source is the evidence round's job
+            # (`propose_evidence(prefer_large=True)`).
+            " In this search name the labeled perturbation screen(s) only: the "
+            "analysis pairs a small labeled screen with a large unlabeled source "
+            "of the same cell type, and that source is searched for separately "
+            "once the screen is chosen."
+            if prefer_large
+            else ""
+        )
     )
 
 
@@ -344,6 +360,8 @@ def run_perturbation_task(
     config: PerturbationTrainingConfig | None = None,
     modality: dict[str, Any] | None = None,
     expression_path: str | Path | None = None,
+    max_panel_genes: int | None = None,
+    counts: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the contract and graphs from tables, then train the three arms.
 
@@ -431,7 +449,11 @@ def run_perturbation_task(
             f"(guide ids are read as the gene they target when the panel has it)"
         )
     genes, panel_selection = select_panel(
-        gold, measured, control_mask=control_mask, always_include=sorted(perturbation_genes)
+        gold,
+        measured,
+        control_mask=control_mask,
+        always_include=sorted(perturbation_genes),
+        limit=max_panel_genes,
     )
 
     # The panel is shared by every dataset and every graph, so it is the
@@ -446,12 +468,26 @@ def run_perturbation_task(
         }
     }
     tables: list[tuple[int, Path, Any]] = []
+    #: source index -> its cell count before the cap
+    subsampled: dict[int, int] = {}
+    #: source index -> the rows the cap kept (for the raw-count twin of the table)
+    kept_rows: dict[int, np.ndarray] = {}
     for index, path in enumerate(supplementary_paths):
         try:
             table = read_table(path)
         except Exception as error:  # noqa: BLE001 - unreadable source is reported
             sources[f"supp_{index}"] = {"path": str(path), "error": f"{type(error).__name__}: {error}"}
             continue
+        kept = supplementary_rows(len(table), max_supplementary_cells(), seed)
+        if kept is not None:
+            print(
+                f"# supplementary: {Path(path).name} has {len(table):,} cells; keeping "
+                f"{len(kept):,} (KOSMOS_PERTURBATION_MAX_SUPP_CELLS)",
+                flush=True,
+            )
+            subsampled[index] = int(len(table))
+            kept_rows[index] = kept
+            table = table.iloc[kept].reset_index(drop=True)
         tables.append((index, Path(path), table))
     for frame in supplementary_frames:
         index = len(tables)
@@ -478,11 +514,19 @@ def run_perturbation_task(
         # A narrower intersection is a fact about the sources, not a failure:
         # both arms train on this panel, and the share is recorded so a reader
         # can see how much of the gold the auxiliary graph actually covered.
+    # GEARS' perturbation vocabulary is the GO graph's genes, not the measured
+    # panel: a perturbed gene the screen does not measure is still encoded.
+    go_path = Path(go_reference)
+    vocabulary: list[str] | None = None
+    if go_path.exists():
+        with stage(f"reading the perturbation vocabulary ({go_path.name})"):
+            vocabulary = go_vocabulary(go_path)
     task = build_task(
         gold,
         condition_column=condition_column,
         gene_columns=panel,
         control_labels=control_labels,
+        perturbation_vocabulary=vocabulary,
     )
     examples, report = build_examples(
         gold,
@@ -490,6 +534,7 @@ def run_perturbation_task(
         context_columns=context_columns,
         min_cells_per_perturbation=min_cells_per_perturbation,
     )
+    gold_controls = gold_control_cells(gold, task, context_columns=context_columns)
     # The panel is now narrower than the gold. That is a fact about the sources,
     # and it decides how much of the screen the auxiliary graph can even see, so
     # it is reported rather than left implicit.
@@ -528,13 +573,43 @@ def run_perturbation_task(
             "cells and perturbation identities"
         )
 
-    # the gold graph must be built on the *panel*, not on the gold's own gene list:
-    # the panel is what every source and every graph shares
-    control_matrix = gold.loc[control_mask, panel].to_numpy(dtype=np.float32)
-    with stage(f"building the co-expression graphs over {len(panel):,} panel gene(s)"):
+    labels = sorted({example.label for example in examples})
+    # `KOSMOS_PERTURBATION_HOLDOUT=IRF1` (comma/space separated) pins those
+    # perturbations into test, so "can the response to IRF1 be predicted?" is
+    # answered by the test metric instead of a random draw.
+    holdout = tuple(
+        name
+        for name in os.getenv("KOSMOS_PERTURBATION_HOLDOUT", "").replace(",", " ").split()
+        if name
+    )
+    splits_by_label = perturbation_splits(
+        labels,
+        mode=split_mode,
+        test_fraction=test_fraction,
+        validation_fraction=validation_fraction,
+        seed=seed,
+        holdout=holdout,
+    )
+    splits = split_examples(examples, splits_by_label)
+    if not splits["train"] or not splits["test"]:
+        raise ValueError(
+            "the splits left a side empty: "
+            f"{ {name: len(values) for name, values in splits.items()} }; "
+            "a perturbation screen needs several perturbations per side"
+        )
+
+    # GEARS builds the co-expression graph from the *training* cells (the
+    # training perturbations and the controls), on the panel every source shares.
+    train_ids = {example.sample_id for example in splits["train"]}
+    train_mask = control_mask.to_numpy(dtype=bool) | gold.index.astype(str).isin(train_ids)
+    train_matrix = gold.loc[train_mask, panel].to_numpy(dtype=np.float32)
+    with stage(
+        f"building the co-expression graphs over {len(panel):,} panel gene(s) "
+        f"from {int(train_mask.sum()):,} training cell(s)"
+    ):
         graphs = {
             "G_C": coexpression_graph(
-                control_matrix, name="G_C", threshold=coexpress_threshold, k=coexpress_k
+                train_matrix, name="G_C", threshold=coexpress_threshold, k=coexpress_k
             )
         }
     # supplementary: prefer its control cells; otherwise compare the whole source
@@ -624,6 +699,8 @@ def run_perturbation_task(
             "how": how,
             "edges": graph.n_edges,
         }
+    for index, before in subsampled.items():
+        sources.setdefault(f"supp_{index}", {})["subsampled_from"] = before
     auxiliary_graphs: list = []
     if auxiliary:
         # One graph per source: incompatible sources are never pooled into one.
@@ -647,39 +724,16 @@ def run_perturbation_task(
             "arms have nothing extra to learn from",
             flush=True,
         )
-    go_path = Path(go_reference)
     with stage(f"building the GO similarity graph ({go_path.name})"):
         graphs["G_GO"] = (
-            go_graph(panel, reference=go_path, k=go_k)
+            go_graph(list(task.perturbation_vocabulary), reference=go_path, k=go_k)
             if go_path.exists()
             else identity_graph(len(panel), name="G_GO")
         )
 
-    labels = sorted({example.label for example in examples})
-    splits_by_label = perturbation_splits(
-        labels,
-        mode=split_mode,
-        test_fraction=test_fraction,
-        validation_fraction=validation_fraction,
-        seed=seed,
-    )
-    splits = split_examples(examples, splits_by_label)
-    if not splits["train"] or not splits["test"]:
-        raise ValueError(
-            "the splits left a side empty: "
-            f"{ {name: len(values) for name, values in splits.items()} }; "
-            "a perturbation screen needs several perturbations per side"
-        )
-
     training = config or PerturbationTrainingConfig(seed=seed)
-    # The MLP baselines are trained beside `arms`, not inside it: the message
-    # counts what will actually be trained, or it under-reports every run that
-    # has them on.
-    arm_count = len(training.arms) + (
-        3 if getattr(training, "include_mlp_baselines", False) else 0
-    )
     with stage(
-        f"training {arm_count} arms for up to {training.epochs} epoch(s)"
+        f"training {len(training.arms)} arms for up to {training.epochs} epoch(s)"
     ):
         results = run_perturbation_experiment(
             splits=splits,
@@ -688,7 +742,16 @@ def run_perturbation_task(
             out_dir=out,
             config=training,
             supplementary_controls=supplementary_controls,
+            control_cells=gold_controls,
             modality=modality,
+            # the PerturbNet arms read the first source's raw counts: the same
+            # cells the cap kept from its normalised table
+            counts=(
+                {**counts, "supplementary_rows": kept_rows.get(0)} if counts else counts
+            ),
+            control_rows=np.array(
+                [int(row) for row in gold.index[control_mask.to_numpy(dtype=bool)]], dtype=np.int64
+            ),
         )
     # The perturbation-type judgement belongs in the contract: it is a property
     # of the data (which screen, which assay) that the rest of the pipeline is
@@ -714,6 +777,8 @@ def run_perturbation_task(
         },
     )
     results["sources"] = sources
+    # the examples' account (cells used, perturbations dropped and why) for the data report
+    results["detail"] = {k: v for k, v in report.items() if k != "modality"}
     (out / "perturbation_results.json").write_text(
         json.dumps(results, indent=2, default=str), encoding="utf-8"
     )

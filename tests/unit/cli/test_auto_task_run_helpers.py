@@ -520,6 +520,93 @@ def test_preflight_lets_the_model_drop_an_irrelevant_candidate(tmp_path, monkeyp
     assert "drop hf://owner/other" in (tmp_path / "log.jsonl").read_text()
 
 
+def test_preflight_keeps_a_screens_annotated_half_from_its_own_listing(tmp_path, monkeypatch):
+    """The label table must be found in the listing the chosen file belongs to.
+
+    Pairing a decision with the leftover `listing` of the previous loop looked
+    for the annotated sibling in whatever series was examined last, so a
+    screen's label half was never kept and the run ended with no gold.
+    """
+    _serving(
+        monkeypatch,
+        {
+            "geo://GSE1": _listing_payload(
+                "geo://GSE1",
+                [
+                    {
+                        "path": "suppl/GSE1_filtered_matrix.mtx.gz",
+                        "bytes": 600 * 1024**2,
+                        "reference": "geo://GSE1#suppl/GSE1_filtered_matrix.mtx.gz",
+                    },
+                    {
+                        "path": "suppl/GSE1_filtered_cell_identities.csv.gz",
+                        "bytes": 2 * 1024**2,
+                        "reference": "geo://GSE1#suppl/GSE1_filtered_cell_identities.csv.gz",
+                    },
+                ],
+            ),
+            "geo://GSE2": _listing_payload(
+                "geo://GSE2",
+                [
+                    {
+                        "path": "suppl/other.csv",
+                        "bytes": 1024,
+                        "reference": "geo://GSE2#suppl/other.csv",
+                    }
+                ],
+            ),
+        },
+    )
+    log = auto_task_run.PipelineLog(tmp_path / "log.jsonl")
+
+    class Client:
+        def generate_structured(self, **_kwargs):
+            return {
+                "downloads": [
+                    {
+                        "reference": "geo://GSE1#suppl/GSE1_filtered_matrix.mtx.gz",
+                        "why": "the expression matrix",
+                    }
+                ]
+            }
+
+    chosen, _ = auto_task_run.preflight(
+        [_proposal("geo://GSE1"), _proposal("geo://GSE2")],
+        _preflight_args(task_kind="perturbation"),
+        Client(),
+        log,
+    )
+
+    assert "geo://GSE1#suppl/GSE1_filtered_cell_identities.csv.gz" in [
+        choice.reference for choice in chosen
+    ]
+
+
+def test_perturbation_evidence_matches_on_measured_genes(tmp_path, monkeypatch):
+    """Supplementary for a screen is transcriptome, not more label columns.
+
+    The gold here is a screen's label table, whose "measured columns" are QC
+    counters (`nCount_RNA`, ...). Matching evidence on those finds nothing; the
+    evidence has to share the genes the counts matrix measures instead.
+    """
+    import kosmos.ppi.perturbation.assemble as assemble
+
+    label = tmp_path / "label.csv"
+    label.write_text("cell_barcode,guide,nCount_RNA\nb0,NT,100\nb1,STAT1g1,90\n")
+    counts = tmp_path / "counts.csv"
+    counts.write_text("cell_barcode,GENE1,GENE2\nb0,1,2\nb1,3,4\n")
+    monkeypatch.setattr(assemble, "pick_expression_partner", lambda gold, cands: counts)
+    monkeypatch.setattr(assemble, "measurement_features", lambda path: {"GENE1", "GENE2"})
+    log = auto_task_run.PipelineLog(tmp_path / "log.jsonl")
+
+    columns = auto_task_run._perturbation_evidence_columns(
+        str(label), [str(label), str(counts)], log
+    )
+
+    assert columns == ["GENE1", "GENE2"]
+    assert "nCount_RNA" not in columns
+
+
 def test_a_spent_budget_stops_further_downloads(tmp_path, monkeypatch):
     """The per-file cap bounds one artifact; this bounds the run."""
     calls: list[list[str]] = []
@@ -833,3 +920,53 @@ def test_the_rescue_block_prints_what_a_person_can_do(tmp_path, capsys):
     assert "fetch the file named in column relative_path" in printed
     assert "--candidate" in printed
     assert "other.csv" not in printed  # no manual step was named for it
+
+
+def test_gold_round_refuses_a_candidate_whose_description_is_not_a_screen():
+    covid = {"about": "title: Single-cell RNA-seq of human PBMCs in COVID-19 | summary: ..."}
+    crop = {"about": "title: CROP-Seq in Primary Human T Cells | summary: sgRNA library"}
+    perturb = {"about": "title: CRISPR activation and interference screens [CRISPRa Perturb-seq]"}
+    pooled = {"about": "title: A genome-scale screen for synthetic drivers of T-cell proliferation"}
+    assert "names no perturbation screen" in auto_task_run._not_a_screen(covid)
+    assert auto_task_run._not_a_screen(crop) == ""
+    assert auto_task_run._not_a_screen(perturb) == ""
+    assert "no single-cell readout" in auto_task_run._not_a_screen(pooled)
+    assert auto_task_run._not_a_screen({}) == ""  # no description: not judged here
+    assert auto_task_run._wants_screen(argparse.Namespace(task_kind="perturbation"))
+    assert not auto_task_run._wants_screen(argparse.Namespace(task_kind="per_cell"))
+
+
+def test_a_per_guide_table_is_not_a_screens_gold(tmp_path):
+    guides = tmp_path / "GSE132080_sgRNA_barcode_sequences_and_phenotypes.csv"
+    guides.write_text("sgRNA_name,sequence,gene,gamma_day5\nA_00,GGTCACCAGG,ALDOA,-0.4\n")
+    cells = tmp_path / "GSM2406681_10X010_cell_identities.csv"
+    cells.write_text("cell BC,guide identity,read count\nAAAC-1,ATF6_pBA1,12\n")
+    assert not auto_task_run._per_cell_labels({"path": str(guides), "rows": 128})
+    assert auto_task_run._per_cell_labels({"path": str(cells), "rows": None})
+    assert auto_task_run._per_cell_labels({"path": "missing.csv", "rows": 65257})
+    assert auto_task_run._per_cell_labels({"path": "missing.csv", "features": ["Cell.BC"]})
+
+
+def test_supplementary_cap_follows_supp_size_unless_given():
+    ns = argparse.Namespace
+    assert auto_task_run._supplementary_max_bytes(ns(max_bytes=None, supp_size="any")) is None
+    assert auto_task_run._supplementary_max_bytes(ns(max_bytes=None, supp_size="large")) == 10 * 1024**3
+    assert auto_task_run._supplementary_max_bytes(ns(max_bytes=123, supp_size="large")) == 123
+
+
+def test_geo_sample_tables_get_their_sample_title(monkeypatch, tmp_path):
+    import datafetcher.sources.geo as geo
+
+    monkeypatch.setattr(
+        geo, "sample_titles",
+        lambda accession, config: {"GSM2406681": "UPR Perturb-seq experiment cells"},
+    )
+    entries = [
+        {"path": "data/fetched/geo/GSE90546/GSM2406681_10X010_matrix.mtx.txt.gz-table.csv"},
+        {"path": "data/fetched/geo/GSE90546/GSM2406675_10X001_matrix.mtx.txt.gz-table.csv"},
+        {"path": "data/fetched/hf/x/table.csv"},
+    ]
+    log = auto_task_run.PipelineLog(tmp_path / "log.jsonl")
+    auto_task_run._attach_sample_titles(entries, log)
+    assert entries[0]["sample_title"] == "UPR Perturb-seq experiment cells"
+    assert "sample_title" not in entries[1] and "sample_title" not in entries[2]

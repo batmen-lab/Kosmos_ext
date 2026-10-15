@@ -96,7 +96,9 @@ def fetch(
                     if file.derived_from is None and _is_archive(result=record, file=file)
                 }
                 record.files = [
-                    file for file in record.files if file.derived_from not in archives
+                    file
+                    for file in record.files
+                    if not _descends_from(file, archives, record.files)
                 ]
                 _unpack_archives(
                     record,
@@ -246,6 +248,24 @@ def _selector_arguments(ref) -> dict:
 #: holding one CSV, and a staged archive is not a table: without this the run
 #: downloads the data, finds no table, and stops.
 ARCHIVE_SUFFIXES = (".zip", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".rar")
+#: Zip containers that are documents, not archives of data files.
+OFFICE_SUFFIXES = (".xlsx", ".xlsm", ".docx", ".pptx")
+#: Archive nesting unpacked: the series archive, and the per-sample archives in it.
+MAX_ARCHIVE_DEPTH = 2
+
+
+def _descends_from(file, archives: set[str], files) -> bool:
+    """Whether `file` was unpacked, directly or through a nested archive, from one
+    of `archives`."""
+    parents = {item.path: item.derived_from for item in files}
+    seen: set[str] = set()
+    parent = file.derived_from
+    while parent and parent not in seen:
+        if parent in archives:
+            return True
+        seen.add(parent)
+        parent = parents.get(parent)
+    return False
 
 
 def _archive_suffix(name: str) -> str | None:
@@ -299,9 +319,19 @@ def _unpack_archives(
     import zipfile
 
     directory = Path(result.directory)
-    for record in list(result.files):
+    # A queue, not a snapshot: an archive unpacked out of another one is
+    # unpacked too. GEO's RAW.tar holds one `GSM*_matrix.tar.gz` per sample,
+    # and with a snapshot the 10x triplets inside were never reached, so a
+    # screen arrived as label tables with no transcriptome.
+    queue = [(record, 0) for record in list(result.files)]
+    while queue:
+        record, depth = queue.pop(0)
         source = directory / record.path
         if not source.exists():
+            continue
+        if record.path.lower().endswith(OFFICE_SUFFIXES):
+            # An .xlsx is a zip of XML parts; unpacked, its parts were reviewed
+            # as "tables" (styles.xml, vmlDrawing1.vml). It is a document.
             continue
         suffix = _archive_suffix(record.path)
         if suffix is None:
@@ -351,14 +381,15 @@ def _unpack_archives(
             path = target / name
             if not path.is_file():
                 continue
-            result.files.append(
-                FileRecord(
-                    path=str(path.relative_to(directory)),
-                    bytes=path.stat().st_size,
-                    sha256=sha256_file(path),
-                    derived_from=record.path,
-                )
+            member = FileRecord(
+                path=str(path.relative_to(directory)),
+                bytes=path.stat().st_size,
+                sha256=sha256_file(path),
+                derived_from=record.path,
             )
+            result.files.append(member)
+            if depth + 1 < MAX_ARCHIVE_DEPTH:
+                queue.append((member, depth + 1))
         result.note(
             f"{record.path} unpacked to {len(extracted)} file(s); they are "
             f"candidates in their own right"
@@ -484,6 +515,18 @@ def _rebuild_derived(result: FetchResult, config: DataFetcherConfig) -> bool:
     return after != before
 
 
+def _table_label(path: Path, directory: Path, shared_names: set[str]) -> str:
+    """The converted table's name: the file's own name, prefixed by the archive it
+    came out of when another source in this fetch has the same name."""
+    if path.name not in shared_names or path.parent == directory:
+        return path.name
+    parent = path.parent.name.removesuffix("-contents")
+    suffix = _archive_suffix(parent)
+    if suffix:
+        parent = parent[: -len(suffix)]
+    return f"{parent}__{path.name}"
+
+
 def _convert_single_cell(result: FetchResult, config: DataFetcherConfig) -> None:
     """Turn any staged single-cell file into a bounded table beside it.
 
@@ -493,20 +536,46 @@ def _convert_single_cell(result: FetchResult, config: DataFetcherConfig) -> None
     A file whose format this reader does not know is left alone with a note.
     """
     from .singlecell import (
+        MTX_SUFFIXES,
+        _mtx_components,
         convert_single_cell,
         is_single_cell,
         selection_from_config,
     )
 
     directory = Path(result.directory)
-    for record in list(result.files):
+    # 10x triplets unpacked from per-sample archives share one file name
+    # (`matrix.mtx`); their tables need the sample in the name, or every sample
+    # is written to the same `matrix.mtx-table.csv` and only the last survives.
+    names = [
+        Path(record.path).name
+        for record in result.files
+        if not record.path.endswith("-table.csv") and is_single_cell(record.path)
+    ]
+    shared_names = {name for name in names if names.count(name) > 1}
+    sources = [record.path for record in result.files]
+    # A matrix fetched on its own, before its barcodes/features, could not be
+    # read then; when a later fetch stages the companions in the same series
+    # directory, that matrix is converted now. (Each file of a series is its
+    # own fetch, so conversion used to depend on download order.)
+    staged = {record.path for record in result.files}
+    for candidate in sorted(directory.iterdir()) if directory.is_dir() else ():
+        if (
+            candidate.is_file()
+            and candidate.name not in staged
+            and candidate.name.lower().endswith(MTX_SUFFIXES)
+            and not (directory / f"{candidate.name}-table.csv").exists()
+            and _mtx_components(candidate) is not None
+        ):
+            sources.append(candidate.name)
+    for source in sources:
         # Skip the converted tables themselves, not every derived file: a
         # single-cell container that came *out of an archive* is a source too,
         # and skipping it meant a screen staged as `.../perturb_processed.h5ad`
         # inside a zip was never converted.
-        if record.path.endswith("-table.csv") or not is_single_cell(record.path):
+        if source.endswith("-table.csv") or not is_single_cell(source):
             continue
-        path = directory / record.path
+        path = directory / source
         if not path.exists():
             continue
         selection = selection_from_config(config)
@@ -518,9 +587,9 @@ def _convert_single_cell(result: FetchResult, config: DataFetcherConfig) -> None
                 path, selection=selection, metadata=metadata
             )
         except Exception as e:  # noqa: BLE001 - an unreadable file is a finding
-            result.note(f"{record.path} could not be read as single-cell data: {type(e).__name__}: {e}")
+            result.note(f"{source} could not be read as single-cell data: {type(e).__name__}: {e}")
             continue
-        target = directory / f"{path.name}-table.csv"
+        target = directory / f"{_table_label(path, directory, shared_names)}-table.csv"
         table.to_csv(target, index=False)
         facts = selection.facts
         result.files.append(
@@ -528,12 +597,12 @@ def _convert_single_cell(result: FetchResult, config: DataFetcherConfig) -> None
                 path=str(target.relative_to(directory)),
                 bytes=target.stat().st_size,
                 sha256=sha256_file(target),
-                derived_from=record.path,
+                derived_from=source,
                 conversion=facts.to_dict() if facts else None,
             )
         )
         result.note(
-            f"{record.path} converted to {target.name}: "
+            f"{source} converted to {target.name}: "
             + (
                 facts.describe()
                 if facts
@@ -560,15 +629,36 @@ def _bounds_note(selection) -> str:
     return f"; pre-check bounds: cells capped at {selection.max_cells:,}, {genes}"
 
 
+#: Words a per-cell label table carries in its name (GEO: `*_cell_identities`,
+#: `*_metadata`; Dixit: `*_cbc_gbc_dict` -- an inverted guide -> barcodes map).
+_METADATA_WORDS = ("metadata", "cell_identities", "identities", "annotation", "cell_info", "obs", "cbc_gbc_dict")
+
+
 def _metadata_beside(path: Path) -> Path | None:
-    """A barcode/x/label table next to a single-cell file, when there is one."""
+    """A barcode -> label table next to a single-cell file, when there is one.
+
+    Compressed files count, the matrix's own companions (barcodes/features) do
+    not, and a table sharing the matrix's name prefix wins (a GEO series puts
+    several samples' files in one directory); `strict` beats `lenient`.
+    """
+    from .singlecell import companion_kind, mtx_prefixes
+
+    tables = (".csv", ".tsv", ".txt", ".csv.gz", ".tsv.gz", ".txt.gz")
+    candidates = []
     for candidate in sorted(path.parent.iterdir()):
-        if candidate == path or not candidate.is_file():
-            continue
         lowered = candidate.name.lower()
-        if lowered.endswith((".csv", ".tsv", ".txt")) and "metadata" in lowered:
-            return candidate
-    return None
+        if candidate == path or not candidate.is_file() or candidate.stat().st_size == 0:
+            continue
+        if not lowered.endswith(tables) or companion_kind(candidate.name, path.name):
+            continue
+        if not any(word in lowered for word in _METADATA_WORDS):
+            continue
+        prefixes = [p.lower() for p in mtx_prefixes(path.name) if p]
+        shared = max((len(p) for p in prefixes if lowered.startswith(p)), default=0)
+        candidates.append((shared, "lenient" not in lowered, "raw" not in lowered, candidate))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item[:3])[3]
 
 
 def list_reference_files(

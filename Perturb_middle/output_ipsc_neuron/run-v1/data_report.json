@@ -1,0 +1,109 @@
+{
+  "question": "In human iPSC-derived neurons, can the transcriptional response to CRISPRi knockdown of genes not seen in training be predicted from a small labeled screen, using large single-cell profiles of iPSC-derived neurons from other experiments, with their labels ignored, as supplementary evidence?",
+  "backend": "perturbation",
+  "kind": "perturbation_response",
+  "data_source": "plan",
+  "staged": {
+    "how": "plan",
+    "plan": "Perturb_middle/output_ipsc_neuron/plan.json",
+    "assembled_screens": [],
+    "study": {
+      "question": "In human iPSC-derived neurons, can the transcriptional response to CRISPRi knockdown of genes not seen in training be predicted from a small labeled screen, using large single-cell profiles of iPSC-derived neurons from other experiments, with their labels ignored, as supplementary evidence?",
+      "dataset": "GSE289235 (CRISPRi CROP-seq, day-21 iPSC-derived neurons)",
+      "held_out_unit": "perturbed genes never seen in training",
+      "condition_column": "condition",
+      "split_mode": "unseen_single",
+      "test_fraction": 0.25,
+      "validation_fraction": 0.2,
+      "batch_size": 32,
+      "max_panel_genes": 0,
+      "normalize": "log1p(CPM 10000)",
+      "target_sum": 10000.0,
+      "counts": {
+        "total_column": "total_counts",
+        "gold": "Perturb_middle/output_ipsc_neuron/gold_counts.parquet",
+        "supplementary": {
+          "Perturb_middle/output_ipsc_neuron/supp_ipsc_neuron_pooled.parquet": "Perturb_middle/output_ipsc_neuron/supp_ipsc_neuron_pooled_counts.parquet"
+        }
+      }
+    }
+  },
+  "gold": "Perturb_middle/output_ipsc_neuron/gold.parquet",
+  "supplementary": [
+    "Perturb_middle/output_ipsc_neuron/supp_ipsc_neuron_pooled.parquet"
+  ],
+  "contract": {
+    "n_genes": 5006,
+    "n_perturbation_genes": 9853,
+    "condition_column": "condition",
+    "control_labels": [
+      "ctrl",
+      "control",
+      "control_ctrl",
+      "vehicle",
+      "none",
+      "non-targeting",
+      "non_targeting",
+      "nt",
+      "wt",
+      "unperturbed"
+    ],
+    "delta_scale": 1.0,
+    "genes_sha256": "7c32ad95e0779fa18ec29ecbda2431b3b6ee6204405a64161b89fe8e708dec23"
+  },
+  "split_sizes": {
+    "train": 6077,
+    "validation": 1221,
+    "test": 1044
+  },
+  "sources": {
+    "gold": {
+      "path": "Perturb_middle/output_ipsc_neuron/gold.parquet",
+      "cells": 10693,
+      "control_cells": 522,
+      "genes": 5006,
+      "panel_after_intersection": 5006,
+      "modality": "unknown",
+      "modality_source": "plan"
+    },
+    "supp_0": {
+      "path": "Perturb_middle/output_ipsc_neuron/supp_ipsc_neuron_pooled.parquet",
+      "cells": 74355,
+      "used_cells": 74355,
+      "how": "all cells (no condition column: an unperturbed source)",
+      "edges": 12709
+    }
+  },
+  "graph_edge_overlap": {
+    "edges_first": 7147,
+    "edges_second": 11367,
+    "shared": 5525,
+    "jaccard": 0.42535991993225036,
+    "of_first": 0.7730516300545683,
+    "of_second": 0.48605612738629367
+  },
+  "modality": {
+    "requested": {
+      "modality": "crispri",
+      "decided_by": "words",
+      "rationale": "the question's words name 'crispri' (2 hit(s): crispri x2)",
+      "hits": {
+        "crispra": 0,
+        "crispri": 2,
+        "crisprko": 0
+      }
+    },
+    "provided": {
+      "gold": "unknown",
+      "gold_source": "plan",
+      "gold_description": "",
+      "supplementary": {}
+    },
+    "verdict": {
+      "status": "unchecked",
+      "message": "perturbation modality was not compared: the data does not declare one",
+      "requested": "crispri",
+      "provided": "unknown"
+    }
+  }
+}

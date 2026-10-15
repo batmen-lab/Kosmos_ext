@@ -213,3 +213,43 @@ vgcore.*
 data/perturbation/reference/
 data/
 /data/
+
+# ---------------------------------------------------------------------------
+# Perturbation work (stage 1 survey, stage 2 prepare scripts, stage 3 runs)
+# ---------------------------------------------------------------------------
+# Tables and matrices a prepare script or a fetch writes, wherever it writes
+# them (the rules above cover `data/` only): `Perturb_middle/output_*/*.parquet`
+# alone is ~5 GB, and `artifacts/prepared/` 2 GB. The scripts re-create them.
+*.parquet
+*.npy
+*.csv.gz
+*.tsv.gz
+*.txt.gz
+*.mtx
+*.mtx.gz
+*.h5
+*.h5ad
+*.h5ad.gz
+*.part
+
+# Stage-2 / stage-3 outputs kept as text: `prepare_report.md`, `summary.md`,
+# `data_report.md`, `report_run-*.md`, small json. Their heavy files are covered
+# by the type rules above and by `*.pt`, `*.npz`, `*.png`, `*.jsonl` earlier.
+artifacts/prepared/
+
+# The old stage 1 (`kosmos dataprep`) wrote a 40-50 MB plan.json / reviews.json
+# per run (a gene-panel profile of every table); `survey.md/json`, `gold_check.md`
+# and `data.md` of a run stay trackable.
+artifacts/dataprep/**/plan.json
+artifacts/dataprep/**/reviews.json
+artifacts/dataprep/**/search_trace.json
+artifacts/dataprep/**/data_report.json
+
+# Caches and state a run leaves behind.
+.mypy_cache/
+.hypothesis/
+.cache/
+lightning_logs/
+wandb/
+*.tfevents*
+nohup.out

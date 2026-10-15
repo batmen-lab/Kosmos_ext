@@ -1,0 +1,12 @@
+{
+  "arm": "perturbnet_supp",
+  "device": "cuda",
+  "cells": {
+    "gold_train": 2024,
+    "supplementary": 72837
+  },
+  "scvi_seconds": 4827.0,
+  "unannotated_genes": {},
+  "cinn_seconds": 101.3,
+  "seconds": 4944.3
+}

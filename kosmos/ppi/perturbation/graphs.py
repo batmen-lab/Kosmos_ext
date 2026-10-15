@@ -14,8 +14,9 @@
     importance`), restricted to the panel and capped to the top-k edges per
     target exactly as GEARS does.
 
-A graph is stored as the pair `(edge_index, edge_weight)` with a symmetric
-normalisation applied at use time, together with the statistics that describe it
+A graph is stored as the pair `(edge_index, edge_weight)`, directed source ->
+target as in GEARS (`_gears_top_k_edges`), with a normalisation applied at use
+time, together with the statistics that describe it
 (threshold, k, edge count, density, degree quantiles). Every graph is written to
 the run's artifacts, and the edge overlap between G_C and G_S is reported: two
 graphs that share no edges cannot inform each other, and the overlap is the
@@ -117,6 +118,21 @@ def _top_k_edges(
     return np.vstack([rows, columns]).astype(np.int64), weights
 
 
+def _gears_top_k_edges(
+    similarity: np.ndarray, *, k: int, threshold: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """GEARS' rule: for every target gene, its k+1 strongest sources (itself
+    included), kept when the weight is above `threshold`; directed source -> target."""
+    n = similarity.shape[0]
+    take = min(k + 1, n)
+    sources = np.argpartition(-similarity, take - 1, axis=1)[:, :take]      # (n, take)
+    targets = np.repeat(np.arange(n), take).reshape(n, take)
+    weights = similarity[targets, sources]
+    keep = weights > threshold
+    edge_index = np.vstack([sources[keep], targets[keep]]).astype(np.int64)
+    return edge_index, weights[keep].astype(np.float32)
+
+
 def coexpression_graph(
     control_matrix: np.ndarray,
     *,
@@ -124,7 +140,8 @@ def coexpression_graph(
     threshold: float = DEFAULT_COEXPRESS_THRESHOLD,
     k: int = DEFAULT_COEXPRESS_K,
 ) -> GraphArtifact:
-    """|Pearson| kNN graph over genes, from control cells."""
+    """GEARS' co-expression graph: |Pearson| over the given cells, top k+1
+    sources per gene above `threshold`, directed (`get_coexpression_network_from_train`)."""
     matrix = np.asarray(control_matrix, dtype=np.float32)
     if matrix.ndim != 2 or matrix.shape[0] < 3:
         raise ValueError(
@@ -137,7 +154,7 @@ def coexpression_graph(
     similarity = np.abs(normalised.T @ normalised)
     np.fill_diagonal(similarity, 1.0)
     similarity = np.nan_to_num(similarity, nan=0.0, posinf=0.0, neginf=0.0)
-    edge_index, edge_weight = _top_k_edges(similarity, k=k, threshold=threshold)
+    edge_index, edge_weight = _gears_top_k_edges(similarity, k=k, threshold=threshold)
     return GraphArtifact(
         name=name,
         edge_index=edge_index,
@@ -228,9 +245,9 @@ def go_graph(
     weights = top["importance"].to_numpy(dtype=np.float32)
     keep = ~(np.isnan(rows) | np.isnan(columns))
     rows, columns, weights = rows[keep].astype(np.int64), columns[keep].astype(np.int64), weights[keep]
+    # directed source -> target, as GEARS' GeneSimNetwork builds it
     edge_index = np.vstack([rows, columns])
-    edge_index = np.hstack([edge_index, edge_index[::-1]])
-    edge_weight = np.concatenate([weights, weights])
+    edge_weight = weights
     return GraphArtifact(
         name=name,
         edge_index=edge_index,
@@ -246,6 +263,17 @@ def go_graph(
             rows_read=int(len(frame)),
         ),
     )
+
+
+def go_vocabulary(reference: str | Path = GO_REFERENCE, chunksize: int = 2_000_000) -> list[str]:
+    """Every gene of the GO graph: GEARS' perturbation vocabulary (`pert_names`)."""
+    import pandas as pd
+
+    genes: set[str] = set()
+    for chunk in pd.read_csv(reference, chunksize=chunksize, usecols=["source", "target"]):
+        genes.update(chunk["source"].astype(str))
+        genes.update(chunk["target"].astype(str))
+    return sorted(genes)
 
 
 def identity_graph(n_nodes: int, *, name: str = "G_I") -> GraphArtifact:

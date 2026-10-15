@@ -175,6 +175,55 @@ def series_about(accession: str, config: DataFetcherConfig, *, limit: int = 6553
     return " | ".join(parts)[:1200]
 
 
+def sample_files(sample: str, config: DataFetcherConfig) -> list[dict[str, object]]:
+    """One GSM sample's own supplementary files, with sizes, without downloading.
+
+    A series' `RAW.tar` bundles every sample; each sample also has its own
+    directory (`geo/samples/GSM2406nnn/GSM2406681/suppl/`), which is what lets a
+    run take the one sample it needs instead of the whole series.
+    """
+    url = f"{config.geo_ftp_root.rsplit('/series', 1)[0]}/samples/{_series_dir(sample)}/{sample}/suppl/"
+    try:
+        html = get_bytes(url, config).decode("utf-8", "replace")
+    except SourceError:
+        return []
+    entries: list[dict[str, object]] = []
+    matches = list(_HREF.finditer(html))
+    for position, match in enumerate(matches):
+        name = match.group(1)
+        if name.startswith(("http", "/")) or name.endswith("/") or name in {".", ".."}:
+            continue
+        end = matches[position + 1].start() if position + 1 < len(matches) else len(html)
+        found = _SIZE_IN_TEXT.findall(html[match.end() : end].replace("</a>", " "))
+        size = parse_size(found[-1]) if found else None
+        entries.append({"name": name, "bytes": size, "url": url + name})
+    return entries
+
+
+def sample_titles(accession: str, config: DataFetcherConfig) -> dict[str, str]:
+    """GSM accession -> its title and characteristics, from one brief record.
+
+    A series' files are named by sample (`GSM2406681_10X010_...`), and the name
+    says nothing about which experiment it is; the title does ("UPR Perturb-seq
+    experiment" vs "Pilot TF experiment"). Failure returns {}.
+    """
+    url = f"{config.geo_query_root}?acc={accession}&targ=gsm&form=text&view=brief"
+    try:
+        text = get_prefix(url, config, limit=1 << 20).decode("utf-8", "replace")
+    except SourceError:
+        return {}
+    titles: dict[str, list[str]] = {}
+    current = ""
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("^SAMPLE"):
+            current = line.split("=", 1)[-1].strip()
+            titles[current] = []
+        elif current and line.startswith(("!Sample_title", "!Sample_characteristics_ch1", "!Sample_source_name_ch1")):
+            titles[current].append(line.split("=", 1)[-1].strip())
+    return {gsm: "; ".join(parts)[:300] for gsm, parts in titles.items() if parts}
+
+
 def _read_table(path: Path, limit: int = 1 << 22) -> str:
     """The series matrix text, decompressed if needed, bounded."""
     blob = path.read_bytes()
@@ -346,3 +395,93 @@ class GeoSource:
 
 
 register(GeoSource())
+
+
+EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+
+
+def _eutils_json(path: str, params: dict[str, object], config: DataFetcherConfig) -> dict:
+    import json
+    import urllib.parse
+
+    url = f"{EUTILS}/{path}?{urllib.parse.urlencode({**params, 'retmode': 'json'})}"
+    for attempt in range(3):
+        try:
+            return json.loads(get_prefix(url, config, limit=1 << 22).decode("utf-8", "replace"))
+        except (SourceError, ValueError):
+            # NCBI answers bursts above 3 requests/s with HTTP 429
+            import time
+
+            time.sleep(1.0 * (attempt + 1))
+    return {}
+
+
+def search_series(
+    words: str, config: DataFetcherConfig, *, organism: str = "", retmax: int = 30
+) -> list[dict[str, str]]:
+    """GEO series whose title, summary or design contains every word.
+
+    The full-text search ToolUniverse does not do: its GEO tool searches RNA-seq
+    series only, and Papalexi's THP-1 screen (GSE153056) is typed "Other" with
+    no cell line in its title. Words are AND-ed, not a phrase: Entrez reads
+    `CRISPR screen` as a phrase and missed "pooled CRISPR screens". Failure
+    returns [].
+    """
+    terms = [w for w in words.split() if w]
+    if not terms:
+        return []
+    term = " AND ".join(f"{t}*" if t.lower() in ("screen", "screens") else t for t in terms)
+    term = f"({term}) AND gse[ETYP]"
+    if organism:
+        latin = {"human": "Homo sapiens", "mouse": "Mus musculus"}.get(organism, organism)
+        term += f' AND "{latin}"[ORGN]'
+    ids = (_eutils_json("esearch.fcgi", {"db": "gds", "term": term, "retmax": retmax}, config)
+           .get("esearchresult", {}).get("idlist", []))
+    if not ids:
+        return []
+    summary = _eutils_json("esummary.fcgi", {"db": "gds", "id": ",".join(ids)}, config).get("result", {})
+    hits = []
+    for uid in ids:
+        record = summary.get(uid) or {}
+        accession = str(record.get("accession") or "")
+        if accession.upper().startswith("GSE"):
+            hits.append(
+                {
+                    "reference": f"geo://{accession}",
+                    "title": str(record.get("title") or ""),
+                    "summary": str(record.get("summary") or "")[:2000],
+                }
+            )
+    return hits
+
+
+def series_sra_ids(accession: str, config: DataFetcherConfig) -> list[int]:
+    """The SRA experiment ids (Entrez uids) of a GEO series' samples, via elink.
+
+    scBaseCount keys its samples by these uids, so this is how the gold's own
+    runs are found there (and kept out of the supplementary pool).
+    """
+    uid = 200000000 + int(re.sub(r"\D", "", accession))
+    data = _eutils_json("elink.fcgi", {"dbfrom": "gds", "db": "sra", "id": uid}, config)
+    links: list[int] = []
+    for linkset in data.get("linksets") or []:
+        for db in linkset.get("linksetdbs") or []:
+            if db.get("linkname") == "gds_sra":
+                links += [int(x) for x in db.get("links") or []]
+    return links
+
+
+def sra_samples(uids: list[int], config: DataFetcherConfig) -> dict[int, str]:
+    """SRA experiment uid -> the GSM it was submitted as ("" when none).
+
+    One GSM can be several SRX (a GEX library and its guide library each get
+    one), and scBaseCount counts each SRX on its own.
+    """
+    found: dict[int, str] = {}
+    for start in range(0, len(uids), 200):
+        chunk = uids[start : start + 200]
+        result = _eutils_json("esummary.fcgi", {"db": "sra", "id": ",".join(map(str, chunk))}, config).get("result", {})
+        for uid in chunk:
+            gsm = re.search(r"GSM\d+", str((result.get(str(uid)) or {}).get("expxml") or ""))
+            found[int(uid)] = gsm.group(0) if gsm else ""
+    return found

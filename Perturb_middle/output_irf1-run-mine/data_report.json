@@ -1,0 +1,96 @@
+{
+  "question": "Does CRISPR knockout of the gene IRF1 change the transcriptome of human macrophages, and can the transcriptional response to the perturbation be predicted?",
+  "backend": "perturbation",
+  "kind": "perturbation_response",
+  "data_source": "plan",
+  "staged": {
+    "how": "plan",
+    "plan": "Perturb_middle/output_irf1-run-mine/plan.json",
+    "assembled_screens": []
+  },
+  "gold": "Perturb_middle/output_irf1-run-mine/gold_subset.csv.gz",
+  "supplementary": [
+    "Perturb_middle/output_irf1-run-mine/supp_2_GSM4633605_CITE_cDNA_counts.csv.gz",
+    "Perturb_middle/output_irf1-run-mine/supp_3_GSM4633608_ECCITE_Arrayed_cDNA_counts.csv.gz"
+  ],
+  "contract": {
+    "n_genes": 2000,
+    "condition_column": "condition",
+    "control_labels": [
+      "ctrl",
+      "control",
+      "control_ctrl",
+      "vehicle",
+      "none",
+      "non-targeting",
+      "non_targeting",
+      "nt",
+      "wt",
+      "unperturbed"
+    ],
+    "delta_scale": 1.0,
+    "genes_sha256": "83f62e13596355bc6f61ed7c2a976d6b32db792e5cf688d901c3842eccb59322"
+  },
+  "split_sizes": {
+    "train": 12908,
+    "validation": 1322,
+    "test": 4113
+  },
+  "sources": {
+    "gold": {
+      "path": "Perturb_middle/output_irf1-run-mine/gold_subset.csv.gz",
+      "cells": 20729,
+      "control_cells": 2386,
+      "genes": 2009,
+      "panel_after_intersection": 2000,
+      "modality": "unknown",
+      "modality_source": "plan"
+    },
+    "supp_0": {
+      "path": "Perturb_middle/output_irf1-run-mine/supp_2_GSM4633605_CITE_cDNA_counts.csv.gz",
+      "cells": 7566,
+      "used_cells": 7566,
+      "how": "all cells (no condition column: an unperturbed source)",
+      "edges": 12196
+    },
+    "supp_1": {
+      "path": "Perturb_middle/output_irf1-run-mine/supp_3_GSM4633608_ECCITE_Arrayed_cDNA_counts.csv.gz",
+      "cells": 16695,
+      "used_cells": 16695,
+      "how": "all cells (no condition column: an unperturbed source)",
+      "edges": 2654
+    }
+  },
+  "graph_edge_overlap": {
+    "edges_first": 4293,
+    "edges_second": 7098,
+    "shared": 2854,
+    "jaccard": 0.3343094763968607,
+    "of_first": 0.664803167947822,
+    "of_second": 0.4020850943927867
+  },
+  "modality": {
+    "requested": {
+      "modality": "crisprko",
+      "decided_by": "words",
+      "rationale": "the question's words name 'crisprko' (1 hit(s): crisprko x1)",
+      "hits": {
+        "crispra": 0,
+        "crispri": 0,
+        "crisprko": 1
+      }
+    },
+    "provided": {
+      "gold": "unknown",
+      "gold_source": "plan",
+      "gold_description": "",
+      "supplementary": {}
+    },
+    "verdict": {
+      "status": "unchecked",
+      "message": "perturbation modality was not compared: the data does not declare one",
+      "requested": "crisprko",
+      "provided": "unknown"
+    }
+  }
+}

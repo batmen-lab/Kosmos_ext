@@ -1,0 +1,126 @@
+{
+  "task": "irf1-run-mine",
+  "objective": "Does CRISPR knockout of the gene IRF1 change the transcriptome of human macrophages, and can the transcriptional response to the perturbation be predicted?",
+  "labels": {
+    "path": "data/fetched/geo/GSE153056/GSE153056_ECCITE_metadata.tsv.gz",
+    "barcode_column": "Unnamed: 0",
+    "condition_column": "gene",
+    "cells_total": 20729,
+    "cells_kept": 20729,
+    "condition_counts": {
+      "NT": 2386,
+      "IFNGR1": 1341,
+      "IFNGR2": 1213,
+      "CD86": 1197,
+      "ATF2": 1102,
+      "IRF1": 1073,
+      "JAK2": 1024,
+      "MARCH8": 1003,
+      "TNFRSF14": 964,
+      "CAV1": 882,
+      "ETV7": 841,
+      "CMTM6": 817,
+      "NFKBIA": 787,
+      "POU2F2": 662,
+      "STAT2": 661,
+      "STAT5A": 659,
+      "SMAD4": 659,
+      "PDCD1LG2": 617,
+      "IRF7": 614,
+      "UBE2L6": 518,
+      "STAT3": 493,
+      "STAT1": 444,
+      "BRD4": 341,
+      "CUL3": 274,
+      "MYC": 109,
+      "SPI1": 48
+    }
+  },
+  "supplementary": [
+    {
+      "source": "data/fetched/geo/GSE153056/GSE153056_RAW.tar-contents/GSM4633614_ECCITE_cDNA_counts.tsv.gz",
+      "written": "Perturb_middle/output_irf1-run-mine/supp_1_GSM4633614_ECCITE_cDNA_counts.csv.gz",
+      "cells": 20729,
+      "genes": 2009,
+      "value_max": 28.335259645662525,
+      "value_mean": 0.41269619884731645
+    },
+    {
+      "source": "data/fetched/geo/GSE153056/GSE153056_RAW.tar-contents/GSM4633605_CITE_cDNA_counts.tsv.gz",
+      "written": "Perturb_middle/output_irf1-run-mine/supp_2_GSM4633605_CITE_cDNA_counts.csv.gz",
+      "cells": 7566,
+      "genes": 2009,
+      "value_max": 34.6125928289391,
+      "value_mean": 0.4102094920496338
+    },
+    {
+      "source": "data/fetched/geo/GSE153056/GSE153056_RAW.tar-contents/GSM4633608_ECCITE_Arrayed_cDNA_counts.tsv.gz",
+      "written": "Perturb_middle/output_irf1-run-mine/supp_3_GSM4633608_ECCITE_Arrayed_cDNA_counts.csv.gz",
+      "cells": 16695,
+      "genes": 2009,
+      "value_max": 41.69300034641037,
+      "value_mean": 0.4083665375528582
+    }
+  ],
+  "preprocess": {
+    "normalize": "log1p_cpm",
+    "target_sum": 10000.0,
+    "n_hvg": 2000
+  },
+  "outputs": {
+    "gold_subset": "Perturb_middle/output_irf1-run-mine/gold_subset.csv.gz",
+    "plan": "Perturb_middle/output_irf1-run-mine/plan.json",
+    "supplementary": [
+      "Perturb_middle/output_irf1-run-mine/supp_1_GSM4633614_ECCITE_cDNA_counts.csv.gz",
+      "Perturb_middle/output_irf1-run-mine/supp_2_GSM4633605_CITE_cDNA_counts.csv.gz",
+      "Perturb_middle/output_irf1-run-mine/supp_3_GSM4633608_ECCITE_Arrayed_cDNA_counts.csv.gz"
+    ]
+  },
+  "warnings": [
+    "GSM4633612_ECCITE_Arrayed_GO_CITE03_counts.tsv.gz: shares <10 panel genes; skipped",
+    "GSM4633613_ECCITE_Arrayed_GO_LENTI_counts.tsv.gz: shares <10 panel genes; skipped"
+  ],
+  "n_perturbations": 25,
+  "hvg": {
+    "source": "data/fetched/geo/GSE153056/GSE153056_RAW.tar-contents/GSM4633614_ECCITE_cDNA_counts.tsv.gz",
+    "n_selected": 2009,
+    "forced_perturbation_genes": [
+      "CD86",
+      "ATF2",
+      "MARCH8",
+      "CAV1",
+      "POU2F2",
+      "STAT5A",
+      "SMAD4",
+      "PDCD1LG2",
+      "CUL3"
+    ],
+    "top_genes": [
+      "CXCL10",
+      "SPP1",
+      "S100A8",
+      "CCL2",
+      "APOC1",
+      "S100A9",
+      "IFI27",
+      "CD74",
+      "HLA-DRA",
+      "HSP90B1",
+      "CXCL9",
+      "HSPA5",
+      "IL8",
+      "FN1",
+      "RGS16",
+      "NUPR1",
+      "CTSL",
+      "ALOX5AP",
+      "APOE",
+      "CYP1B1",
+      "S100A4",
+      "PDIA4",
+      "CXCL11",
+      "GBP5",
+      "VIM"
+    ]
+  }
+}

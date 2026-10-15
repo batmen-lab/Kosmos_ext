@@ -1,0 +1,109 @@
+{
+  "question": "In Jurkat T cells, can the transcriptional response to CRISPR knockout of T cell receptor signaling genes not seen in training be predicted from a small labeled screen, using large single-cell profiles of Jurkat cells from other CRISPR screens, with their labels ignored, as supplementary evidence?",
+  "backend": "perturbation",
+  "kind": "perturbation_response",
+  "data_source": "plan",
+  "staged": {
+    "how": "plan",
+    "plan": "Perturb_middle/output_jurkat_tcr/plan.json",
+    "assembled_screens": [],
+    "study": {
+      "question": "In Jurkat T cells, can the transcriptional response to CRISPR knockout of T cell receptor signaling genes not seen in training be predicted from a small labeled screen, using large single-cell profiles of Jurkat cells from other CRISPR screens, with their labels ignored, as supplementary evidence?",
+      "dataset": "GSE92872 (Datlinger 2017 CROP-seq, Jurkat TCR)",
+      "held_out_unit": "perturbed genes never seen in training",
+      "condition_column": "condition",
+      "split_mode": "unseen_single",
+      "test_fraction": 0.25,
+      "validation_fraction": 0.2,
+      "batch_size": 32,
+      "max_panel_genes": 0,
+      "normalize": "log1p(CPM 10000)",
+      "target_sum": 10000.0,
+      "counts": {
+        "total_column": "total_counts",
+        "gold": "Perturb_middle/output_jurkat_tcr/gold_counts.parquet",
+        "supplementary": {
+          "Perturb_middle/output_jurkat_tcr/supp_jurkat_pooled.parquet": "Perturb_middle/output_jurkat_tcr/supp_jurkat_pooled_counts.parquet"
+        }
+      }
+    }
+  },
+  "gold": "Perturb_middle/output_jurkat_tcr/gold.parquet",
+  "supplementary": [
+    "Perturb_middle/output_jurkat_tcr/supp_jurkat_pooled.parquet"
+  ],
+  "contract": {
+    "n_genes": 5013,
+    "n_perturbation_genes": 9853,
+    "condition_column": "condition",
+    "control_labels": [
+      "ctrl",
+      "control",
+      "control_ctrl",
+      "vehicle",
+      "none",
+      "non-targeting",
+      "non_targeting",
+      "nt",
+      "wt",
+      "unperturbed"
+    ],
+    "delta_scale": 1.0,
+    "genes_sha256": "4fd8c3cb2f318e89d3075acb39f883eea086c73c3a705679107aeffbccb150f3"
+  },
+  "split_sizes": {
+    "train": 1319,
+    "validation": 246,
+    "test": 641
+  },
+  "sources": {
+    "gold": {
+      "path": "Perturb_middle/output_jurkat_tcr/gold.parquet",
+      "cells": 3204,
+      "control_cells": 705,
+      "genes": 5013,
+      "panel_after_intersection": 5013,
+      "modality": "unknown",
+      "modality_source": "plan"
+    },
+    "supp_0": {
+      "path": "Perturb_middle/output_jurkat_tcr/supp_jurkat_pooled.parquet",
+      "cells": 72837,
+      "used_cells": 72837,
+      "how": "all cells (no condition column: an unperturbed source)",
+      "edges": 11552
+    }
+  },
+  "graph_edge_overlap": {
+    "edges_first": 5523,
+    "edges_second": 10480,
+    "shared": 5193,
+    "jaccard": 0.4803885291396855,
+    "of_first": 0.9402498642042368,
+    "of_second": 0.49551526717557254
+  },
+  "modality": {
+    "requested": {
+      "modality": "crisprko",
+      "decided_by": "words",
+      "rationale": "the question's words name 'crisprko' (1 hit(s): crisprko x1)",
+      "hits": {
+        "crispra": 0,
+        "crispri": 0,
+        "crisprko": 1
+      }
+    },
+    "provided": {
+      "gold": "unknown",
+      "gold_source": "plan",
+      "gold_description": "",
+      "supplementary": {}
+    },
+    "verdict": {
+      "status": "unchecked",
+      "message": "perturbation modality was not compared: the data does not declare one",
+      "requested": "crisprko",
+      "provided": "unknown"
+    }
+  }
+}

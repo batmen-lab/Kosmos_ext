@@ -1,0 +1,148 @@
+{
+  "stage1": "artifacts/dataprep/adamson-auto",
+  "sample": "GSM2406681_10X010",
+  "steps": [
+    [
+      "cells in the matrix",
+      65337
+    ],
+    [
+      "with a guide call",
+      65257
+    ],
+    [
+      "with good coverage",
+      59219
+    ],
+    [
+      "with exactly one guide",
+      50467
+    ],
+    [
+      "with a named guide (not `*`)",
+      50440
+    ]
+  ],
+  "study": {
+    "question": "In K562 cells, can the transcriptional response to CRISPRi knockdown of unfolded protein response (UPR) genes not seen in training be predicted from the other knockdowns, using single-cell profiles of K562 cells from independent Perturb-seq experiments as supplementary evidence?",
+    "dataset": "GSE90546 GSM2406681_10X010 (Adamson 2016 UPR Perturb-seq)",
+    "held_out_unit": "perturbed genes never seen in training",
+    "condition_column": "condition",
+    "split_mode": "unseen_single",
+    "test_fraction": 0.25,
+    "validation_fraction": 0.2,
+    "batch_size": 128,
+    "max_panel_genes": 0,
+    "normalize": "log1p(CPM 10000)",
+    "target_sum": 10000.0,
+    "counts": {
+      "total_column": "total_counts",
+      "gold": "Perturb_middle/output_adamson_upr/gold_counts.parquet",
+      "supplementary": {
+        "Perturb_middle/output_adamson_upr/supp_dixit_k562_wt.parquet": "Perturb_middle/output_adamson_upr/supp_dixit_k562_wt_counts.parquet"
+      }
+    }
+  },
+  "gold": {
+    "written": "Perturb_middle/output_adamson_upr/gold.parquet",
+    "cells": 50440,
+    "control_cells": 5241,
+    "perturbed_genes": [
+      "AARS",
+      "AMIGO3",
+      "ARHGAP22",
+      "ASCC3",
+      "ATP5B",
+      "CAD",
+      "CARS",
+      "CCND3",
+      "CHERP",
+      "COPB1",
+      "COPZ1",
+      "DAD1",
+      "DARS",
+      "DDOST",
+      "DDRGK1",
+      "DERL2",
+      "DHDDS",
+      "DNAJC19",
+      "EIF2B2",
+      "EIF2B3",
+      "EIF2B4",
+      "EIF2S1",
+      "FARSB",
+      "FECH",
+      "GBF1",
+      "GMPPB",
+      "GNPNAT1",
+      "HARS",
+      "HSD17B12",
+      "HSPA5",
+      "HSPA9",
+      "HYOU1",
+      "IARS2",
+      "IDH3A",
+      "IER3IP1",
+      "KCTD16",
+      "MANF",
+      "MARS",
+      "MRGBP",
+      "MRPL39",
+      "MTHFD1",
+      "NEDD8",
+      "OST4",
+      "P4HB",
+      "PDIA6",
+      "PPWD1",
+      "PSMD4",
+      "PTDSS1",
+      "QARS",
+      "SAMM50",
+      "SARS",
+      "SCYL1",
+      "SEC61A1",
+      "SEC61B",
+      "SEC61G",
+      "SEC63",
+      "SEL1L",
+      "SLC35B1",
+      "SLC39A7",
+      "SLMO2",
+      "SOCS1",
+      "SPCS2",
+      "SPCS3",
+      "SRP68",
+      "SRP72",
+      "SRPR",
+      "SRPRB",
+      "STT3A",
+      "SYVN1",
+      "TARS",
+      "TELO2",
+      "TIMM23",
+      "TIMM44",
+      "TMED10",
+      "TMED2",
+      "TMEM167A",
+      "TTI1",
+      "TTI2",
+      "UFL1",
+      "UFM1",
+      "XRN1",
+      "YIPF5"
+    ],
+    "perturbed_genes_not_measured": [],
+    "cells_per_perturbation": {
+      "min": 185,
+      "median": 507.0
+    },
+    "panel_genes": 5014,
+    "panel_forced_perturbed_genes": 14
+  },
+  "supplementary": {
+    "source": "data/fetched/geo/GSE90063/GSE90063_k562_umi_wt.txt.gz",
+    "written": "Perturb_middle/output_adamson_upr/supp_dixit_k562_wt.parquet",
+    "cells": 5409,
+    "panel_genes_measured": 5014
+  }
+}

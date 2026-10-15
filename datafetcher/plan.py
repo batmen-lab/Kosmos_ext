@@ -54,6 +54,10 @@ class PlanTask(BaseModel):
     sample_id_column: str | None = None
     task_type: str = "classification"
     evaluation_metric: str = "balanced_accuracy"
+    #: Which single-cell backend the task runs with (`per_cell` | `perturbation`).
+    #: The orchestrator stamps this after fetching, so a reviewed plan routes to
+    #: the same backend even when nobody re-types the question's wording.
+    backend: str | None = None
     #: What to do when more than one table carries the label column.
     #:   external -- one becomes gold, the rest become supplementary evidence:
     #:               their features are used and their labels are ignored, so
@@ -61,6 +65,11 @@ class PlanTask(BaseModel):
     #:   pool     -- concatenate them into one gold table (labels used)
     #:   error    -- refuse, and make the caller choose
     multi_gold_policy: Literal["external", "pool", "error"] = "external"
+    #: The order of the accepted supplementary tables, which is also which one
+    #: a backend that takes a single source uses (the first):
+    #:   planned -- the order the tables were planned in (default)
+    #:   rows    -- most rows first: the "small gold, large evidence" setting
+    supplementary_order: Literal["planned", "rows"] = "planned"
     test_fraction: float = 0.2
     validation_fraction: float = 0.2
     seed: int = 42
@@ -77,7 +86,11 @@ class PlanTask(BaseModel):
 
 
 def align_to_gold(
-    entry: PlanEntry, gold_features: list[str], *, min_shared: int | None = None
+    entry: PlanEntry,
+    gold_features: list[str],
+    *,
+    min_shared: int | None = None,
+    own: list[str] | None = None,
 ) -> str | None:
     """Match a table's columns to the gold's, by name. None means it fits.
 
@@ -92,7 +105,7 @@ def align_to_gold(
     and the renames on the entry when it can (`concave points_mean` ->
     `concave_points_mean`).
     """
-    own = list(entry.features)
+    own = list(entry.features) if own is None else list(own)
     # The gold's naming convention against this table's. This is the gate that
     # keeps a mouse table out of a human gold's correction: `Pisd` and `PISD`
     # normalise to the same string, so without it the Baron mouse samples
@@ -414,10 +427,60 @@ def _apply_review(entry: PlanEntry, decision, task: PlanTask, plan: DataPlan) ->
 
     proposed = str(entry.review.get("role", ""))
     reason = str(entry.review.get("reason") or "")
+    # The screen fields live under the review's `model` sub-dict when the
+    # decision carries both halves; fall back to the flat shape the tests use.
+    model = entry.review.get("model") or entry.review
     if proposed == "unusable":
         return RoleDecision(
             role="unusable",
             reason=f"review: {reason or 'the model judged this table unusable'}",
+            features=decision.features,
+            has_target=decision.has_target,
+        )
+    if (
+        proposed == "gold"
+        and model.get("is_screen")
+        and model.get("condition_column")
+        and not model.get("has_expression")
+    ):
+        # A perturbation screen is routinely published as a label table beside
+        # its counts matrix. The rules see no target they can encode in a
+        # two-column `barcode -> guide` table, so they refuse it -- but it *is*
+        # the screen's labels, and the condition column supervises the response
+        # model once the counts matrix is joined on the barcode. Refusing it
+        # here is what left a whole screen with zero gold. The rules can still
+        # take the table out (`unusable` above) and a per-cell task never sets
+        # `is_screen`/`condition_column`, so this stays narrow.
+        column = model.get("condition_column")
+        plan.notes.append(
+            f"{Path(entry.path).name}: review found a screen label half "
+            f"(condition column {column!r}); keeping it as the gold's labels"
+        )
+        return RoleDecision(
+            role="gold",
+            reason=(
+                f"review: screen label half (condition column {column!r}); its "
+                f"counts matrix is joined at training time"
+            ),
+            features=decision.features,
+            has_target=True,
+        )
+    if (
+        proposed == "supplementary"
+        and model.get("has_expression")
+        and not model.get("condition_column")
+    ):
+        # The other half of a screen: measured transcriptome with no condition
+        # column. It is not gold, but it is exactly the evidence a perturbation
+        # correction consumes, so the rules must not discard it for lacking a
+        # label it was never meant to carry.
+        plan.notes.append(
+            f"{Path(entry.path).name}: review found measured transcriptome with "
+            f"no condition column; keeping it as evidence for the screen"
+        )
+        return RoleDecision(
+            role="supplementary",
+            reason="review: measured transcriptome, usable as evidence for the screen",
             features=decision.features,
             has_target=decision.has_target,
         )
@@ -446,6 +509,49 @@ def _apply_review(entry: PlanEntry, decision, task: PlanTask, plan: DataPlan) ->
     return decision
 
 
+def _is_screen_label_half(plan: DataPlan) -> bool:
+    """Is the gold a perturbation screen's label table?
+
+    Such a table carries the condition column and QC counters, not genes; its
+    measurements live in the counts matrix beside it. It is the one gold whose
+    own feature list is *not* the panel evidence has to share.
+    """
+    if not plan.gold:
+        return False
+    review = plan.gold[0].review or {}
+    model = review.get("model") or review
+    return bool(model.get("is_screen")) and bool(model.get("condition_column")) and not model.get(
+        "has_expression"
+    )
+
+
+def _carries_expression(entry: PlanEntry) -> bool:
+    """Did the review find measured expression in this table, labeled or not?
+
+    Evidence for a screen whose gold is its label table: another screen's cells
+    (`causalbench_k562`, 162,752 K562 cells with an `intervention` column) are
+    unlabeled evidence once their labels are ignored, and comparing them to the
+    label table's QC columns refused them as "shares 0 measured columns".
+    """
+    review = entry.review or {}
+    model = review.get("model") or review
+    return bool(model.get("has_expression"))
+
+
+def _is_measured_transcriptome(entry: PlanEntry) -> bool:
+    """Did the review call this table measured expression (and not a screen)?
+
+    A perturbation task's evidence is transcriptome -- control cells or a
+    second cohort -- and needs no labels. The review already says whether a
+    table carries gene expression; re-deriving the gene panel by parsing every
+    wide matrix here is both the wrong comparison (the label half has no genes)
+    and minutes of I/O. The backend intersects the panel at training time.
+    """
+    review = entry.review or {}
+    model = review.get("model") or review
+    return bool(model.get("has_expression")) and not model.get("condition_column")
+
+
 def _enforce_supplementary_schema(plan: DataPlan) -> None:
     """Evidence is matched to the gold by intersection, not by identity.
 
@@ -463,6 +569,12 @@ def _enforce_supplementary_schema(plan: DataPlan) -> None:
     different measurement of a different thing.
     """
     gold_features = list(plan.gold[0].features)
+    # A perturbation screen's gold is its label table: its own "features" are QC
+    # counters, so it shares no column with a cohort's genes and every real
+    # transcriptome is refused as "shares only 1 measured column". For such a
+    # gold, a table the review called measured expression is evidence by
+    # definition -- the backend intersects the gene panel at training time.
+    label_half_gold = _is_screen_label_half(plan)
     gold_digest = str((plan.gold[0].provenance or {}).get("sha256") or "")
     kept: list[PlanEntry] = []
     rejected: list[tuple[PlanEntry, str]] = []
@@ -481,6 +593,9 @@ def _enforce_supplementary_schema(plan: DataPlan) -> None:
             )
             plan.unusable.append(entry)
             continue
+        if label_half_gold and _carries_expression(entry):
+            kept.append(entry)
+            continue
         reason = align_to_gold(entry, gold_features)
         if reason is not None:
             rejected.append((entry, reason))
@@ -494,6 +609,13 @@ def _enforce_supplementary_schema(plan: DataPlan) -> None:
     accepted: list[PlanEntry] = []
     intersection: list[str] = []
     for entry in ordered:
+        if label_half_gold and _carries_expression(entry):
+            # A screen's evidence is measured expression, not a set of the
+            # label table's columns; the backend intersects the panel when it
+            # joins. It has no `shared_features` to narrow, and re-checking it
+            # here is what demoted every real cohort to unusable.
+            accepted.append(entry)
+            continue
         candidate = (
             list(entry.shared_features)
             if not intersection
@@ -522,6 +644,13 @@ def _enforce_supplementary_schema(plan: DataPlan) -> None:
     # Back to the order the tables were planned in: the widest-first order is a
     # rule for deciding, not the order a reader wants to see them.
     plan.supplementary = sorted(accepted, key=lambda entry: order.get(id(entry), 0))
+    if plan.task.supplementary_order == "rows":
+        # Most rows first; a table whose rows were not counted goes last.
+        plan.supplementary.sort(key=lambda entry: -(entry.rows or 0))
+        plan.notes.append(
+            "supplementary tables ordered by rows (largest first): "
+            + ", ".join(f"{Path(entry.path).name} ({entry.rows or '?'} rows)" for entry in plan.supplementary)
+        )
     if accepted and intersection and len(intersection) < len(gold_features):
         # The gold's own column order, because that is what the plan and the
         # reports already read, and what a person compares against the gold.

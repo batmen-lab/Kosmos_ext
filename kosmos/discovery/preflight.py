@@ -94,6 +94,8 @@ def choose_downloads(
     log: Callable[[str], None] = print,
     max_downloads: int | None = None,
     used: Sequence[str] = (),
+    prefer_large: bool = False,
+    screen_round: bool = False,
 ) -> list[dict[str, str]]:
     """Which offered references to download, as the model reads the listing.
 
@@ -126,10 +128,28 @@ def choose_downloads(
         "a `README`, a `*_files.tsv`, a `*_summary.tsv`, a `SHA256SUMS` or a "
         "`filelist` *points at* the measurements and contains none; picking one "
         "of those is how a run ends with nothing to train on.\n"
-        "- Among files that could answer the question, choose the smallest. A "
-        "0.6 GB file and a 2.7 GB file from the same series often carry the same "
-        "thing.\n"
-        "- Anything marked `[already in this run]` is already here: the labeled "
+        + (
+            "- These are SUPPLEMENTARY sources for a small labeled table: among "
+            "files that could answer the question, choose the one with the most "
+            "cells (a whole atlas over a subset of it), within the size limits "
+            "already applied. A file that only *looks* larger because it is a "
+            "different format of the same cells adds nothing.\n"
+            if prefer_large
+            else "- Among files that could answer the question, choose the smallest. A "
+            "0.6 GB file and a 2.7 GB file from the same series often carry the same "
+            "thing.\n"
+        )
+        + (
+            "- This round downloads the LABELED perturbation screen the question is "
+            "about: per-cell expression with the guide/perturbation each cell "
+            "carried, on the question's topic. A large collection to use as "
+            "unlabeled evidence is searched for in a later round -- do not spend "
+            "this round's downloads on one, however well it fits that part of the "
+            "question.\n"
+            if screen_round
+            else ""
+        )
+        + "- Anything marked `[already in this run]` is already here: the labeled "
         "table and whatever was fetched for it. Choosing one of those is always "
         "wrong -- it adds nothing and it is refused. Pick a *different* file, "
         "even when it is the larger one.\n"

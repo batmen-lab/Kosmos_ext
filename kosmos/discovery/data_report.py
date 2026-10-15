@@ -343,6 +343,7 @@ def build_data_report(
             "gold_columns": len(gold_features),
         },
         "rejection_causes": dict(causes.most_common()),
+        "notes": list(plan.get("notes") or []),
         "tables": rows,
         "refusals": refusals,
         "rounds": rounds,
@@ -362,6 +363,18 @@ def render_data_report(report: dict[str, Any]) -> str:
         f"**{summary['unusable']}**, waiting for a person "
         f"**{summary['awaiting_human']}**",
     ]
+    if not summary["tables"]:
+        # "0 considered" read as "nothing was found"; usually files were found
+        # and none of them got a role -- say why.
+        lines += [
+            "",
+            "> **No table got a role.** Files were downloaded and screened (see the "
+            "rounds below), but none could serve as the labeled table, so the plan "
+            "assigned no roles. The plan's own notes:",
+        ]
+        lines += [f"> - {note}" for note in (report.get("notes") or [])[:5]] or [
+            "> - (none recorded)"
+        ]
     if summary.get("gold_columns"):
         columns = (
             f"**Training columns:** {summary['training_columns']} of the gold's "

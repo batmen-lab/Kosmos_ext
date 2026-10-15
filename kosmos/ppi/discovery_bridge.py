@@ -57,6 +57,84 @@ from .task_ontology import TaskKind, apply_backend_override, classify_task, need
 ROOT = Path(__file__).resolve().parents[2]
 AUTO_TASK_RUN = ROOT / "scripts" / "auto_task_run.py"
 
+#: What a caller may write in `KOSMOS_PERTURBATION_ARMS` -> the arm key(s) it
+#: selects. A bare variant (`base`, `signed`) selects it in **both**
+#: families -- GEARS and the graph-free MLP -- because the comparison between
+#: the two architectures is the point; a fully qualified name selects exactly
+#: one arm.
+_ARM_VARIANTS = {
+    "base": ("gears_base", "mlp_base"),
+    "gold": ("gears_base", "mlp_base"),
+    "signed": ("gears_augmented_ungated", "mlp_augmented_ungated"),
+    "signed_ppi": ("gears_augmented_ungated", "mlp_augmented_ungated"),
+    "ungated": ("gears_augmented_ungated", "mlp_augmented_ungated"),
+    "gears_base": ("gears_base",),
+    "gears_augmented_ungated": ("gears_augmented_ungated",),
+    "mlp_base": ("mlp_base",),
+    "mlp_augmented_ungated": ("mlp_augmented_ungated",),
+    "mlp_signed": ("mlp_augmented_ungated",),
+    "gated": ("gears_gated", "mlp_gated"),
+    "gears_gated": ("gears_gated",),
+    "mlp_gated": ("mlp_gated",),
+    # the 8-arm comparison: base / signed PPI / gated x {GEARS, MLP} + PerturbNet x 2
+    "all": (
+        "gears_base", "mlp_base", "gears_augmented_ungated", "mlp_augmented_ungated",
+        "gears_gated", "mlp_gated", "perturbnet_base", "perturbnet_supp",
+    ),
+    "finetune": ("gears_finetune_ppi",),
+    "finetune_ppi": ("gears_finetune_ppi",),
+    "gears_finetune_ppi": ("gears_finetune_ppi",),
+    # PerturbNet runs in its own environment and is never in the default set
+    "perturbnet": ("perturbnet_base", "perturbnet_supp"),
+    "perturbnet_base": ("perturbnet_base",),
+    "perturbnet_supp": ("perturbnet_supp",),
+}
+
+
+def _arm_key(arm: str) -> str:
+    """The metrics.json prefix of an arm: its `summary.md` name, snake_cased."""
+    from .perturbation.figures import _arm_label
+
+    return _arm_label(arm).replace(" ", "_")
+
+
+def _study_counts(study: dict[str, Any], supplementary_paths: Sequence[Any]) -> dict[str, Any] | None:
+    """The raw count tables a stage-2 study block names, resolved for stage 3.
+
+    The supplementary count table is the one written beside the first
+    supplementary table (the source stage 3 uses), matched by resolved path.
+    """
+    block = study.get("counts") or {}
+    if not block.get("gold"):
+        return None
+    by_table = {
+        Path(str(table)).resolve(): Path(str(path))
+        for table, path in (block.get("supplementary") or {}).items()
+    }
+    first = Path(str(supplementary_paths[0])).resolve() if supplementary_paths else None
+    return {
+        "gold": Path(str(block["gold"])),
+        "supplementary": by_table.get(first) if first is not None else None,
+        "total_column": block.get("total_column", "total_counts"),
+        "target_sum": float(study.get("target_sum", 1e4)),
+    }
+
+
+def _perturbation_arms_from_env() -> tuple[str, ...] | None:
+    """The arms named by `KOSMOS_PERTURBATION_ARMS`, or None for the default.
+
+    `KOSMOS_PERTURBATION_ARMS=base,signed` trains only the gold-only arm and the
+    gold + supp signed PPI arm -- the two rows the comparison needs.
+    """
+    raw = str(os.getenv("KOSMOS_PERTURBATION_ARMS", "")).strip()
+    if not raw:
+        return None
+    names = [part.strip().lower().replace("-", "_") for part in raw.replace(",", " ").split()]
+    arms: list[str] = []
+    for name in names:
+        arms.extend(_ARM_VARIANTS.get(name, ()))
+    return tuple(dict.fromkeys(arms)) or None
+
 
 @dataclass
 class DataTaskOutcome:
@@ -109,10 +187,19 @@ def fetch_and_plan(
     out_dir: str | Path,
     domain: str = "biology",
     intent: str = "",
+    retrieval_ask: str = "",
+    candidates: Sequence[str] = (),
     hints: Sequence[str] = (),
     exclude_columns: Sequence[str] = (),
     fetch_limit: int = 2,
     supp_limit: int = 3,
+    supp_size: str = "any",
+    search_hops: int | None = None,
+    max_files_per_fetch: int | None = None,
+    archive_members: int | None = None,
+    fetch_retries: int | None = None,
+    mechanical_search: bool = False,
+    refresh: bool = False,
     max_download_mb: float | None = None,
     max_bytes: int | None = None,
     min_shared_fraction: float | None = None,
@@ -144,12 +231,43 @@ def fetch_and_plan(
         str(fetch_limit),
         "--supp-limit",
         str(supp_limit),
+        "--supp-size",
+        str(supp_size),
         "--plan-out",
         str(plan_path),
         "--yes",
     ]
     if intent:
         command += ["--intent", intent]
+    if retrieval_ask:
+        # Wording for the retrieval prompt that does not turn the search on --
+        # so the same question is asked the same thing whether or not the caller
+        # named the tables to judge.
+        command += ["--retrieval-ask", retrieval_ask]
+    # Breadth knobs. `--fetch-limit`/`--supp-limit` say *how many* datasets; these
+    # say how hard to look and how much of each dataset to keep: more search
+    # hops and retries give retrieval more chances to name a screen, and the
+    # wider file/archive caps are what reach the counts matrix deep inside a
+    # GEO RAW.tar.
+    if search_hops is not None:
+        command += ["--search-hops", str(search_hops)]
+    if fetch_retries is not None:
+        command += ["--fetch-retries", str(fetch_retries)]
+    if max_files_per_fetch is not None:
+        command += ["--max-files-per-fetch", str(max_files_per_fetch)]
+    if archive_members is not None:
+        command += ["--archive-members", str(archive_members)]
+    if mechanical_search:
+        command += ["--mechanical-search"]
+    if refresh:
+        # Reuse is the default (matching bytes are not fetched twice); refresh
+        # turns that off so a re-run actually re-downloads.
+        command += ["--refresh"]
+    for candidate in candidates:
+        # A table the caller already has (or a screen a person named) skips
+        # retrieval entirely: `auto_task_run` treats `--candidate` as "these are
+        # the files to judge", which is the human-in-the-loop rescue path.
+        command += ["--candidate", str(candidate)]
     for hint in hints:
         command += ["--hint", str(hint)]
     for column in exclude_columns:
@@ -280,10 +398,12 @@ def run_data_task(
             asked = infer_requested_modality(question)
             # The auxiliary graph only needs control cells; the labeled screen
             # has to be the assay the question names.
-            fetch_intent = "\n".join(
+            # The profile's ask steers the retrieval prompt but must not be what
+            # turns the search on: `intent` (the caller's) does that. Passing it
+            # as `retrieval_ask` keeps one retrieval question across every path.
+            fetch_ask = "\n".join(
                 part
                 for part in (
-                    intent,
                     supplementary_requirement_text(),
                     retrieval_requirement(asked["modality"]),
                 )
@@ -312,7 +432,8 @@ def run_data_task(
                     question=question,
                     out_dir=out,
                     domain=domain,
-                    intent=fetch_intent,
+                    intent=intent,
+                    retrieval_ask=fetch_ask,
                     hints=fetch_hints,
                     task_kind="perturbation",
                     exclude_columns=exclude_columns,
@@ -355,7 +476,6 @@ def run_data_task(
                 coexpress_threshold=coexpress_threshold,
                 coexpress_k=coexpress_k,
                 eta=eta,
-                gate_kappa=gate_kappa,
                 ppi_lambda=ppi_lambda,
             )
         except Exception as e:  # noqa: BLE001 - a failed backend is a finding
@@ -395,7 +515,6 @@ def run_data_task(
                         coexpress_threshold=coexpress_threshold,
                         coexpress_k=coexpress_k,
                         eta=eta,
-                        gate_kappa=gate_kappa,
                         ppi_lambda=ppi_lambda,
                     )
                 except Exception as fallback_error:  # noqa: BLE001
@@ -914,18 +1033,14 @@ def run_perturbation_outcome(
     coexpress_threshold: float = 0.4,
     coexpress_k: int = 20,
     eta: float = 1.0,
-    gate_kappa: float = 1.0,
-    #: The signed/gated coefficients and the two-stage schedule. `None` reads
-    #: the same environment variables the column task honours, so one export
-    #: (`PPI_LAMBDA`, `PPI_STAGE1_EPOCHS`, ...) drives both backends.
-    gate_lambda: float | None = None,
+    #: λ's initial value and the two-stage schedule (see perturbation/train.py).
+    #: `None` reads `PPI_LAMBDA`, `PPI_STAGE1_EPOCHS`, `PPI_STAGE2_EPOCHS`,
+    #: `PPI_LAMBDA_LR_MULTIPLIER`, `PPI_STAGE2_LR_MULTIPLIER`, and otherwise
+    #: the training config's defaults (1, 5, 1, ×10, ÷10).
     ppi_lambda: float | None = None,
     direction_lambda: float | None = None,
-    schedule: str | None = None,
     stage1_epochs: int | None = None,
     stage2_epochs: int | None = None,
-    stage2_lr_multiplier: float | None = None,
-    loss_ramp_epochs: int | None = None,
 ) -> DataTaskOutcome:
     """Run the perturbation backend and report it the way the column task is.
 
@@ -949,16 +1064,22 @@ def run_perturbation_outcome(
         modality_of,
     )
     from .perturbation.run import run_perturbation_task
+    from .perturbation.train import ARMS as PERTURBATION_ARMS
     from .perturbation.train import PerturbationTrainingConfig
 
     from .flow import next_output_dir
 
     staged: dict[str, Any] = {}
+    max_panel_genes: int | None = None
     expression_path: Path | None = None
     supplementary_frames: list[Any] = []
     assembled_screens: list[dict[str, Any]] = []
     gold_source = None
     supplementary_source_names: dict[str, str] = {}
+    #: training settings a stage-2 `study` block may carry (e.g. batch_size)
+    study_training: dict[str, Any] = {}
+    #: the stage-2 raw count tables (`study.counts`), for the PerturbNet arms
+    count_tables: dict[str, Any] | None = None
     if gold_table:
         gold_path = Path(str(gold_table))
         supplementary_paths = [Path(str(entry)) for entry in supplementary_tables]
@@ -994,7 +1115,21 @@ def run_perturbation_outcome(
         ]
         from .perturbation.assemble import pick_expression_partner
 
-        expression_path = pick_expression_partner(gold_path, plan_tables)
+        # A plan written by the prepare stage carries a `study` block: the split
+        # and the panel are decided there, and its tables are already the
+        # training tables (no label/measurement join, no partner screens).
+        study = payload.get("study") or {}
+        if study:
+            split_mode = str(study.get("split_mode", split_mode))
+            test_fraction = float(study.get("test_fraction", test_fraction))
+            validation_fraction = float(study.get("validation_fraction", validation_fraction))
+            if study.get("max_panel_genes") is not None:
+                max_panel_genes = int(study["max_panel_genes"])
+            condition_column = condition_column or study.get("condition_column")
+            if study.get("batch_size"):
+                study_training["batch_size"] = int(study["batch_size"])
+            count_tables = _study_counts(study, supplementary_paths)
+        expression_path = None if study else pick_expression_partner(gold_path, plan_tables)
         if expression_path is not None:
             supplementary_paths = [
                 path for path in supplementary_paths if Path(path) != Path(expression_path)
@@ -1012,18 +1147,20 @@ def run_perturbation_outcome(
             from .perturbation.assemble import measurement_features
 
             gold_genes = measurement_features(expression_path)
-        with stage(f"looking for another screen among the plan's {len(plan_tables)} table(s)"):
-            supplementary_frames, assembled_screens = _screen_partners(
-                gold_path=Path(str(gold_path)),
-                used=[Path(str(path)) for path in (expression_path,) if path is not None],
-                plan_tables=plan_tables,
-                gold_genes=gold_genes,
-                echo=echo,
-            )
+        if not study:
+            with stage(f"looking for another screen among the plan's {len(plan_tables)} table(s)"):
+                supplementary_frames, assembled_screens = _screen_partners(
+                    gold_path=Path(str(gold_path)),
+                    used=[Path(str(path)) for path in (expression_path,) if path is not None],
+                    plan_tables=plan_tables,
+                    gold_genes=gold_genes,
+                    echo=echo,
+                )
         staged = {
             "how": "plan",
             "plan": str(plan_path),
             "assembled_screens": assembled_screens,
+            **({"study": study} if study else {}),
         }
     else:
         from .perturbation.sources import default_pair
@@ -1075,44 +1212,57 @@ def run_perturbation_outcome(
         print(f"# modality: {verdict['status']} - {verdict['message']}", flush=True)
 
     run_dir = next_output_dir(Path(out_dir) / "run")
-    # The graph-free MLP baselines run in the autoresearch flow (set
-    # PPI_MLP_BASELINES=0 to turn them off). Library callers that build their own
-    # config are unaffected: the flag defaults to False there.
-    include_mlp = str(os.getenv("PPI_MLP_BASELINES", "1")).strip().lower() not in (
-        "0", "false", "no", "off",
-    )
-    def _opt_float(name: str, default: float) -> float:
-        raw = os.getenv(name, "").strip()
-        return float(raw) if raw else float(default)
+    # Which arms to train: `KOSMOS_PERTURBATION_ARMS` if set (`all` = the 8-arm
+    # comparison), else base / signed / gated for GEARS and MLP
+    # (`PPI_MLP_BASELINES=0` drops the MLP arms).
+    arms = _perturbation_arms_from_env()
+    if arms is None:
+        include_mlp = str(os.getenv("PPI_MLP_BASELINES", "1")).strip().lower() not in (
+            "0", "false", "no", "off",
+        )
+        arms = tuple(
+            arm for arm in PERTURBATION_ARMS if include_mlp or not arm.startswith("mlp_")
+        )
 
-    def _opt_int(name: str, default: int) -> int:
+    def _env(name: str, cast, given):
+        if given is not None:
+            return cast(given)
         raw = os.getenv(name, "").strip()
-        return int(raw) if raw else int(default)
+        return cast(raw) if raw else None
 
-    config = PerturbationTrainingConfig(
-        epochs=int(max_epochs),
-        patience=int(patience),
-        seed=int(seed),
-        eta=float(eta),
-        gate_kappa=float(gate_kappa),
-        gate_lambda=_opt_float("PPI_GATE_LAMBDA", 1.0) if gate_lambda is None else float(gate_lambda),
-        ppi_lambda=_opt_float("PPI_LAMBDA", 0.5) if ppi_lambda is None else float(ppi_lambda),
-        direction_lambda=(
-            _opt_float("PPI_DIRECTION_LAMBDA", 0.1)
-            if direction_lambda is None
-            else float(direction_lambda)
+    overrides = {
+        # the learnable λ's initial value (perturbation/train.py: 1 in [0, 2])
+        "lambda_init": _env("PPI_LAMBDA", float, ppi_lambda),
+        "direction_lambda": _env("PPI_DIRECTION_LAMBDA", float, direction_lambda),
+        "stage1_epochs": _env("PPI_STAGE1_EPOCHS", int, stage1_epochs),
+        "stage2_epochs": _env("PPI_STAGE2_EPOCHS", int, stage2_epochs),
+        "lambda_lr_multiplier": _env("PPI_LAMBDA_LR_MULTIPLIER", float, None),
+        "stage2_lr_multiplier": _env("PPI_STAGE2_LR_MULTIPLIER", float, None),
+        # 0 = the original GEARS (Δ ignores the control cell), 1 = cell-conditioned
+        "condition_on_control": _env(
+            "KOSMOS_PERTURBATION_CONDITION_ON_CONTROL",
+            lambda raw: str(raw).strip().lower() not in ("0", "false", "no", "off"),
+            None,
         ),
-        schedule=os.getenv("PPI_SCHEDULE", "two_stage") if schedule is None else str(schedule),
-        stage1_epochs=_opt_int("PPI_STAGE1_EPOCHS", 4) if stage1_epochs is None else int(stage1_epochs),
-        stage2_epochs=_opt_int("PPI_STAGE2_EPOCHS", 1) if stage2_epochs is None else int(stage2_epochs),
-        stage2_lr_multiplier=(
-            _opt_float("PPI_STAGE2_LR_MULTIPLIER", 0.1)
-            if stage2_lr_multiplier is None
-            else float(stage2_lr_multiplier)
-        ),
-        loss_ramp_epochs=_opt_int("PPI_LOSS_RAMP_EPOCHS", 0) if loss_ramp_epochs is None else int(loss_ramp_epochs),
-        include_mlp_baselines=include_mlp,
-    )
+        "selection_metric": _env("KOSMOS_PERTURBATION_SELECTION", str, None),
+        # env first, then the plan's study block, then the config default (32)
+        "batch_size": _env("KOSMOS_PERTURBATION_BATCH_SIZE", int, None)
+        or study_training.get("batch_size"),
+        "learning_rate": _env("KOSMOS_PERTURBATION_LR", float, None),
+        "lr_decay": _env("KOSMOS_PERTURBATION_LR_DECAY", float, None),
+        "gated_kappa": _env("PPI_GATED_KAPPA", float, None),
+        "finetune_epochs": _env("PPI_FINETUNE_EPOCHS", int, None),
+        "finetune_lr_multiplier": _env("PPI_FINETUNE_LR_MULTIPLIER", float, None),
+    }
+    config_kwargs: dict[str, Any] = {
+        "arms": arms,
+        "epochs": int(max_epochs),
+        "patience": int(patience),
+        "seed": int(seed),
+        "eta": float(eta),
+        **{key: value for key, value in overrides.items() if value is not None},
+    }
+    config = PerturbationTrainingConfig(**config_kwargs)
     results = run_perturbation_task(
         gold_path=gold_path,
         supplementary_paths=supplementary_paths,
@@ -1132,38 +1282,44 @@ def run_perturbation_outcome(
         modality=modality,
         expression_path=expression_path,
         supplementary_frames=supplementary_frames,
+        max_panel_genes=max_panel_genes,
+        counts=count_tables,
     )
     results["staged"] = staged
     arms = results["arms"]
-    base = arms["gears_base"]["test"]["summary"]
-    gated = arms["gears_augmented"]["test"]["summary"]
+    # The comparison is signed PPI against base within one family: GEARS when
+    # it was trained, else the MLP pair (an MLP-only run has no `gears_base`).
+    base_arm = next((arm for arm in ("gears_base", "mlp_base") if arm in arms), next(iter(arms)))
+    base = arms[base_arm]["test"]["summary"]
+    # The headline is the GEARS signed PPI arm against the GEARS base. A caller
+    # who trained only `base` gets that, rather than a KeyError.
+    headline_arm = next(
+        (arm for arm in ("gears_augmented_ungated", "mlp_augmented_ungated") if arm in arms),
+        base_arm,
+    )
+    headline = arms[headline_arm]["test"]
+    signed = headline["summary"]
     metrics: dict[str, Any] = {
         "kind": kind.kind,
         "loss_mode": kind.loss_mode,
         "backend": "perturbation",
         "metric": "mse_deg",
         "data_source": staged.get("how", "unknown"),
-        "value": float(gated["mse_deg"]),
+        "value": float(signed["mse_deg"]),
         "baseline": float(base["mse_deg"]),
-        "delta": float(gated["mse_deg"] - base["mse_deg"]),
-        "effect_size": float(gated["mse_deg"] - base["mse_deg"]),
+        "delta": float(signed["mse_deg"] - base["mse_deg"]),
+        "effect_size": float(signed["mse_deg"] - base["mse_deg"]),
         "p_value": None,
-        "n_perturbations_test": int(
-            arms["gears_augmented"]["test"]["n_perturbations"]
-        ),
+        "n_perturbations_test": int(headline["n_perturbations"]),
         "graph_edge_overlap": results.get("graph_edge_overlap", {}),
         "modality_requested": requested["modality"],
         "modality_provided": provided,
         "modality_verdict": verdict["status"],
     }
-    for name, summary in (
-        ("base", base),
-        ("ungated", arms["gears_augmented_ungated"]["test"]["summary"]),
-        ("gated", gated),
-        ("mlp_base", (arms.get("mlp_base") or {}).get("test", {}).get("summary") or {}),
-        ("mlp_augmented_ungated", (arms.get("mlp_augmented_ungated") or {}).get("test", {}).get("summary") or {}),
-        ("mlp_augmented", (arms.get("mlp_augmented") or {}).get("test", {}).get("summary") or {}),
-    ):
+    # Every trained arm is keyed by the name `summary.md` shows for it
+    # (`base`, `signed_ppi`, `mlp_base`, ...), so the two reports agree.
+    for arm, payload in arms.items():
+        summary = (payload.get("test") or {}).get("summary") or {}
         if not summary:
             continue
         for key in (
@@ -1174,13 +1330,15 @@ def run_perturbation_outcome(
             "direction_accuracy",
             "top_k_overlap",
         ):
-            metrics[f"{name}_{key}"] = float(summary[key])
-    if "mlp_base" in arms and "mlp_augmented" in arms:
+            metrics[f"{_arm_key(arm)}_{key}"] = float(summary[key])
+    metrics["headline_arm"] = _arm_key(headline_arm)
+    if "mlp_augmented_ungated" in arms and "mlp_base" in arms:
         metrics["mlp_delta_mse_deg"] = (
-            metrics["mlp_augmented_mse_deg"] - metrics["mlp_base_mse_deg"]
+            metrics["mlp_signed_ppi_mse_deg"] - metrics["mlp_base_mse_deg"]
         )
-        metrics["gated_minus_mlp_base_mse_deg"] = (
-            metrics["gated_mse_deg"] - metrics["mlp_base_mse_deg"]
+    if "mlp_base_mse_deg" in metrics:
+        metrics["headline_minus_mlp_base_mse_deg"] = (
+            float(signed["mse_deg"]) - metrics["mlp_base_mse_deg"]
         )
     figures = [Path(path) for path in (results.get("figures") or [])]
     metrics["artifact_dir"] = str(run_dir)
@@ -1200,15 +1358,19 @@ def run_perturbation_outcome(
         modality=modality,
     )
     if echo:
+        from .perturbation.figures import _arm_label
+
+        trained = " | ".join(
+            f"{_arm_label(arm)} {payload['test']['summary']['mse_deg']:.4f}"
+            for arm, payload in arms.items()
+        )
         print(
-            f"# perturbation: mse_deg base {base['mse_deg']:.4f} | ungated "
-            f"{metrics['ungated_mse_deg']:.4f} | gated {gated['mse_deg']:.4f} "
-            f"(gold {metrics['base_mse_deg']:.4f})",
+            f"# perturbation: mse_deg {trained} ({_arm_label(base_arm)} {float(base['mse_deg']):.4f})",
             flush=True,
         )
         print(
-            f"#   direction accuracy {gated['direction_accuracy']:.3f}, "
-            f"pearson {gated['pearson']:.3f}, top-K overlap {gated['top_k_overlap']:.3f}",
+            f"#   {_arm_label(headline_arm)}: direction accuracy {signed['direction_accuracy']:.3f}, "
+            f"pearson {signed['pearson']:.3f}, top-K overlap {signed['top_k_overlap']:.3f}",
             flush=True,
         )
         print(f"#   summary {run_dir / 'summary.md'}", flush=True)
@@ -1304,16 +1466,35 @@ def write_perturbation_data_report(
         "| source | path | cells | used | how | edges |",
         "|---|---|---|---|---|---|",
     ]
+    examples = results.get("detail") or {}
     for name, detail in sources.items():
         if not isinstance(detail, dict):
             continue
+        used, how = detail.get("used_cells", ""), detail.get("how", detail.get("error", ""))
+        if name == "gold" and "n_examples" in examples:
+            # the gold's used cells are its examples plus its controls (the
+            # controls alone were shown here before: "522 used" of 10,693)
+            used = int(examples["n_examples"]) + int(examples.get("control_cells") or 0)
+            how = (
+                f"{examples['n_examples']:,} perturbed cells ({examples.get('n_perturbations')} perturbations) "
+                f"+ {int(examples.get('control_cells') or 0):,} controls"
+            )
+            if examples.get("dropped_count"):
+                how += f"; {examples['dropped_count']} perturbation(s) under {examples.get('min_cells_per_perturbation')} cells dropped"
+            if examples.get("outside_vocabulary"):
+                how += (
+                    f"; {examples['outside_vocabulary_cells']:,} cells of {len(examples['outside_vocabulary'])} "
+                    f"perturbation(s) outside the GO vocabulary dropped: {', '.join(examples['outside_vocabulary'])}"
+                )
+        elif used == "":
+            used = detail.get("control_cells", "")
         lines.append(
             "| {name} | {path} | {cells} | {used} | {how} | {edges} |".format(
                 name=name,
                 path=detail.get("path", ""),
                 cells=detail.get("cells", ""),
-                used=detail.get("used_cells", detail.get("control_cells", "")),
-                how=detail.get("how", detail.get("error", "")),
+                used=used,
+                how=how,
                 edges=detail.get("edges", ""),
             )
         )

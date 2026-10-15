@@ -215,6 +215,16 @@ def _perturbation_extract(response: dict[str, Any], visible: Sequence[str]) -> d
         modality = "unknown"
     is_screen = bool(response.get("is_screen", False))
     has_expression = bool(response.get("has_expression", False))
+    # Perturbation needs two things -- a per-cell condition column and a
+    # measured transcriptome -- but not necessarily in the same file: a screen
+    # is routinely published as a label table beside its counts matrix. A table
+    # with the condition column is the **label half** (usable as the gold's
+    # labels once the backend joins its counts matrix); a table with expression
+    # and no condition is the **measurement half**; only a table with neither is
+    # unusable. Requiring both halves in one file is what refused every file of
+    # a screen published as `metadata.tsv + RAW.tar`.
+    label_half = condition is not None and not has_expression
+    measurement_half = condition is None and has_expression
     return {
         "is_screen": is_screen,
         "has_expression": has_expression,
@@ -224,14 +234,18 @@ def _perturbation_extract(response: dict[str, Any], visible: Sequence[str]) -> d
         # the plan's target is the condition column, so the rest of the pipeline
         # (which speaks in terms of a target column) keeps working
         "target_column": condition,
-        # A screen needs all three: a condition column, controls, and the
-        # measurements. The metadata table that passed `is_screen` here had the
-        # first two and none of the third, so nothing could be trained.
-        "force_role": (
-            "unusable"
-            if not is_screen or not has_expression or condition is None
-            else None
+        # A condition-bearing table supervises even without the measurements in
+        # it; keep it as gold so the backend can join the counts matrix. A pure
+        # measurement table is the other half: not gold (no condition), but
+        # *evidence* -- measured transcriptome the correction can use -- so it
+        # is kept, not thrown away for lacking a label it was never meant to
+        # have.
+        "promote_role": (
+            "gold" if label_half else ("supplementary" if measurement_half else None)
         ),
+        # Only a table with no perturbation identity at all is unusable for this
+        # task.
+        "force_role": None if condition is not None else "unusable",
     }
 
 

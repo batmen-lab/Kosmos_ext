@@ -150,10 +150,29 @@ def download(url: str, dest: Path, config: DataFetcherConfig) -> FileRecord:
     except Exception as e:  # noqa: BLE001
         partial.unlink(missing_ok=True)
         raise SourceError(f"could not download {url}: {e}") from e
+    # An empty or short body is a failed download, not a file: recording it
+    # made every later run "reuse" a 0-byte GEO file as if it were the data.
+    expected = _content_length(response)
+    if written == 0 or (expected is not None and written < expected):
+        partial.unlink(missing_ok=True)
+        raise SourceError(
+            f"{url} returned {written:,} of "
+            f"{f'{expected:,}' if expected is not None else 'an unknown number of'} "
+            f"byte(s); the download was cut short -- try again"
+        )
     partial.replace(dest)
     return FileRecord(
         path=dest.name, bytes=written, sha256=sha256_file(dest), source_url=url
     )
+
+
+def _content_length(response) -> int | None:
+    headers = getattr(response, "headers", None)
+    try:
+        value = headers.get("Content-Length") if headers is not None else None
+        return int(value) if value is not None else None
+    except (AttributeError, TypeError, ValueError):
+        return None
 
 
 def _content_type(response) -> str:

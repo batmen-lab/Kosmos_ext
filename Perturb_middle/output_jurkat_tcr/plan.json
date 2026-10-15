@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "task": {
+    "objective": "In Jurkat T cells, can the transcriptional response to CRISPR knockout of T cell receptor signaling genes not seen in training be predicted from a small labeled screen, using large single-cell profiles of Jurkat cells from other CRISPR screens, with their labels ignored, as supplementary evidence?",
+    "target_column": "condition",
+    "backend": "perturbation"
+  },
+  "study": {
+    "question": "In Jurkat T cells, can the transcriptional response to CRISPR knockout of T cell receptor signaling genes not seen in training be predicted from a small labeled screen, using large single-cell profiles of Jurkat cells from other CRISPR screens, with their labels ignored, as supplementary evidence?",
+    "dataset": "GSE92872 (Datlinger 2017 CROP-seq, Jurkat TCR)",
+    "held_out_unit": "perturbed genes never seen in training",
+    "condition_column": "condition",
+    "split_mode": "unseen_single",
+    "test_fraction": 0.25,
+    "validation_fraction": 0.2,
+    "batch_size": 32,
+    "max_panel_genes": 0,
+    "normalize": "log1p(CPM 10000)",
+    "target_sum": 10000.0,
+    "counts": {
+      "total_column": "total_counts",
+      "gold": "Perturb_middle/output_jurkat_tcr/gold_counts.parquet",
+      "supplementary": {
+        "Perturb_middle/output_jurkat_tcr/supp_jurkat_pooled.parquet": "Perturb_middle/output_jurkat_tcr/supp_jurkat_pooled_counts.parquet"
+      }
+    }
+  },
+  "gold": [
+    {
+      "path": "Perturb_middle/output_jurkat_tcr/gold.parquet",
+      "role": "gold",
+      "reason": "GSE92872 CROP-seq Jurkat TCR"
+    }
+  ],
+  "supplementary": [
+    {
+      "path": "Perturb_middle/output_jurkat_tcr/supp_jurkat_pooled.parquet",
+      "role": "supplementary",
+      "reason": "6 Jurkat sample(s) pooled by similarity to the gold controls (GSM7719390_J1_1_matrix.mtx.gz, GSM7719391_J_Lat_matrix.mtx.gz, jurkat.h5, GSM8187448_DMSO_WCE_1_matrix.mtx.gz, GSM8187449_DMSO_WCE_2_matrix.mtx.gz, GSM4483270_mRNA_library.matrix.mtx.gz), labels ignored"
+    }
+  ],
+  "unusable": []
+}

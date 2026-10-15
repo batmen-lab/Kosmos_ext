@@ -1,0 +1,3004 @@
+{
+  "question": "In Jurkat T cells, can the transcriptional response to CRISPR knockout of T cell receptor signaling genes not seen in training be predicted from a small labeled screen, using large single-cell profiles of Jurkat cells from other CRISPR screens, with their labels ignored, as supplementary evidence?",
+  "spec": {
+    "question": "In Jurkat T cells, can the transcriptional response to CRISPR knockout of T cell receptor signaling genes not seen in training be predicted from a small labeled screen, using large single-cell profiles of Jurkat cells from other CRISPR screens, with their labels ignored, as supplementary evidence?",
+    "cell_type": "Jurkat",
+    "cell_type_aliases": [
+      "Jurkat T cells",
+      "Jurkat cells",
+      "acute T cell leukemia cells"
+    ],
+    "organism": "human",
+    "modality": "CRISPRko",
+    "topic": "T cell receptor signaling",
+    "assays": [
+      "Perturb-seq",
+      "CROP-seq"
+    ]
+  },
+  "gold": [
+    {
+      "series": "geo://GSE92872",
+      "series_title": "Pooled CRISPR screening with single-cell transcriptome read-out",
+      "sample": "GSE92872",
+      "sample_title": "Pooled CRISPR screening with single-cell transcriptome read-out (series-level files; samples: GSM2439080, ... 11 total)",
+      "role": "gold",
+      "proposed_role": "gold",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "Jurkat",
+      "topic_match": 1,
+      "bytes": 19398656,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE92872_CROP-seq_Jurkat_TCR.count_matrix.csv.gz",
+          "bytes": 1572864
+        },
+        {
+          "name": "GSE92872_CROP-seq_Jurkat_TCR.digital_expression.csv.gz",
+          "bytes": 17825792
+        }
+      ],
+      "why": "CROP-seq Jurkat TCR-stimulated single-cell CRISPRko screen with gRNA labels",
+      "samples": [
+        "GSM2439080",
+        "GSM2439081",
+        "GSM2439082",
+        "GSM2439083",
+        "GSM2439084",
+        "GSM2439085",
+        "GSM2439086",
+        "GSM2439087",
+        "GSM2439088",
+        "GSM2439089",
+        "GSM2439090"
+      ]
+    },
+    {
+      "series": "geo://GSE148820",
+      "series_title": "10x 3\u2019 scRNA-seq analysis on Jurkat cells post TCR acivation in CRISPR/Cas9 screening",
+      "sample": "GSM4483270",
+      "sample_title": "mRNA_library; Jurkat cells; cell type: Jurkat-Cas9 cell",
+      "role": "gold",
+      "proposed_role": "gold",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "Jurkat",
+      "topic_match": 0.9,
+      "bytes": 120957952,
+      "cells_estimate": 17515,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM4483271, GSM4483272",
+      "files": [
+        {
+          "name": "GSM4483270_mRNA_library.barcodes.tsv.gz",
+          "bytes": 66560
+        },
+        {
+          "name": "GSM4483270_mRNA_library.features.tsv.gz",
+          "bytes": 305152
+        },
+        {
+          "name": "GSM4483270_mRNA_library.matrix.mtx.gz",
+          "bytes": 120586240
+        }
+      ],
+      "why": "Jurkat CRISPRko Perturb-seq mRNA expression matrix; guides in companion files."
+    }
+  ],
+  "supplementary": [
+    {
+      "series": "geo://GSE241207",
+      "series_title": "Single-molecule RNA-FISH analysis reveals stochasticity in reactivation of latent HIV-1 regulated by Nuclear Orphan Receptors NR4A and cMYC",
+      "sample": "GSM7719390",
+      "sample_title": "J1_1; J1.1; cell line: J1.1; cell type: HIV-1 LAV infected Jurkat E6 Cells (J1.1); genotype: WT; treatment: No treatment",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "Jurkat E6 (J1.1)",
+      "topic_match": 0.2,
+      "bytes": 127250432,
+      "cells_estimate": 14282,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM7719390_J1_1_barcodes.tsv.gz",
+          "bytes": 54272
+        },
+        {
+          "name": "GSM7719390_J1_1_features.tsv.gz",
+          "bytes": 318464
+        },
+        {
+          "name": "GSM7719390_J1_1_matrix.mtx.gz",
+          "bytes": 126877696
+        }
+      ],
+      "why": "Jurkat single-cell expression, no CRISPR labels; usable as unlabeled supplementary."
+    },
+    {
+      "series": "geo://GSE241207",
+      "series_title": "Single-molecule RNA-FISH analysis reveals stochasticity in reactivation of latent HIV-1 regulated by Nuclear Orphan Receptors NR4A and cMYC",
+      "sample": "GSM7719391",
+      "sample_title": "J_Lat; J-Lat; cell line: J-Lat; cell type: HIV-R7/E-/GFP infected Jurkat cells; genotype: WT; treatment: No treatment",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "Jurkat (J-Lat)",
+      "topic_match": 0.2,
+      "bytes": 91589632,
+      "cells_estimate": 11856,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM7719391_J_Lat_barcodes.tsv.gz",
+          "bytes": 45056
+        },
+        {
+          "name": "GSM7719391_J_Lat_features.tsv.gz",
+          "bytes": 318464
+        },
+        {
+          "name": "GSM7719391_J_Lat_matrix.mtx.gz",
+          "bytes": 91226112
+        }
+      ],
+      "why": "Jurkat single-cell expression, no CRISPR labels; usable as unlabeled supplementary."
+    },
+    {
+      "series": "geo://GSE249595",
+      "series_title": "Genome-scale CRISPRi Perturb-seq on both unstimulated and stimulated Jurkat cells reveals regulators of human T-cell signaling",
+      "sample": "GSM7951413",
+      "sample_title": "Channel 1; Jurkat; cell line: Jurkat; cell type: T cell",
+      "role": "supplementary",
+      "proposed_role": "gold",
+      "refused": "modality CRISPRi is not CRISPRko",
+      "modality": "CRISPRi",
+      "cell_type": "Jurkat",
+      "topic_match": 1,
+      "bytes": 235806924,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "label file GSM7951413_channel1_guides_barcode.tsv.gz",
+      "files": [
+        {
+          "name": "GSM7951413_channel1_guides_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951413_channel1_guides_features.tsv.gz",
+          "bytes": 425984
+        },
+        {
+          "name": "GSM7951413_channel1_guides_matrix.mtx.gz",
+          "bytes": 22020096
+        },
+        {
+          "name": "GSM7951413_channel1_labels_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951413_channel1_labels_features.tsv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM7951413_channel1_labels_matrix.mtx.gz",
+          "bytes": 6606028
+        },
+        {
+          "name": "GSM7951413_channel1_transcriptome_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951413_channel1_transcriptome_features.tsv.gz",
+          "bytes": 185344
+        },
+        {
+          "name": "GSM7951413_channel1_transcriptome_matrix.mtx.gz",
+          "bytes": 149946368
+        }
+      ],
+      "why": "Jurkat CRISPRi Perturb-seq with guides and transcriptome; TCR signaling topic."
+    },
+    {
+      "series": "geo://GSE249595",
+      "series_title": "Genome-scale CRISPRi Perturb-seq on both unstimulated and stimulated Jurkat cells reveals regulators of human T-cell signaling",
+      "sample": "GSM7951414",
+      "sample_title": "Channel 2; Jurkat; cell line: Jurkat; cell type: T cell",
+      "role": "supplementary",
+      "proposed_role": "gold",
+      "refused": "modality CRISPRi is not CRISPRko",
+      "modality": "CRISPRi",
+      "cell_type": "Jurkat",
+      "topic_match": 1,
+      "bytes": 222699724,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "label file GSM7951414_channel2_guides_barcode.tsv.gz",
+      "files": [
+        {
+          "name": "GSM7951414_channel2_guides_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951414_channel2_guides_features.tsv.gz",
+          "bytes": 425984
+        },
+        {
+          "name": "GSM7951414_channel2_guides_matrix.mtx.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951414_channel2_labels_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951414_channel2_labels_features.tsv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM7951414_channel2_labels_matrix.mtx.gz",
+          "bytes": 7130316
+        },
+        {
+          "name": "GSM7951414_channel2_transcriptome_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951414_channel2_transcriptome_features.tsv.gz",
+          "bytes": 185344
+        },
+        {
+          "name": "GSM7951414_channel2_transcriptome_matrix.mtx.gz",
+          "bytes": 139460608
+        }
+      ],
+      "why": "Jurkat CRISPRi Perturb-seq with guides and transcriptome; TCR signaling topic."
+    },
+    {
+      "series": "geo://GSE249595",
+      "series_title": "Genome-scale CRISPRi Perturb-seq on both unstimulated and stimulated Jurkat cells reveals regulators of human T-cell signaling",
+      "sample": "GSM7951415",
+      "sample_title": "Channel 3; Jurkat; cell line: Jurkat; cell type: T cell",
+      "role": "supplementary",
+      "proposed_role": "gold",
+      "refused": "modality CRISPRi is not CRISPRko",
+      "modality": "CRISPRi",
+      "cell_type": "Jurkat",
+      "topic_match": 1,
+      "bytes": 228152320,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "label file GSM7951415_channel3_guides_barcode.tsv.gz",
+      "files": [
+        {
+          "name": "GSM7951415_channel3_guides_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951415_channel3_guides_features.tsv.gz",
+          "bytes": 425984
+        },
+        {
+          "name": "GSM7951415_channel3_guides_matrix.mtx.gz",
+          "bytes": 20971520
+        },
+        {
+          "name": "GSM7951415_channel3_labels_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951415_channel3_labels_features.tsv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM7951415_channel3_labels_matrix.mtx.gz",
+          "bytes": 7340032
+        },
+        {
+          "name": "GSM7951415_channel3_transcriptome_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951415_channel3_transcriptome_features.tsv.gz",
+          "bytes": 185344
+        },
+        {
+          "name": "GSM7951415_channel3_transcriptome_matrix.mtx.gz",
+          "bytes": 142606336
+        }
+      ],
+      "why": "Jurkat CRISPRi Perturb-seq with guides and transcriptome; TCR signaling topic."
+    },
+    {
+      "series": "geo://GSE249595",
+      "series_title": "Genome-scale CRISPRi Perturb-seq on both unstimulated and stimulated Jurkat cells reveals regulators of human T-cell signaling",
+      "sample": "GSM7951416",
+      "sample_title": "Channel 4; Jurkat; cell line: Jurkat; cell type: T cell",
+      "role": "supplementary",
+      "proposed_role": "gold",
+      "refused": "modality CRISPRi is not CRISPRko",
+      "modality": "CRISPRi",
+      "cell_type": "Jurkat",
+      "topic_match": 1,
+      "bytes": 210011955,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "label file GSM7951416_channel4_guides_barcode.tsv.gz",
+      "files": [
+        {
+          "name": "GSM7951416_channel4_guides_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951416_channel4_guides_features.tsv.gz",
+          "bytes": 425984
+        },
+        {
+          "name": "GSM7951416_channel4_guides_matrix.mtx.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951416_channel4_labels_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951416_channel4_labels_features.tsv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM7951416_channel4_labels_matrix.mtx.gz",
+          "bytes": 5976883
+        },
+        {
+          "name": "GSM7951416_channel4_transcriptome_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951416_channel4_transcriptome_features.tsv.gz",
+          "bytes": 185344
+        },
+        {
+          "name": "GSM7951416_channel4_transcriptome_matrix.mtx.gz",
+          "bytes": 127926272
+        }
+      ],
+      "why": "Jurkat CRISPRi Perturb-seq with guides and transcriptome; TCR signaling topic."
+    },
+    {
+      "series": "geo://GSE249595",
+      "series_title": "Genome-scale CRISPRi Perturb-seq on both unstimulated and stimulated Jurkat cells reveals regulators of human T-cell signaling",
+      "sample": "GSM7951417",
+      "sample_title": "Channel 5; Jurkat; cell line: Jurkat; cell type: T cell",
+      "role": "supplementary",
+      "proposed_role": "gold",
+      "refused": "modality CRISPRi is not CRISPRko",
+      "modality": "CRISPRi",
+      "cell_type": "Jurkat",
+      "topic_match": 1,
+      "bytes": 179288678,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "label file GSM7951417_channel5_guides_barcode.tsv.gz",
+      "files": [
+        {
+          "name": "GSM7951417_channel5_guides_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951417_channel5_guides_features.tsv.gz",
+          "bytes": 425984
+        },
+        {
+          "name": "GSM7951417_channel5_guides_matrix.mtx.gz",
+          "bytes": 17825792
+        },
+        {
+          "name": "GSM7951417_channel5_labels_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951417_channel5_labels_features.tsv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM7951417_channel5_labels_matrix.mtx.gz",
+          "bytes": 4613734
+        },
+        {
+          "name": "GSM7951417_channel5_transcriptome_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951417_channel5_transcriptome_features.tsv.gz",
+          "bytes": 185344
+        },
+        {
+          "name": "GSM7951417_channel5_transcriptome_matrix.mtx.gz",
+          "bytes": 99614720
+        }
+      ],
+      "why": "Jurkat CRISPRi Perturb-seq with guides and transcriptome; TCR signaling topic."
+    },
+    {
+      "series": "geo://GSE249595",
+      "series_title": "Genome-scale CRISPRi Perturb-seq on both unstimulated and stimulated Jurkat cells reveals regulators of human T-cell signaling",
+      "sample": "GSM7951418",
+      "sample_title": "Channel 6; Jurkat; cell line: Jurkat; cell type: T cell",
+      "role": "supplementary",
+      "proposed_role": "gold",
+      "refused": "modality CRISPRi is not CRISPRko",
+      "modality": "CRISPRi",
+      "cell_type": "Jurkat",
+      "topic_match": 1,
+      "bytes": 212738252,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "label file GSM7951418_channel6_guides_barcode.tsv.gz",
+      "files": [
+        {
+          "name": "GSM7951418_channel6_guides_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951418_channel6_guides_features.tsv.gz",
+          "bytes": 425984
+        },
+        {
+          "name": "GSM7951418_channel6_guides_matrix.mtx.gz",
+          "bytes": 17825792
+        },
+        {
+          "name": "GSM7951418_channel6_labels_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951418_channel6_labels_features.tsv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM7951418_channel6_labels_matrix.mtx.gz",
+          "bytes": 6606028
+        },
+        {
+          "name": "GSM7951418_channel6_transcriptome_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951418_channel6_transcriptome_features.tsv.gz",
+          "bytes": 185344
+        },
+        {
+          "name": "GSM7951418_channel6_transcriptome_matrix.mtx.gz",
+          "bytes": 131072000
+        }
+      ],
+      "why": "Jurkat CRISPRi Perturb-seq with guides and transcriptome; TCR signaling topic."
+    },
+    {
+      "series": "geo://GSE249595",
+      "series_title": "Genome-scale CRISPRi Perturb-seq on both unstimulated and stimulated Jurkat cells reveals regulators of human T-cell signaling",
+      "sample": "GSM7951419",
+      "sample_title": "Channel 7; Jurkat; cell line: Jurkat; cell type: T cell",
+      "role": "supplementary",
+      "proposed_role": "gold",
+      "refused": "modality CRISPRi is not CRISPRko",
+      "modality": "CRISPRi",
+      "cell_type": "Jurkat",
+      "topic_match": 1,
+      "bytes": 253108428,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "label file GSM7951419_channel7_guides_barcode.tsv.gz",
+      "files": [
+        {
+          "name": "GSM7951419_channel7_guides_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951419_channel7_guides_features.tsv.gz",
+          "bytes": 425984
+        },
+        {
+          "name": "GSM7951419_channel7_guides_matrix.mtx.gz",
+          "bytes": 25165824
+        },
+        {
+          "name": "GSM7951419_channel7_labels_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951419_channel7_labels_features.tsv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM7951419_channel7_labels_matrix.mtx.gz",
+          "bytes": 6081740
+        },
+        {
+          "name": "GSM7951419_channel7_transcriptome_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951419_channel7_transcriptome_features.tsv.gz",
+          "bytes": 185344
+        },
+        {
+          "name": "GSM7951419_channel7_transcriptome_matrix.mtx.gz",
+          "bytes": 164626432
+        }
+      ],
+      "why": "Jurkat CRISPRi Perturb-seq with guides and transcriptome; TCR signaling topic."
+    },
+    {
+      "series": "geo://GSE249595",
+      "series_title": "Genome-scale CRISPRi Perturb-seq on both unstimulated and stimulated Jurkat cells reveals regulators of human T-cell signaling",
+      "sample": "GSM7951420",
+      "sample_title": "Channel 8; Jurkat; cell line: Jurkat; cell type: T cell",
+      "role": "supplementary",
+      "proposed_role": "gold",
+      "refused": "modality CRISPRi is not CRISPRko",
+      "modality": "CRISPRi",
+      "cell_type": "Jurkat",
+      "topic_match": 1,
+      "bytes": 222699724,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "label file GSM7951420_channel8_guides_barcode.tsv.gz",
+      "files": [
+        {
+          "name": "GSM7951420_channel8_guides_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951420_channel8_guides_features.tsv.gz",
+          "bytes": 425984
+        },
+        {
+          "name": "GSM7951420_channel8_guides_matrix.mtx.gz",
+          "bytes": 25165824
+        },
+        {
+          "name": "GSM7951420_channel8_labels_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951420_channel8_labels_features.tsv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM7951420_channel8_labels_matrix.mtx.gz",
+          "bytes": 5033164
+        },
+        {
+          "name": "GSM7951420_channel8_transcriptome_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951420_channel8_transcriptome_features.tsv.gz",
+          "bytes": 185344
+        },
+        {
+          "name": "GSM7951420_channel8_transcriptome_matrix.mtx.gz",
+          "bytes": 135266304
+        }
+      ],
+      "why": "Jurkat CRISPRi Perturb-seq with guides and transcriptome; TCR signaling topic."
+    },
+    {
+      "series": "geo://GSE249595",
+      "series_title": "Genome-scale CRISPRi Perturb-seq on both unstimulated and stimulated Jurkat cells reveals regulators of human T-cell signaling",
+      "sample": "GSM7951421",
+      "sample_title": "Channel 9; Jurkat; cell line: Jurkat; cell type: T cell",
+      "role": "supplementary",
+      "proposed_role": "gold",
+      "refused": "modality CRISPRi is not CRISPRko",
+      "modality": "CRISPRi",
+      "cell_type": "Jurkat",
+      "topic_match": 1,
+      "bytes": 233500057,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "label file GSM7951421_channel9_guides_barcode.tsv.gz",
+      "files": [
+        {
+          "name": "GSM7951421_channel9_guides_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951421_channel9_guides_features.tsv.gz",
+          "bytes": 425984
+        },
+        {
+          "name": "GSM7951421_channel9_guides_matrix.mtx.gz",
+          "bytes": 19922944
+        },
+        {
+          "name": "GSM7951421_channel9_labels_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951421_channel9_labels_features.tsv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM7951421_channel9_labels_matrix.mtx.gz",
+          "bytes": 6396313
+        },
+        {
+          "name": "GSM7951421_channel9_transcriptome_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951421_channel9_transcriptome_features.tsv.gz",
+          "bytes": 185344
+        },
+        {
+          "name": "GSM7951421_channel9_transcriptome_matrix.mtx.gz",
+          "bytes": 149946368
+        }
+      ],
+      "why": "Jurkat CRISPRi Perturb-seq with guides and transcriptome; TCR signaling topic."
+    },
+    {
+      "series": "geo://GSE249595",
+      "series_title": "Genome-scale CRISPRi Perturb-seq on both unstimulated and stimulated Jurkat cells reveals regulators of human T-cell signaling",
+      "sample": "GSM7951422",
+      "sample_title": "Channel 10; Jurkat; cell line: Jurkat; cell type: T cell",
+      "role": "supplementary",
+      "proposed_role": "gold",
+      "refused": "modality CRISPRi is not CRISPRko",
+      "modality": "CRISPRi",
+      "cell_type": "Jurkat",
+      "topic_match": 1,
+      "bytes": 244090675,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "label file GSM7951422_channel10_guides_barcode.tsv.gz",
+      "files": [
+        {
+          "name": "GSM7951422_channel10_guides_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951422_channel10_guides_features.tsv.gz",
+          "bytes": 425984
+        },
+        {
+          "name": "GSM7951422_channel10_guides_matrix.mtx.gz",
+          "bytes": 23068672
+        },
+        {
+          "name": "GSM7951422_channel10_labels_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951422_channel10_labels_features.tsv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM7951422_channel10_labels_matrix.mtx.gz",
+          "bytes": 6501171
+        },
+        {
+          "name": "GSM7951422_channel10_transcriptome_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951422_channel10_transcriptome_features.tsv.gz",
+          "bytes": 185344
+        },
+        {
+          "name": "GSM7951422_channel10_transcriptome_matrix.mtx.gz",
+          "bytes": 157286400
+        }
+      ],
+      "why": "Jurkat CRISPRi Perturb-seq with guides and transcriptome; TCR signaling topic."
+    },
+    {
+      "series": "geo://GSE249595",
+      "series_title": "Genome-scale CRISPRi Perturb-seq on both unstimulated and stimulated Jurkat cells reveals regulators of human T-cell signaling",
+      "sample": "GSM7951423",
+      "sample_title": "Channel 11; Jurkat; cell line: Jurkat; cell type: T cell",
+      "role": "supplementary",
+      "proposed_role": "gold",
+      "refused": "modality CRISPRi is not CRISPRko",
+      "modality": "CRISPRi",
+      "cell_type": "Jurkat",
+      "topic_match": 1,
+      "bytes": 237170073,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "label file GSM7951423_channel11_guides_barcode.tsv.gz",
+      "files": [
+        {
+          "name": "GSM7951423_channel11_guides_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951423_channel11_guides_features.tsv.gz",
+          "bytes": 425984
+        },
+        {
+          "name": "GSM7951423_channel11_guides_matrix.mtx.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951423_channel11_labels_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951423_channel11_labels_features.tsv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM7951423_channel11_labels_matrix.mtx.gz",
+          "bytes": 6920601
+        },
+        {
+          "name": "GSM7951423_channel11_transcriptome_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951423_channel11_transcriptome_features.tsv.gz",
+          "bytes": 185344
+        },
+        {
+          "name": "GSM7951423_channel11_transcriptome_matrix.mtx.gz",
+          "bytes": 154140672
+        }
+      ],
+      "why": "Jurkat CRISPRi Perturb-seq with guides and transcriptome; TCR signaling topic."
+    },
+    {
+      "series": "geo://GSE249595",
+      "series_title": "Genome-scale CRISPRi Perturb-seq on both unstimulated and stimulated Jurkat cells reveals regulators of human T-cell signaling",
+      "sample": "GSM7951424",
+      "sample_title": "Channel 12; Jurkat; cell line: Jurkat; cell type: T cell",
+      "role": "supplementary",
+      "proposed_role": "gold",
+      "refused": "modality CRISPRi is not CRISPRko",
+      "modality": "CRISPRi",
+      "cell_type": "Jurkat",
+      "topic_match": 1,
+      "bytes": 239057510,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "label file GSM7951424_channel12_guides_barcode.tsv.gz",
+      "files": [
+        {
+          "name": "GSM7951424_channel12_guides_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951424_channel12_guides_features.tsv.gz",
+          "bytes": 425984
+        },
+        {
+          "name": "GSM7951424_channel12_guides_matrix.mtx.gz",
+          "bytes": 20971520
+        },
+        {
+          "name": "GSM7951424_channel12_labels_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951424_channel12_labels_features.tsv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM7951424_channel12_labels_matrix.mtx.gz",
+          "bytes": 6710886
+        },
+        {
+          "name": "GSM7951424_channel12_transcriptome_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951424_channel12_transcriptome_features.tsv.gz",
+          "bytes": 185344
+        },
+        {
+          "name": "GSM7951424_channel12_transcriptome_matrix.mtx.gz",
+          "bytes": 154140672
+        }
+      ],
+      "why": "Jurkat CRISPRi Perturb-seq with guides and transcriptome; TCR signaling topic."
+    },
+    {
+      "series": "geo://GSE249595",
+      "series_title": "Genome-scale CRISPRi Perturb-seq on both unstimulated and stimulated Jurkat cells reveals regulators of human T-cell signaling",
+      "sample": "GSM7951425",
+      "sample_title": "Channel 13; Jurkat; cell line: Jurkat; cell type: T cell",
+      "role": "supplementary",
+      "proposed_role": "gold",
+      "refused": "modality CRISPRi is not CRISPRko",
+      "modality": "CRISPRi",
+      "cell_type": "Jurkat",
+      "topic_match": 1,
+      "bytes": 272716800,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "label file GSM7951425_channel13_guides_barcode.tsv.gz",
+      "files": [
+        {
+          "name": "GSM7951425_channel13_guides_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951425_channel13_guides_features.tsv.gz",
+          "bytes": 425984
+        },
+        {
+          "name": "GSM7951425_channel13_guides_matrix.mtx.gz",
+          "bytes": 23068672
+        },
+        {
+          "name": "GSM7951425_channel13_labels_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951425_channel13_labels_features.tsv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM7951425_channel13_labels_matrix.mtx.gz",
+          "bytes": 7864320
+        },
+        {
+          "name": "GSM7951425_channel13_transcriptome_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951425_channel13_transcriptome_features.tsv.gz",
+          "bytes": 185344
+        },
+        {
+          "name": "GSM7951425_channel13_transcriptome_matrix.mtx.gz",
+          "bytes": 184549376
+        }
+      ],
+      "why": "Jurkat CRISPRi Perturb-seq with guides and transcriptome; TCR signaling topic."
+    },
+    {
+      "series": "geo://GSE249595",
+      "series_title": "Genome-scale CRISPRi Perturb-seq on both unstimulated and stimulated Jurkat cells reveals regulators of human T-cell signaling",
+      "sample": "GSM7951426",
+      "sample_title": "Channel 14; Jurkat; cell line: Jurkat; cell type: T cell",
+      "role": "supplementary",
+      "proposed_role": "gold",
+      "refused": "modality CRISPRi is not CRISPRko",
+      "modality": "CRISPRi",
+      "cell_type": "Jurkat",
+      "topic_match": 1,
+      "bytes": 256988160,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "label file GSM7951426_channel14_guides_barcode.tsv.gz",
+      "files": [
+        {
+          "name": "GSM7951426_channel14_guides_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951426_channel14_guides_features.tsv.gz",
+          "bytes": 425984
+        },
+        {
+          "name": "GSM7951426_channel14_guides_matrix.mtx.gz",
+          "bytes": 23068672
+        },
+        {
+          "name": "GSM7951426_channel14_labels_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951426_channel14_labels_features.tsv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM7951426_channel14_labels_matrix.mtx.gz",
+          "bytes": 5767168
+        },
+        {
+          "name": "GSM7951426_channel14_transcriptome_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951426_channel14_transcriptome_features.tsv.gz",
+          "bytes": 185344
+        },
+        {
+          "name": "GSM7951426_channel14_transcriptome_matrix.mtx.gz",
+          "bytes": 170917888
+        }
+      ],
+      "why": "Jurkat CRISPRi Perturb-seq with guides and transcriptome; TCR signaling topic."
+    },
+    {
+      "series": "geo://GSE249595",
+      "series_title": "Genome-scale CRISPRi Perturb-seq on both unstimulated and stimulated Jurkat cells reveals regulators of human T-cell signaling",
+      "sample": "GSM7951427",
+      "sample_title": "Channel 15; Jurkat; cell line: Jurkat; cell type: T cell",
+      "role": "supplementary",
+      "proposed_role": "gold",
+      "refused": "modality CRISPRi is not CRISPRko",
+      "modality": "CRISPRi",
+      "cell_type": "Jurkat",
+      "topic_match": 1,
+      "bytes": 253318144,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "label file GSM7951427_channel15_guides_barcode.tsv.gz",
+      "files": [
+        {
+          "name": "GSM7951427_channel15_guides_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951427_channel15_guides_features.tsv.gz",
+          "bytes": 425984
+        },
+        {
+          "name": "GSM7951427_channel15_guides_matrix.mtx.gz",
+          "bytes": 20971520
+        },
+        {
+          "name": "GSM7951427_channel15_labels_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951427_channel15_labels_features.tsv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM7951427_channel15_labels_matrix.mtx.gz",
+          "bytes": 5242880
+        },
+        {
+          "name": "GSM7951427_channel15_transcriptome_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951427_channel15_transcriptome_features.tsv.gz",
+          "bytes": 185344
+        },
+        {
+          "name": "GSM7951427_channel15_transcriptome_matrix.mtx.gz",
+          "bytes": 169869312
+        }
+      ],
+      "why": "Jurkat CRISPRi Perturb-seq with guides and transcriptome; TCR signaling topic."
+    },
+    {
+      "series": "geo://GSE249595",
+      "series_title": "Genome-scale CRISPRi Perturb-seq on both unstimulated and stimulated Jurkat cells reveals regulators of human T-cell signaling",
+      "sample": "GSM7951428",
+      "sample_title": "Channel 16; Jurkat; cell line: Jurkat; cell type: T cell",
+      "role": "supplementary",
+      "proposed_role": "gold",
+      "refused": "modality CRISPRi is not CRISPRko",
+      "modality": "CRISPRi",
+      "cell_type": "Jurkat",
+      "topic_match": 1,
+      "bytes": 278379110,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "label file GSM7951428_channel16_guides_barcode.tsv.gz",
+      "files": [
+        {
+          "name": "GSM7951428_channel16_guides_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951428_channel16_guides_features.tsv.gz",
+          "bytes": 425984
+        },
+        {
+          "name": "GSM7951428_channel16_guides_matrix.mtx.gz",
+          "bytes": 25165824
+        },
+        {
+          "name": "GSM7951428_channel16_labels_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951428_channel16_labels_features.tsv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM7951428_channel16_labels_matrix.mtx.gz",
+          "bytes": 5138022
+        },
+        {
+          "name": "GSM7951428_channel16_transcriptome_barcode.tsv.gz",
+          "bytes": 18874368
+        },
+        {
+          "name": "GSM7951428_channel16_transcriptome_features.tsv.gz",
+          "bytes": 185344
+        },
+        {
+          "name": "GSM7951428_channel16_transcriptome_matrix.mtx.gz",
+          "bytes": 190840832
+        }
+      ],
+      "why": "Jurkat CRISPRi Perturb-seq with guides and transcriptome; TCR signaling topic."
+    },
+    {
+      "series": "hf://VirtualCell2025/jurkat.h5",
+      "series_title": "VirtualCell2025/jurkat.h5",
+      "sample": "hf://VirtualCell2025/jurkat.h5",
+      "sample_title": "VirtualCell2025/jurkat.h5",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "Jurkat",
+      "topic_match": 0.3,
+      "bytes": 1551186021,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 2461
+        },
+        {
+          "name": "README.md",
+          "bytes": 24
+        },
+        {
+          "name": "jurkat.h5",
+          "bytes": 1551183536
+        }
+      ],
+      "why": "Single-cell Jurkat expression; no perturbation labels, but same cell type as supplementary evidence."
+    },
+    {
+      "series": "geo://GSE263194",
+      "series_title": "Comparative analysis between single-cell RNA-seq and single-molecule RNA FISH indicates that the pyrimidine nucleobase idoxuridine (IdU) globally amplifies transcriptional noise",
+      "sample": "GSM8187448",
+      "sample_title": "DMSO-treated, replicate 1; Jurkat T Lymphocytes; cell line: Jurkat T Lymphocytes; treatment: DMSO",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "Jurkat",
+      "topic_match": 0.1,
+      "bytes": 217035571,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8187448_DMSO_WCE_1_barcodes.tsv.gz",
+          "bytes": 5976883
+        },
+        {
+          "name": "GSM8187448_DMSO_WCE_1_features.tsv.gz",
+          "bytes": 294912
+        },
+        {
+          "name": "GSM8187448_DMSO_WCE_1_matrix.mtx.gz",
+          "bytes": 210763776
+        }
+      ],
+      "why": "Jurkat scRNA-seq, no CRISPR perturbation; useful unlabeled same-cell-type expression."
+    },
+    {
+      "series": "geo://GSE263194",
+      "series_title": "Comparative analysis between single-cell RNA-seq and single-molecule RNA FISH indicates that the pyrimidine nucleobase idoxuridine (IdU) globally amplifies transcriptional noise",
+      "sample": "GSM8187449",
+      "sample_title": "DMSO-treated, replicate 2; Jurkat T Lymphocytes; cell line: Jurkat T Lymphocytes; treatment: DMSO",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "Jurkat",
+      "topic_match": 0.1,
+      "bytes": 221544448,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8187449_DMSO_WCE_2_barcodes.tsv.gz",
+          "bytes": 6291456
+        },
+        {
+          "name": "GSM8187449_DMSO_WCE_2_features.tsv.gz",
+          "bytes": 294912
+        },
+        {
+          "name": "GSM8187449_DMSO_WCE_2_matrix.mtx.gz",
+          "bytes": 214958080
+        }
+      ],
+      "why": "Jurkat scRNA-seq, no CRISPR perturbation; useful unlabeled same-cell-type expression."
+    },
+    {
+      "series": "geo://GSE263194",
+      "series_title": "Comparative analysis between single-cell RNA-seq and single-molecule RNA FISH indicates that the pyrimidine nucleobase idoxuridine (IdU) globally amplifies transcriptional noise",
+      "sample": "GSM8187450",
+      "sample_title": "IdU-treated, replicate 1; Jurkat T Lymphocytes; cell line: Jurkat T Lymphocytes; treatment: IdU",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "Jurkat",
+      "topic_match": 0.1,
+      "bytes": 202565222,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8187450_IdU_WCE_1_barcodes.tsv.gz",
+          "bytes": 6186598
+        },
+        {
+          "name": "GSM8187450_IdU_WCE_1_features.tsv.gz",
+          "bytes": 294912
+        },
+        {
+          "name": "GSM8187450_IdU_WCE_1_matrix.mtx.gz",
+          "bytes": 196083712
+        }
+      ],
+      "why": "Jurkat scRNA-seq with IdU treatment, not CRISPR; unlabeled same-cell-type expression."
+    },
+    {
+      "series": "geo://GSE263194",
+      "series_title": "Comparative analysis between single-cell RNA-seq and single-molecule RNA FISH indicates that the pyrimidine nucleobase idoxuridine (IdU) globally amplifies transcriptional noise",
+      "sample": "GSM8187451",
+      "sample_title": "IdU-treated, replicate 2; Jurkat T Lymphocytes; cell line: Jurkat T Lymphocytes; treatment: IdU",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "Jurkat",
+      "topic_match": 0.1,
+      "bytes": 188828876,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8187451_IdU_WCE_2_barcodes.tsv.gz",
+          "bytes": 6081740
+        },
+        {
+          "name": "GSM8187451_IdU_WCE_2_features.tsv.gz",
+          "bytes": 294912
+        },
+        {
+          "name": "GSM8187451_IdU_WCE_2_matrix.mtx.gz",
+          "bytes": 182452224
+        }
+      ],
+      "why": "Jurkat scRNA-seq with IdU treatment, not CRISPR; unlabeled same-cell-type expression."
+    }
+  ],
+  "rejected": [
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075340",
+      "sample_title": "snRNAseq_lung_587_HuHu_uninfected; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: PBS (mock); batch: HuHu (HSC + fetal thymus)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung (humanized immune cells)",
+      "topic_match": 0,
+      "bytes": 6064639,
+      "cells_estimate": 1913,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM10075340_587_barcodes.tsv.gz",
+          "bytes": 7270
+        },
+        {
+          "name": "GSM10075340_587_features.tsv.gz",
+          "bytes": 709632
+        },
+        {
+          "name": "GSM10075340_587_matrix.mtx.gz",
+          "bytes": 5347737
+        }
+      ],
+      "why": "Mouse lung snRNA-seq, not Jurkat; no CRISPR perturbation."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075341",
+      "sample_title": "snRNAseq_lung_668_HuHu_infected; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: SARS-CoV-2 infected; batch: HuHu (HSC + fetal thymus)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung (humanized immune cells)",
+      "topic_match": 0,
+      "bytes": 23799808,
+      "cells_estimate": 5658,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM10075341_668_barcodes.tsv.gz",
+          "bytes": 21504
+        },
+        {
+          "name": "GSM10075341_668_features.tsv.gz",
+          "bytes": 709632
+        },
+        {
+          "name": "GSM10075341_668_matrix.mtx.gz",
+          "bytes": 23068672
+        }
+      ],
+      "why": "Mouse lung snRNA-seq, not Jurkat; no CRISPR perturbation."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075342",
+      "sample_title": "snRNAseq_lung_678_HuHu_infected; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: SARS-CoV-2 infected; batch: HuHu (HSC + fetal thymus)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung (humanized immune cells)",
+      "topic_match": 0,
+      "bytes": 29048832,
+      "cells_estimate": 7275,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM10075342_678_barcodes.tsv.gz",
+          "bytes": 27648
+        },
+        {
+          "name": "GSM10075342_678_features.tsv.gz",
+          "bytes": 709632
+        },
+        {
+          "name": "GSM10075342_678_matrix.mtx.gz",
+          "bytes": 28311552
+        }
+      ],
+      "why": "Mouse lung snRNA-seq, not Jurkat; no CRISPR perturbation."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075343",
+      "sample_title": "snRNAseq_lung_680_HuHu_infected; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: SARS-CoV-2 infected; batch: HuHu (HSC + fetal thymus)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung (humanized immune cells)",
+      "topic_match": 0,
+      "bytes": 12258304,
+      "cells_estimate": 3772,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM10075343_680_barcodes.tsv.gz",
+          "bytes": 14336
+        },
+        {
+          "name": "GSM10075343_680_features.tsv.gz",
+          "bytes": 709632
+        },
+        {
+          "name": "GSM10075343_680_matrix.mtx.gz",
+          "bytes": 11534336
+        }
+      ],
+      "why": "Mouse lung snRNA-seq, not Jurkat; no CRISPR perturbation."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075344",
+      "sample_title": "snRNAseq_lung_3601_HuHu_uninfected; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: PBS (mock); batch: HuHu (HSC + fetal thymus)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung (humanized immune cells)",
+      "topic_match": 0,
+      "bytes": 29045760,
+      "cells_estimate": 6467,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM10075344_3601_barcodes.tsv.gz",
+          "bytes": 24576
+        },
+        {
+          "name": "GSM10075344_3601_features.tsv.gz",
+          "bytes": 709632
+        },
+        {
+          "name": "GSM10075344_3601_matrix.mtx.gz",
+          "bytes": 28311552
+        }
+      ],
+      "why": "Mouse lung snRNA-seq, not Jurkat; no CRISPR perturbation."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075345",
+      "sample_title": "snRNAseq_lung_3603_HuHu_uninfected; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: PBS (mock); batch: HuHu (HSC + fetal thymus)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung (humanized immune cells)",
+      "topic_match": 0,
+      "bytes": 30097408,
+      "cells_estimate": 7275,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM10075345_3603_barcodes.tsv.gz",
+          "bytes": 27648
+        },
+        {
+          "name": "GSM10075345_3603_features.tsv.gz",
+          "bytes": 709632
+        },
+        {
+          "name": "GSM10075345_3603_matrix.mtx.gz",
+          "bytes": 29360128
+        }
+      ],
+      "why": "Mouse lung snRNA-seq, not Jurkat; no CRISPR perturbation."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075346",
+      "sample_title": "snRNAseq_lung_569_Hu_infected; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: SARS-CoV-2 infected; batch: Hu (HSC only)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung (humanized immune cells)",
+      "topic_match": 0,
+      "bytes": 10685440,
+      "cells_estimate": 3772,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM10075346_569_barcodes.tsv.gz",
+          "bytes": 14336
+        },
+        {
+          "name": "GSM10075346_569_features.tsv.gz",
+          "bytes": 709632
+        },
+        {
+          "name": "GSM10075346_569_matrix.mtx.gz",
+          "bytes": 9961472
+        }
+      ],
+      "why": "Mouse lung snRNA-seq, not Jurkat; no CRISPR perturbation."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075347",
+      "sample_title": "snRNAseq_lung_633_Hu_uninfected; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: PBS (mock); batch: Hu (HSC only)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung (humanized immune cells)",
+      "topic_match": 0,
+      "bytes": 14355456,
+      "cells_estimate": 3772,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM10075347_633_barcodes.tsv.gz",
+          "bytes": 14336
+        },
+        {
+          "name": "GSM10075347_633_features.tsv.gz",
+          "bytes": 709632
+        },
+        {
+          "name": "GSM10075347_633_matrix.mtx.gz",
+          "bytes": 13631488
+        }
+      ],
+      "why": "Mouse lung snRNA-seq, not Jurkat; no CRISPR perturbation."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075348",
+      "sample_title": "snRNAseq_lung_641_Hu_infected; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: SARS-CoV-2 infected; batch: Hu (HSC only)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung (humanized immune cells)",
+      "topic_match": 0,
+      "bytes": 21701632,
+      "cells_estimate": 5389,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM10075348_641_barcodes.tsv.gz",
+          "bytes": 20480
+        },
+        {
+          "name": "GSM10075348_641_features.tsv.gz",
+          "bytes": 709632
+        },
+        {
+          "name": "GSM10075348_641_matrix.mtx.gz",
+          "bytes": 20971520
+        }
+      ],
+      "why": "Mouse lung snRNA-seq, not Jurkat; no CRISPR perturbation."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075349",
+      "sample_title": "snRNAseq_lung_661_Hu_infected; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: SARS-CoV-2 infected; batch: Hu (HSC only)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung (humanized immune cells)",
+      "topic_match": 0,
+      "bytes": 16450560,
+      "cells_estimate": 3233,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM10075349_661_barcodes.tsv.gz",
+          "bytes": 12288
+        },
+        {
+          "name": "GSM10075349_661_features.tsv.gz",
+          "bytes": 709632
+        },
+        {
+          "name": "GSM10075349_661_matrix.mtx.gz",
+          "bytes": 15728640
+        }
+      ],
+      "why": "Mouse lung snRNA-seq, not Jurkat; no CRISPR perturbation."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075350",
+      "sample_title": "snRNAseq_lung_700_Hu_uninfected; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: PBS (mock); batch: Hu (HSC only)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung (humanized immune cells)",
+      "topic_match": 0,
+      "bytes": 24848384,
+      "cells_estimate": 5658,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM10075350_700_barcodes.tsv.gz",
+          "bytes": 21504
+        },
+        {
+          "name": "GSM10075350_700_features.tsv.gz",
+          "bytes": 709632
+        },
+        {
+          "name": "GSM10075350_700_matrix.mtx.gz",
+          "bytes": 24117248
+        }
+      ],
+      "why": "Mouse lung snRNA-seq, not Jurkat; no CRISPR perturbation."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075351",
+      "sample_title": "snRNAseq_lung_593_NonHu_uninfected; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: PBS (mock); batch: NonHu (NSG, non-humanized)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung",
+      "topic_match": 0,
+      "bytes": 31325184,
+      "cells_estimate": 54433,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM10075351_593_barcodes.tsv.gz",
+          "bytes": 206848
+        },
+        {
+          "name": "GSM10075351_593_features.tsv.gz",
+          "bytes": 709632
+        },
+        {
+          "name": "GSM10075351_593_matrix.mtx.gz",
+          "bytes": 30408704
+        }
+      ],
+      "why": "Non-humanized mouse lung snRNA-seq, not Jurkat."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075352",
+      "sample_title": "snRNAseq_lung_595_NonHu_uninfected; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: PBS (mock); batch: NonHu (NSG, non-humanized)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung",
+      "topic_match": 0,
+      "bytes": 22881280,
+      "cells_estimate": 39882,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM10075352_595_barcodes.tsv.gz",
+          "bytes": 151552
+        },
+        {
+          "name": "GSM10075352_595_features.tsv.gz",
+          "bytes": 709632
+        },
+        {
+          "name": "GSM10075352_595_matrix.mtx.gz",
+          "bytes": 22020096
+        }
+      ],
+      "why": "Non-humanized mouse lung snRNA-seq, not Jurkat."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075353",
+      "sample_title": "snRNAseq_lung_640_NonHu_infected; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: SARS-CoV-2 infected; batch: NonHu (NSG, non-humanized)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung",
+      "topic_match": 0,
+      "bytes": 40774656,
+      "cells_estimate": 57667,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM10075353_640_barcodes.tsv.gz",
+          "bytes": 219136
+        },
+        {
+          "name": "GSM10075353_640_features.tsv.gz",
+          "bytes": 709632
+        },
+        {
+          "name": "GSM10075353_640_matrix.mtx.gz",
+          "bytes": 39845888
+        }
+      ],
+      "why": "Non-humanized mouse lung snRNA-seq, not Jurkat."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075354",
+      "sample_title": "snRNAseq_lung_664_NonHu_infected; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: SARS-CoV-2 infected; batch: NonHu (NSG, non-humanized)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung",
+      "topic_match": 0,
+      "bytes": 21853184,
+      "cells_estimate": 45271,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM10075354_664_barcodes.tsv.gz",
+          "bytes": 172032
+        },
+        {
+          "name": "GSM10075354_664_features.tsv.gz",
+          "bytes": 709632
+        },
+        {
+          "name": "GSM10075354_664_matrix.mtx.gz",
+          "bytes": 20971520
+        }
+      ],
+      "why": "Non-humanized mouse lung snRNA-seq, not Jurkat."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075355",
+      "sample_title": "snRNAseq_lung_697_NonHu_infected; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: SARS-CoV-2 infected; batch: NonHu (NSG, non-humanized)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung",
+      "topic_match": 0,
+      "bytes": 33422336,
+      "cells_estimate": 54433,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM10075355_697_barcodes.tsv.gz",
+          "bytes": 206848
+        },
+        {
+          "name": "GSM10075355_697_features.tsv.gz",
+          "bytes": 709632
+        },
+        {
+          "name": "GSM10075355_697_matrix.mtx.gz",
+          "bytes": 32505856
+        }
+      ],
+      "why": "Non-humanized mouse lung snRNA-seq, not Jurkat."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075356",
+      "sample_title": "TCRseq_lung_TCR587_HuHu; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: PBS (mock); batch: HuHu (HSC + fetal thymus)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung T cells",
+      "topic_match": 0,
+      "bytes": 4915,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM10075356_TCR587_trust4_airr.tsv.gz",
+          "bytes": 4915
+        }
+      ],
+      "why": "TCR-seq only, no expression, not Jurkat."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075357",
+      "sample_title": "TCRseq_lung_TCR668_HuHu; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: SARS-CoV-2 infected; batch: HuHu (HSC + fetal thymus)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung T cells",
+      "topic_match": 0,
+      "bytes": 10137,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM10075357_TCR668_filtered_contig_annotations.csv.gz",
+      "files": [
+        {
+          "name": "GSM10075357_TCR668_airr_rearrangement.tsv.gz",
+          "bytes": 6246
+        },
+        {
+          "name": "GSM10075357_TCR668_clonotypes.csv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM10075357_TCR668_filtered_contig_annotations.csv.gz",
+          "bytes": 3891
+        }
+      ],
+      "why": "TCR-seq only, no expression, not Jurkat."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075358",
+      "sample_title": "TCRseq_lung_TCR678_HuHu; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: SARS-CoV-2 infected; batch: HuHu (HSC + fetal thymus)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung T cells",
+      "topic_match": 0,
+      "bytes": 7781,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM10075358_TCR678_filtered_contig_annotations.csv.gz",
+      "files": [
+        {
+          "name": "GSM10075358_TCR678_airr_rearrangement.tsv.gz",
+          "bytes": 4812
+        },
+        {
+          "name": "GSM10075358_TCR678_clonotypes.csv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM10075358_TCR678_filtered_contig_annotations.csv.gz",
+          "bytes": 2969
+        }
+      ],
+      "why": "TCR-seq only, no expression, not Jurkat."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075359",
+      "sample_title": "TCRseq_lung_TCR680_HuHu; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: SARS-CoV-2 infected; batch: HuHu (HSC + fetal thymus)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung T cells",
+      "topic_match": 0,
+      "bytes": 3481,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM10075359_TCR680_trust4_airr.tsv.gz",
+          "bytes": 3481
+        }
+      ],
+      "why": "TCR-seq only, no expression, not Jurkat."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075360",
+      "sample_title": "TCRseq_lung_TCR3601_HuHu; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: PBS (mock); batch: HuHu (HSC + fetal thymus)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung T cells",
+      "topic_match": 0,
+      "bytes": 2764,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM10075360_TCR3601_filtered_contig_annotations.csv.gz",
+      "files": [
+        {
+          "name": "GSM10075360_TCR3601_airr_rearrangement.tsv.gz",
+          "bytes": 1740
+        },
+        {
+          "name": "GSM10075360_TCR3601_clonotypes.csv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM10075360_TCR3601_filtered_contig_annotations.csv.gz",
+          "bytes": 1024
+        }
+      ],
+      "why": "TCR-seq only, no expression, not Jurkat."
+    },
+    {
+      "series": "geo://GSE348568",
+      "series_title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "sample": "GSM10075361",
+      "sample_title": "TCRseq_lung_TCR3603_HuHu; Lung; tissue: Lung; genotype: hACE2 knock-in / mAce2 knock-out NSG; treatment: PBS (mock); batch: HuHu (HSC + fetal thymus)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse lung T cells",
+      "topic_match": 0,
+      "bytes": 19660,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM10075361_TCR3603_filtered_contig_annotations.csv.gz",
+      "files": [
+        {
+          "name": "GSM10075361_TCR3603_airr_rearrangement.tsv.gz",
+          "bytes": 12288
+        },
+        {
+          "name": "GSM10075361_TCR3603_clonotypes.csv.gz",
+          "bytes": 1024
+        },
+        {
+          "name": "GSM10075361_TCR3603_filtered_contig_annotations.csv.gz",
+          "bytes": 6348
+        }
+      ],
+      "why": "TCR-seq only, no expression, not Jurkat."
+    },
+    {
+      "series": "geo://GSE92872",
+      "series_title": "Pooled CRISPR screening with single-cell transcriptome read-out",
+      "sample": "GSE92872",
+      "sample_title": "Pooled CRISPR screening with single-cell transcriptome read-out (series-level files; samples: GSM2439091, ... 13 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "Jurkat",
+      "topic_match": 1,
+      "bytes": 19398656,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE92872_CROP-seq_Jurkat_TCR.count_matrix.csv.gz",
+          "bytes": 1572864
+        },
+        {
+          "name": "GSE92872_CROP-seq_Jurkat_TCR.digital_expression.csv.gz",
+          "bytes": 17825792
+        }
+      ],
+      "why": "Bulk RNA-seq control, not single-cell expression",
+      "samples": [
+        "GSM2439091",
+        "GSM2439092",
+        "GSM2439093",
+        "GSM2439094",
+        "GSM2439095",
+        "GSM2439096",
+        "GSM2439097",
+        "GSM2439098",
+        "GSM2439099",
+        "GSM2439100",
+        "GSM2439101",
+        "GSM2439102",
+        "GSM2439103"
+      ]
+    },
+    {
+      "series": "geo://GSE235152",
+      "series_title": "The transpeptidase sortase A, binds nucleic acids, which can be used and to mediates their cell labeling",
+      "sample": "GSE235152",
+      "sample_title": "The transpeptidase sortase A, binds nucleic acids, which can be used and to mediates their cell labeling (series-level files; samples: GSM7495986, ... 14 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "K562",
+      "topic_match": 0,
+      "bytes": 23068671,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE235152_FB4.xlsx",
+          "bytes": 5138022
+        },
+        {
+          "name": "GSE235152_Screening.xlsx",
+          "bytes": 6396313
+        },
+        {
+          "name": "GSE235152_SMARTSeq.xlsx",
+          "bytes": 11534336
+        }
+      ],
+      "why": "K562 bulk labeling study, wrong cell type, no TCR signaling or CRISPRko",
+      "samples": [
+        "GSM7495986",
+        "GSM7495987",
+        "GSM7495988",
+        "GSM7495989",
+        "GSM7495990",
+        "GSM7495991",
+        "GSM7495992",
+        "GSM7495993",
+        "GSM7495994",
+        "GSM7495995",
+        "GSM7495996",
+        "GSM7495997",
+        "GSM7495998",
+        "GSM7495999"
+      ]
+    },
+    {
+      "series": "hf://datasocial/tiktok-5.6B-videos",
+      "series_title": "datasocial/tiktok-5.6B-videos",
+      "sample": "hf://datasocial/tiktok-5.6B-videos",
+      "sample_title": "datasocial/tiktok-5.6B-videos",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": null,
+      "cell_type": null,
+      "topic_match": null,
+      "bytes": 460480293922,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 2504
+        },
+        {
+          "name": "README.md",
+          "bytes": 2430
+        },
+        {
+          "name": "data/2014-07.parquet",
+          "bytes": 11757
+        },
+        {
+          "name": "data/2014-08.parquet",
+          "bytes": 17971
+        },
+        {
+          "name": "data/2014-09.parquet",
+          "bytes": 17636
+        },
+        {
+          "name": "data/2014-10.parquet",
+          "bytes": 19510
+        },
+        {
+          "name": "data/2014-11.parquet",
+          "bytes": 22392
+        },
+        {
+          "name": "data/2014-12.parquet",
+          "bytes": 23521
+        },
+        {
+          "name": "data/2015-01.parquet",
+          "bytes": 23791
+        },
+        {
+          "name": "data/2015-02.parquet",
+          "bytes": 22844
+        },
+        {
+          "name": "data/2015-03.parquet",
+          "bytes": 29960
+        },
+        {
+          "name": "data/2015-04.parquet",
+          "bytes": 46109
+        },
+        {
+          "name": "data/2015-05.parquet",
+          "bytes": 98503
+        },
+        {
+          "name": "data/2015-06.parquet",
+          "bytes": 454547
+        },
+        {
+          "name": "data/2015-07.parquet",
+          "bytes": 1435498
+        },
+        {
+          "name": "data/2015-08.parquet",
+          "bytes": 2181097
+        },
+        {
+          "name": "data/2015-09.parquet",
+          "bytes": 2284975
+        },
+        {
+          "name": "data/2015-10.parquet",
+          "bytes": 2621016
+        },
+        {
+          "name": "data/2015-11.parquet",
+          "bytes": 3206543
+        },
+        {
+          "name": "data/2015-12.parquet",
+          "bytes": 4880328
+        },
+        {
+          "name": "data/2016-01.parquet",
+          "bytes": 6334712
+        },
+        {
+          "name": "data/2016-02.parquet",
+          "bytes": 5757220
+        },
+        {
+          "name": "data/2016-03.parquet",
+          "bytes": 7495752
+        },
+        {
+          "name": "data/2016-04.parquet",
+          "bytes": 11713986
+        },
+        {
+          "name": "data/2016-05.parquet",
+          "bytes": 18207410
+        },
+        {
+          "name": "data/2016-06.parquet",
+          "bytes": 22219900
+        },
+        {
+          "name": "data/2016-07.parquet",
+          "bytes": 24705317
+        },
+        {
+          "name": "data/2016-08.parquet",
+          "bytes": 20351576
+        },
+        {
+          "name": "data/2016-09.parquet",
+          "bytes": 16596283
+        },
+        {
+          "name": "data/2016-10.parquet",
+          "bytes": 16457372
+        },
+        {
+          "name": "data/2016-11.parquet",
+          "bytes": 15104355
+        },
+        {
+          "name": "data/2016-12.parquet",
+          "bytes": 16200902
+        },
+        {
+          "name": "data/2017-01.parquet",
+          "bytes": 14966377
+        },
+        {
+          "name": "data/2017-02.parquet",
+          "bytes": 13365742
+        },
+        {
+          "name": "data/2017-03.parquet",
+          "bytes": 14524936
+        },
+        {
+          "name": "data/2017-04.parquet",
+          "bytes": 15087247
+        },
+        {
+          "name": "data/2017-05.parquet",
+          "bytes": 17678281
+        },
+        {
+          "name": "data/2017-06.parquet",
+          "bytes": 20525739
+        },
+        {
+          "name": "data/2017-07.parquet",
+          "bytes": 21035658
+        },
+        {
+          "name": "data/2017-08.parquet",
+          "bytes": 22317844
+        }
+      ],
+      "why": "not judged"
+    },
+    {
+      "series": "hf://LocalLLaMA/typed-decisions",
+      "series_title": "LocalLLaMA/typed-decisions",
+      "sample": "hf://LocalLLaMA/typed-decisions",
+      "sample_title": "LocalLLaMA/typed-decisions",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": null,
+      "cell_type": null,
+      "topic_match": null,
+      "bytes": 2142323,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 2504
+        },
+        {
+          "name": "README.md",
+          "bytes": 18162
+        },
+        {
+          "name": "agent_trace_observability/test-00000-of-00001.parquet",
+          "bytes": 71362
+        },
+        {
+          "name": "agent_trace_observability/train-00000-of-00001.parquet",
+          "bytes": 157731
+        },
+        {
+          "name": "all/test-00000-of-00001.parquet",
+          "bytes": 222140
+        },
+        {
+          "name": "all/train-00000-of-00001.parquet",
+          "bytes": 598824
+        },
+        {
+          "name": "assets/leaderboard.png",
+          "bytes": 142737
+        },
+        {
+          "name": "customer_service/test-00000-of-00001.parquet",
+          "bytes": 115037
+        },
+        {
+          "name": "customer_service/train-00000-of-00001.parquet",
+          "bytes": 267280
+        },
+        {
+          "name": "eval.yaml",
+          "bytes": 532
+        },
+        {
+          "name": "invoice_processing/test-00000-of-00001.parquet",
+          "bytes": 79603
+        },
+        {
+          "name": "invoice_processing/train-00000-of-00001.parquet",
+          "bytes": 177403
+        },
+        {
+          "name": "security_incidents/test-00000-of-00001.parquet",
+          "bytes": 87929
+        },
+        {
+          "name": "security_incidents/train-00000-of-00001.parquet",
+          "bytes": 201079
+        }
+      ],
+      "why": "not judged"
+    },
+    {
+      "series": "hf://harvardMadsys/freeinference_agentic_trace",
+      "series_title": "harvardMadsys/freeinference_agentic_trace",
+      "sample": "hf://harvardMadsys/freeinference_agentic_trace",
+      "sample_title": "harvardMadsys/freeinference_agentic_trace",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": null,
+      "cell_type": null,
+      "topic_match": null,
+      "bytes": 8933343127,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 2504
+        },
+        {
+          "name": "README.md",
+          "bytes": 12569
+        },
+        {
+          "name": "release/2026-05-17_2026-05-23/manifest.json",
+          "bytes": 1394
+        },
+        {
+          "name": "release/2026-05-17_2026-05-23/processed/requests.parquet",
+          "bytes": 21989656
+        },
+        {
+          "name": "release/2026-05-17_2026-05-23/processed/sessions.parquet",
+          "bytes": 5014
+        },
+        {
+          "name": "release/2026-05-17_2026-05-23/processed/tables.json",
+          "bytes": 589
+        },
+        {
+          "name": "release/2026-05-17_2026-05-23/processed/tool_calls.parquet",
+          "bytes": 167525
+        },
+        {
+          "name": "release/2026-05-17_2026-05-23/traces/2026-05-17.jsonl.zst",
+          "bytes": 484429
+        },
+        {
+          "name": "release/2026-05-17_2026-05-23/traces/2026-05-18.jsonl.zst",
+          "bytes": 334746
+        },
+        {
+          "name": "release/2026-05-17_2026-05-23/traces/2026-05-19.jsonl.zst",
+          "bytes": 2493421
+        },
+        {
+          "name": "release/2026-05-17_2026-05-23/traces/2026-05-20.jsonl.zst",
+          "bytes": 103976
+        },
+        {
+          "name": "release/2026-05-17_2026-05-23/traces/2026-05-21.jsonl.zst",
+          "bytes": 160758
+        },
+        {
+          "name": "release/2026-05-17_2026-05-23/traces/2026-05-22.jsonl.zst",
+          "bytes": 273898
+        },
+        {
+          "name": "release/2026-05-17_2026-05-23/traces/2026-05-23.jsonl.zst",
+          "bytes": 168235
+        },
+        {
+          "name": "release/2026-05-24_2026-05-30/manifest.json",
+          "bytes": 1396
+        },
+        {
+          "name": "release/2026-05-24_2026-05-30/processed/requests.parquet",
+          "bytes": 24427181
+        },
+        {
+          "name": "release/2026-05-24_2026-05-30/processed/sessions.parquet",
+          "bytes": 6029
+        },
+        {
+          "name": "release/2026-05-24_2026-05-30/processed/tables.json",
+          "bytes": 589
+        },
+        {
+          "name": "release/2026-05-24_2026-05-30/processed/tool_calls.parquet",
+          "bytes": 179107
+        },
+        {
+          "name": "release/2026-05-24_2026-05-30/traces/2026-05-24.jsonl.zst",
+          "bytes": 1120831
+        },
+        {
+          "name": "release/2026-05-24_2026-05-30/traces/2026-05-25.jsonl.zst",
+          "bytes": 661566
+        },
+        {
+          "name": "release/2026-05-24_2026-05-30/traces/2026-05-26.jsonl.zst",
+          "bytes": 416309
+        },
+        {
+          "name": "release/2026-05-24_2026-05-30/traces/2026-05-27.jsonl.zst",
+          "bytes": 634528
+        },
+        {
+          "name": "release/2026-05-24_2026-05-30/traces/2026-05-28.jsonl.zst",
+          "bytes": 290896
+        },
+        {
+          "name": "release/2026-05-24_2026-05-30/traces/2026-05-29.jsonl.zst",
+          "bytes": 243699
+        },
+        {
+          "name": "release/2026-05-24_2026-05-30/traces/2026-05-30.jsonl.zst",
+          "bytes": 177310
+        },
+        {
+          "name": "release/2026-05-31_2026-06-06/manifest.json",
+          "bytes": 1391
+        },
+        {
+          "name": "release/2026-05-31_2026-06-06/processed/requests.parquet",
+          "bytes": 16381638
+        },
+        {
+          "name": "release/2026-05-31_2026-06-06/processed/sessions.parquet",
+          "bytes": 4013
+        },
+        {
+          "name": "release/2026-05-31_2026-06-06/processed/tables.json",
+          "bytes": 586
+        },
+        {
+          "name": "release/2026-05-31_2026-06-06/processed/tool_calls.parquet",
+          "bytes": 100951
+        },
+        {
+          "name": "release/2026-05-31_2026-06-06/traces/2026-05-31.jsonl.zst",
+          "bytes": 289794
+        },
+        {
+          "name": "release/2026-05-31_2026-06-06/traces/2026-06-01.jsonl.zst",
+          "bytes": 295304
+        },
+        {
+          "name": "release/2026-05-31_2026-06-06/traces/2026-06-02.jsonl.zst",
+          "bytes": 143361
+        },
+        {
+          "name": "release/2026-05-31_2026-06-06/traces/2026-06-03.jsonl.zst",
+          "bytes": 404013
+        },
+        {
+          "name": "release/2026-05-31_2026-06-06/traces/2026-06-04.jsonl.zst",
+          "bytes": 76734
+        },
+        {
+          "name": "release/2026-05-31_2026-06-06/traces/2026-06-05.jsonl.zst",
+          "bytes": 257521
+        },
+        {
+          "name": "release/2026-05-31_2026-06-06/traces/2026-06-06.jsonl.zst",
+          "bytes": 103727
+        },
+        {
+          "name": "release/2026-06-07_2026-06-13/manifest.json",
+          "bytes": 1392
+        },
+        {
+          "name": "release/2026-06-07_2026-06-13/processed/requests.parquet",
+          "bytes": 7885194
+        }
+      ],
+      "why": "not judged"
+    },
+    {
+      "series": "geo://GSE148820",
+      "series_title": "10x 3\u2019 scRNA-seq analysis on Jurkat cells post TCR acivation in CRISPR/Cas9 screening",
+      "sample": "GSM4483271",
+      "sample_title": "Index_gRNA_libraryI; Jurkat cells; cell type: Jurkat-Cas9 cell",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "Jurkat",
+      "topic_match": 0.9,
+      "bytes": 2831155,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "label file GSM4483271_Index_gRNA_LibraryI.cellbarcode.rank.txt.gz",
+      "files": [
+        {
+          "name": "GSM4483271_Index_gRNA_LibraryI.cellbarcode.rank.txt.gz",
+          "bytes": 2831155
+        }
+      ],
+      "why": "gRNA index library I; guide calls for GSM4483270 screen."
+    },
+    {
+      "series": "geo://GSE148820",
+      "series_title": "10x 3\u2019 scRNA-seq analysis on Jurkat cells post TCR acivation in CRISPR/Cas9 screening",
+      "sample": "GSM4483272",
+      "sample_title": "Index_gRNA_libraryII; Jurkat cells; cell type: Jurkat-Cas9 cell",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "Jurkat",
+      "topic_match": 0.9,
+      "bytes": 2726297,
+      "cells_estimate": null,
+      "raw_barcodes": true,
+      "series_level": false,
+      "labels": "label file GSM4483272_Index_gRNA_LibraryII.cellbarcode.rank.txt.gz",
+      "files": [
+        {
+          "name": "GSM4483272_Index_gRNA_LibraryII.cellbarcode.rank.txt.gz",
+          "bytes": 2726297
+        }
+      ],
+      "why": "gRNA index library II; guide calls for GSM4483270 screen."
+    },
+    {
+      "series": "geo://GSE313958",
+      "series_title": "Joint single-cell profiling of Cas9 edits and transcriptomes reveals on- and off-target effects on gene expression (RNA-seq)",
+      "sample": "GSM8679741",
+      "sample_title": "RNA-seq, Jurkat, CTLA4 RNP, Mock; Jurkat E6-1; cell line: Jurkat E6-1; treatment: CTLA4 RNP, Mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "Jurkat",
+      "topic_match": 0.2,
+      "bytes": 244736,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8679741_counts_jurkat_RNP_mock.txt.gz",
+          "bytes": 244736
+        }
+      ],
+      "why": "Bulk RNA-seq, not single-cell expression."
+    },
+    {
+      "series": "geo://GSE313958",
+      "series_title": "Joint single-cell profiling of Cas9 edits and transcriptomes reveals on- and off-target effects on gene expression (RNA-seq)",
+      "sample": "GSM8679742",
+      "sample_title": "RNA-seq, Jurkat, CTLA4 RNP, IST; Jurkat E6-1; cell line: Jurkat E6-1; treatment: CTLA4 RNP, IST",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "Jurkat",
+      "topic_match": 0.2,
+      "bytes": 246784,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8679742_counts_jurkat_RNP_IST.txt.gz",
+          "bytes": 246784
+        }
+      ],
+      "why": "Bulk RNA-seq, not single-cell expression."
+    },
+    {
+      "series": "geo://GSE313958",
+      "series_title": "Joint single-cell profiling of Cas9 edits and transcriptomes reveals on- and off-target effects on gene expression (RNA-seq)",
+      "sample": "GSM8679743",
+      "sample_title": "RNA-seq, Jurkat, Donor + CTLA4 RNP, IST; Jurkat E6-1; cell line: Jurkat E6-1; treatment: Donor + CTLA4 RNP, IST",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "Jurkat",
+      "topic_match": 0.2,
+      "bytes": 245760,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8679743_counts_jurkat_t7Prom_IST.txt.gz",
+          "bytes": 245760
+        }
+      ],
+      "why": "Bulk RNA-seq, not single-cell expression."
+    },
+    {
+      "series": "geo://GSE313958",
+      "series_title": "Joint single-cell profiling of Cas9 edits and transcriptomes reveals on- and off-target effects on gene expression (RNA-seq)",
+      "sample": "GSM8679744",
+      "sample_title": "RNA-seq, K562, Donor + B2M RNP, Mock; K562; cell line: K562; treatment: Donor + B2M RNP, Mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "K562",
+      "topic_match": 0,
+      "bytes": 245760,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8679744_counts_k562_t7Prom_mock.txt.gz",
+          "bytes": 245760
+        }
+      ],
+      "why": "Bulk RNA-seq and wrong cell type."
+    },
+    {
+      "series": "geo://GSE313958",
+      "series_title": "Joint single-cell profiling of Cas9 edits and transcriptomes reveals on- and off-target effects on gene expression (RNA-seq)",
+      "sample": "GSM8679745",
+      "sample_title": "RNA-seq, K562, B2M RNP, IST; K562; cell line: K562; treatment: B2M RNP, IST",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "K562",
+      "topic_match": 0,
+      "bytes": 243712,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8679745_counts_k562_RNP_IST.txt.gz",
+          "bytes": 243712
+        }
+      ],
+      "why": "Bulk RNA-seq and wrong cell type."
+    },
+    {
+      "series": "geo://GSE313958",
+      "series_title": "Joint single-cell profiling of Cas9 edits and transcriptomes reveals on- and off-target effects on gene expression (RNA-seq)",
+      "sample": "GSM8679746",
+      "sample_title": "RNA-seq, K562, Donor + B2M RNP, IST; K562; cell line: K562; treatment: Donor + B2M RNP, IST",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "K562",
+      "topic_match": 0,
+      "bytes": 245760,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8679746_counts_k562_t7Prom_IST.txt.gz",
+          "bytes": 245760
+        }
+      ],
+      "why": "Bulk RNA-seq and wrong cell type."
+    },
+    {
+      "series": "geo://GSE241207",
+      "series_title": "Single-molecule RNA-FISH analysis reveals stochasticity in reactivation of latent HIV-1 regulated by Nuclear Orphan Receptors NR4A and cMYC",
+      "sample": "GSM7719389",
+      "sample_title": "ACH_2; ACH-2; cell line: ACH-2; cell type: HIV-1 latent T cell clone with one integrated proviral copy.; genotype: WT; treatment: No treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "ACH-2 latent T cell clone",
+      "topic_match": 0.1,
+      "bytes": 55920640,
+      "cells_estimate": 7275,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM7719389_ACH2_barcodes.tsv.gz",
+          "bytes": 27648
+        },
+        {
+          "name": "GSM7719389_ACH2_features.tsv.gz",
+          "bytes": 318464
+        },
+        {
+          "name": "GSM7719389_ACH2_matrix.mtx.gz",
+          "bytes": 55574528
+        }
+      ],
+      "why": "Not Jurkat; no CRISPR perturbation; off-topic HIV latency study."
+    },
+    {
+      "series": "geo://GSE220606",
+      "series_title": "Effective methods for bulk RNA-seq deconvolution using scnRNA-seq transcriptomes [cell mixtures scRNA-seq]",
+      "sample": "GSM6807287",
+      "sample_title": "Mixture1; mixture of Cell lines; tissue: mixture of Cell lines; cell line: Mix1",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mixture of cell lines",
+      "topic_match": 0,
+      "bytes": 105228288,
+      "cells_estimate": 9701,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM6807287_M1_barcodes.tsv.gz",
+          "bytes": 36864
+        },
+        {
+          "name": "GSM6807287_M1_features.tsv.gz",
+          "bytes": 333824
+        },
+        {
+          "name": "GSM6807287_M1_matrix.mtx.gz",
+          "bytes": 104857600
+        }
+      ],
+      "why": "Cell line mixture for deconvolution, not Jurkat, no perturbation."
+    },
+    {
+      "series": "geo://GSE220606",
+      "series_title": "Effective methods for bulk RNA-seq deconvolution using scnRNA-seq transcriptomes [cell mixtures scRNA-seq]",
+      "sample": "GSM6807288",
+      "sample_title": "Mixture2; mixture of Cell lines; tissue: mixture of Cell lines; cell line: Mix2",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mixture of cell lines",
+      "topic_match": 0,
+      "bytes": 129353728,
+      "cells_estimate": 11856,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM6807288_M2_barcodes.tsv.gz",
+          "bytes": 45056
+        },
+        {
+          "name": "GSM6807288_M2_features.tsv.gz",
+          "bytes": 333824
+        },
+        {
+          "name": "GSM6807288_M2_matrix.mtx.gz",
+          "bytes": 128974848
+        }
+      ],
+      "why": "Cell line mixture for deconvolution, not Jurkat, no perturbation."
+    },
+    {
+      "series": "geo://GSE220606",
+      "series_title": "Effective methods for bulk RNA-seq deconvolution using scnRNA-seq transcriptomes [cell mixtures scRNA-seq]",
+      "sample": "GSM6807289",
+      "sample_title": "Mixture3; mixture of Cell lines; tissue: mixture of Cell lines; cell line: Mix3",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mixture of cell lines",
+      "topic_match": 0,
+      "bytes": 120970240,
+      "cells_estimate": 13204,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM6807289_M3_barcodes.tsv.gz",
+          "bytes": 50176
+        },
+        {
+          "name": "GSM6807289_M3_features.tsv.gz",
+          "bytes": 333824
+        },
+        {
+          "name": "GSM6807289_M3_matrix.mtx.gz",
+          "bytes": 120586240
+        }
+      ],
+      "why": "Cell line mixture for deconvolution, not Jurkat, no perturbation."
+    },
+    {
+      "series": "geo://GSE220606",
+      "series_title": "Effective methods for bulk RNA-seq deconvolution using scnRNA-seq transcriptomes [cell mixtures scRNA-seq]",
+      "sample": "GSM6807290",
+      "sample_title": "Mixture4; mixture of Cell lines; tissue: mixture of Cell lines; cell line: Mix4",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mixture of cell lines",
+      "topic_match": 0,
+      "bytes": 122016768,
+      "cells_estimate": 12665,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM6807290_M4_barcodes.tsv.gz",
+          "bytes": 48128
+        },
+        {
+          "name": "GSM6807290_M4_features.tsv.gz",
+          "bytes": 333824
+        },
+        {
+          "name": "GSM6807290_M4_matrix.mtx.gz",
+          "bytes": 121634816
+        }
+      ],
+      "why": "Cell line mixture for deconvolution, not Jurkat, no perturbation."
+    },
+    {
+      "series": "geo://GSE220606",
+      "series_title": "Effective methods for bulk RNA-seq deconvolution using scnRNA-seq transcriptomes [cell mixtures scRNA-seq]",
+      "sample": "GSM6807291",
+      "sample_title": "Mixture5; mixture of Cell lines; tissue: mixture of Cell lines; cell line: Mix5",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mixture of cell lines",
+      "topic_match": 0,
+      "bytes": 94741504,
+      "cells_estimate": 9431,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM6807291_M5_barcodes.tsv.gz",
+          "bytes": 35840
+        },
+        {
+          "name": "GSM6807291_M5_features.tsv.gz",
+          "bytes": 333824
+        },
+        {
+          "name": "GSM6807291_M5_matrix.mtx.gz",
+          "bytes": 94371840
+        }
+      ],
+      "why": "Cell line mixture for deconvolution, not Jurkat, no perturbation."
+    },
+    {
+      "series": "geo://GSE220606",
+      "series_title": "Effective methods for bulk RNA-seq deconvolution using scnRNA-seq transcriptomes [cell mixtures scRNA-seq]",
+      "sample": "GSM6807292",
+      "sample_title": "Mixture6; mixture of Cell lines; tissue: mixture of Cell lines; cell line: Mix6",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mixture of cell lines",
+      "topic_match": 0,
+      "bytes": 101031936,
+      "cells_estimate": 9162,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM6807292_M6_barcodes.tsv.gz",
+          "bytes": 34816
+        },
+        {
+          "name": "GSM6807292_M6_features.tsv.gz",
+          "bytes": 333824
+        },
+        {
+          "name": "GSM6807292_M6_matrix.mtx.gz",
+          "bytes": 100663296
+        }
+      ],
+      "why": "Cell line mixture for deconvolution, not Jurkat, no perturbation."
+    }
+  ],
+  "candidates": [
+    {
+      "reference": "geo://GSE249595",
+      "title": "Genome-scale CRISPRi Perturb-seq on both unstimulated and stimulated Jurkat cells reveals regulators of human T-cell signaling",
+      "queries": [
+        "T cell receptor signaling Perturb-seq",
+        "Jurkat Perturb-seq"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE348568",
+      "title": "Single-nucleus transcriptomic and T-cell-receptor profiling of SARS-CoV-2-infected humanized (hACE2 knock-in) mouse lung",
+      "queries": [
+        "T cell receptor signaling Perturb-seq"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "hf://VirtualCell2025/jurkat.h5",
+      "title": "VirtualCell2025/jurkat.h5",
+      "queries": [
+        "Jurkat Perturb-seq",
+        "Jurkat CROP-seq",
+        "Jurkat CRISPR screen single-cell",
+        "Jurkat single-cell RNA-seq",
+        "Jurkat scRNA-seq"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE92872",
+      "title": "Pooled CRISPR screening with single-cell transcriptome read-out",
+      "queries": [
+        "T cell receptor signaling Jurkat",
+        "Jurkat CROP-seq",
+        "Jurkat CRISPR screen single-cell"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "geo://GSE235152",
+      "title": "The transpeptidase sortase A, binds nucleic acids, which can be used and to mediates their cell labeling",
+      "queries": [
+        "Jurkat CRISPR screen single-cell",
+        "Jurkat single-cell RNA-seq",
+        "Jurkat scRNA-seq"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "hf://datasocial/tiktok-5.6B-videos",
+      "title": "datasocial/tiktok-5.6B-videos",
+      "queries": [
+        "T cell receptor signaling Perturb-seq",
+        "T cell receptor signaling Jurkat"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "hf://LocalLLaMA/typed-decisions",
+      "title": "LocalLLaMA/typed-decisions",
+      "queries": [
+        "T cell receptor signaling Perturb-seq",
+        "T cell receptor signaling Jurkat"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "hf://harvardMadsys/freeinference_agentic_trace",
+      "title": "harvardMadsys/freeinference_agentic_trace",
+      "queries": [
+        "T cell receptor signaling Perturb-seq",
+        "T cell receptor signaling Jurkat"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "geo://GSE148820",
+      "title": "10x 3\u2019 scRNA-seq analysis on Jurkat cells post TCR acivation in CRISPR/Cas9 screening",
+      "queries": [
+        "Jurkat CRISPR screen single-cell",
+        "Jurkat scRNA-seq"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE313958",
+      "title": "Joint single-cell profiling of Cas9 edits and transcriptomes reveals on- and off-target effects on gene expression (RNA-seq)",
+      "queries": [
+        "Jurkat Perturb-seq",
+        "Jurkat scRNA-seq"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE263194",
+      "title": "Comparative analysis between single-cell RNA-seq and single-molecule RNA FISH indicates that the pyrimidine nucleobase idoxuridine (IdU) globally amplifies transcriptional noise",
+      "queries": [
+        "Jurkat single-cell RNA-seq",
+        "Jurkat scRNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE241207",
+      "title": "Single-molecule RNA-FISH analysis reveals stochasticity in reactivation of latent HIV-1 regulated by Nuclear Orphan Receptors NR4A and cMYC",
+      "queries": [
+        "Jurkat single-cell RNA-seq",
+        "Jurkat scRNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE220606",
+      "title": "Effective methods for bulk RNA-seq deconvolution using scnRNA-seq transcriptomes [cell mixtures scRNA-seq]",
+      "queries": [
+        "Jurkat single-cell RNA-seq",
+        "Jurkat scRNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    }
+  ],
+  "seconds": 118.4
+}

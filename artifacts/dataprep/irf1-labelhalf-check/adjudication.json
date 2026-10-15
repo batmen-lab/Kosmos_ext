@@ -1,0 +1,23 @@
+{
+  "pending": [
+    {
+      "path": "data/fetched/geo/GSE153056/GSE153056_RAW.tar-contents/GSM4633618_ECCITE_GDO_Barcodes.csv.gz",
+      "mechanical": {
+        "role": "unusable",
+        "reason": "no encodable feature column remains: all 2 selected column(s) look like free text or a row index, e.g. ['CGGTGAACAGCTCCTCGCCC', 'eGFPg1']; exclude them, or raise PPI_MAX_CATEGORICAL_CARDINALITY"
+      },
+      "model": {
+        "role": "gold",
+        "reason": "Two-column barcode-to-guide mapping table with no header and no transcriptome columns; it is a cell-metadata/perturbation-assignment table, not a per-cell screen with expression."
+      },
+      "raw_head": [
+        "CGGTGAACAGCTCCTCGCCC,eGFPg1",
+        "ATGTTAATGATTTTAGGTC,CUL3g1",
+        "TGATTTGTCAAGGCAGTGC,CUL3g2",
+        "TTGACTATATCCAGGTAAG,CUL3g3",
+        "CGTAGTGGGGCTGTACACC,CMTM6g1"
+      ],
+      "needs_human": true
+    }
+  ]
+}

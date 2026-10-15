@@ -1,0 +1,2047 @@
+{
+  "question": "In K562 cells, can the transcriptional response to CRISPRi knockdown of unfolded protein response (UPR) genes not seen in training be predicted from a small labeled screen, using large collections of K562 single-cell profiles from other CRISPR screens, with their labels ignored, as supplementary evidence?",
+  "spec": {
+    "question": "In K562 cells, can the transcriptional response to CRISPRi knockdown of unfolded protein response (UPR) genes not seen in training be predicted from a small labeled screen, using large collections of K562 single-cell profiles from other CRISPR screens, with their labels ignored, as supplementary evidence?",
+    "cell_type": "K562",
+    "cell_type_aliases": [
+      "chronic myelogenous leukemia cells",
+      "CML cells",
+      "K-562"
+    ],
+    "organism": "human",
+    "modality": "CRISPRi",
+    "topic": "unfolded protein response",
+    "topic_aliases": [
+      "ER stress response",
+      "UPR",
+      "endoplasmic reticulum stress"
+    ],
+    "assays": [
+      "Perturb-seq",
+      "CROP-seq"
+    ]
+  },
+  "gold": [
+    {
+      "series": "geo://GSE90546",
+      "series_title": "A multiplexed single-cell CRISPR screening platform enables systematic dissection of the unfolded protein response",
+      "sample": "GSM2406681",
+      "sample_title": "UPR Perturb-seq experiment cells; K562 cells; cell line: K562",
+      "role": "gold",
+      "proposed_role": "gold",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "K562",
+      "topic_match": 1.0,
+      "bytes": 740561920,
+      "cells_estimate": 65751,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM2406681_10X010_cell_identities.csv.gz",
+      "files": [
+        {
+          "name": "GSM2406681_10X010_barcodes.tsv.gz",
+          "bytes": 249856
+        },
+        {
+          "name": "GSM2406681_10X010_cell_identities.csv.gz",
+          "bytes": 808960
+        },
+        {
+          "name": "GSM2406681_10X010_genes.tsv.gz",
+          "bytes": 257024
+        },
+        {
+          "name": "GSM2406681_10X010_matrix.mtx.txt.gz",
+          "bytes": 739246080
+        }
+      ],
+      "why": "K562 UPR Perturb-seq single-cell expression; guide labels recoverable from companion files."
+    }
+  ],
+  "supplementary": [
+    {
+      "series": "geo://GSE90546",
+      "series_title": "A multiplexed single-cell CRISPR screening platform enables systematic dissection of the unfolded protein response",
+      "sample": "GSM2406677",
+      "sample_title": "Epistasis experiment cells; K562 cells; cell line: K562",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "K562",
+      "topic_match": 0.5,
+      "bytes": 199729152,
+      "cells_estimate": 15360,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM2406677_10X005_cell_identities.csv.gz",
+      "files": [
+        {
+          "name": "GSM2406677_10X005_barcodes.tsv.gz",
+          "bytes": 58368
+        },
+        {
+          "name": "GSM2406677_10X005_cell_identities.csv.gz",
+          "bytes": 184320
+        },
+        {
+          "name": "GSM2406677_10X005_genes.tsv.gz",
+          "bytes": 257024
+        },
+        {
+          "name": "GSM2406677_10X005_matrix.mtx.txt.gz",
+          "bytes": 199229440
+        }
+      ],
+      "why": "K562 single-cell epistasis Perturb-seq expression; labels in companion guide files."
+    },
+    {
+      "series": "geo://GSE90546",
+      "series_title": "A multiplexed single-cell CRISPR screening platform enables systematic dissection of the unfolded protein response",
+      "sample": "GSM2406675",
+      "sample_title": "Pilot TF experiment cells; K562 cells; cell line: K562",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "K562",
+      "topic_match": 0.6,
+      "bytes": 46516224,
+      "cells_estimate": 5928,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM2406675_10X001_cell_identities.csv.gz",
+      "files": [
+        {
+          "name": "GSM2406675_10X001_barcodes.tsv.gz",
+          "bytes": 22528
+        },
+        {
+          "name": "GSM2406675_10X001_cell_identities.csv.gz",
+          "bytes": 79872
+        },
+        {
+          "name": "GSM2406675_10X001_genes.tsv.gz",
+          "bytes": 276480
+        },
+        {
+          "name": "GSM2406675_10X001_matrix.mtx.txt.gz",
+          "bytes": 46137344
+        }
+      ],
+      "why": "K562 single-cell Perturb-seq expression matrix; pilot TF experiment, labels in companion guide file."
+    },
+    {
+      "series": "hf://Cuiting0906/K562_ABC_CRISPRi_filtered",
+      "series_title": "Cuiting0906/K562_ABC_CRISPRi_filtered",
+      "sample": "hf://Cuiting0906/K562_ABC_CRISPRi_filtered",
+      "sample_title": "Cuiting0906/K562_ABC_CRISPRi_filtered",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "K562",
+      "topic_match": 0.2,
+      "bytes": 283530465,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 2504
+        },
+        {
+          "name": "README.md",
+          "bytes": 1265
+        },
+        {
+          "name": "data/train-00000-of-00026.parquet",
+          "bytes": 9018337
+        },
+        {
+          "name": "data/train-00001-of-00026.parquet",
+          "bytes": 8513410
+        },
+        {
+          "name": "data/train-00002-of-00026.parquet",
+          "bytes": 10662012
+        },
+        {
+          "name": "data/train-00003-of-00026.parquet",
+          "bytes": 11144311
+        },
+        {
+          "name": "data/train-00004-of-00026.parquet",
+          "bytes": 9197332
+        },
+        {
+          "name": "data/train-00005-of-00026.parquet",
+          "bytes": 14569551
+        },
+        {
+          "name": "data/train-00006-of-00026.parquet",
+          "bytes": 10599278
+        },
+        {
+          "name": "data/train-00007-of-00026.parquet",
+          "bytes": 10354239
+        },
+        {
+          "name": "data/train-00008-of-00026.parquet",
+          "bytes": 8585773
+        },
+        {
+          "name": "data/train-00009-of-00026.parquet",
+          "bytes": 10688510
+        },
+        {
+          "name": "data/train-00010-of-00026.parquet",
+          "bytes": 10910146
+        },
+        {
+          "name": "data/train-00011-of-00026.parquet",
+          "bytes": 7949419
+        },
+        {
+          "name": "data/train-00012-of-00026.parquet",
+          "bytes": 12122470
+        },
+        {
+          "name": "data/train-00013-of-00026.parquet",
+          "bytes": 14241298
+        },
+        {
+          "name": "data/train-00014-of-00026.parquet",
+          "bytes": 8682831
+        },
+        {
+          "name": "data/train-00015-of-00026.parquet",
+          "bytes": 8897012
+        },
+        {
+          "name": "data/train-00016-of-00026.parquet",
+          "bytes": 16482826
+        },
+        {
+          "name": "data/train-00017-of-00026.parquet",
+          "bytes": 17741689
+        },
+        {
+          "name": "data/train-00018-of-00026.parquet",
+          "bytes": 10188211
+        },
+        {
+          "name": "data/train-00019-of-00026.parquet",
+          "bytes": 15552372
+        },
+        {
+          "name": "data/train-00020-of-00026.parquet",
+          "bytes": 13442900
+        },
+        {
+          "name": "data/train-00021-of-00026.parquet",
+          "bytes": 10645727
+        },
+        {
+          "name": "data/train-00022-of-00026.parquet",
+          "bytes": 8714954
+        },
+        {
+          "name": "data/train-00023-of-00026.parquet",
+          "bytes": 8143324
+        },
+        {
+          "name": "data/train-00024-of-00026.parquet",
+          "bytes": 8185518
+        },
+        {
+          "name": "data/train-00025-of-00026.parquet",
+          "bytes": 8293246
+        }
+      ],
+      "why": "K562 CRISPRi single-cell screen; labels ignored, useful as supplementary expression evidence."
+    }
+  ],
+  "rejected": [
+    {
+      "series": "geo://GSE90546",
+      "series_title": "A multiplexed single-cell CRISPR screening platform enables systematic dissection of the unfolded protein response",
+      "sample": "GSM2406676",
+      "sample_title": "Pilot TF experiment guide barcodes; K562 cells; cell line: K562",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "K562",
+      "topic_match": 0.6,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM2406676, GSM2406678, GSM2406679",
+      "files": [],
+      "why": "Guide barcodes for pilot TF experiment; serves GSM2406675 labels."
+    },
+    {
+      "series": "geo://GSE90546",
+      "series_title": "A multiplexed single-cell CRISPR screening platform enables systematic dissection of the unfolded protein response",
+      "sample": "GSM2406678",
+      "sample_title": "Epistasis experiment guide barcodes (gemgroup 1); K562 cells; cell line: K562",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "K562",
+      "topic_match": 0.5,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM2406676, GSM2406678, GSM2406679",
+      "files": [],
+      "why": "Guide barcodes gemgroup 1 for epistasis experiment cells."
+    },
+    {
+      "series": "geo://GSE90546",
+      "series_title": "A multiplexed single-cell CRISPR screening platform enables systematic dissection of the unfolded protein response",
+      "sample": "GSM2406679",
+      "sample_title": "Epistasis experiment guide barcodes (gemgroup 2); K562 cells; cell line: K562",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "K562",
+      "topic_match": 0.5,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM2406676, GSM2406678, GSM2406679",
+      "files": [],
+      "why": "Guide barcodes gemgroup 2 for epistasis experiment cells."
+    },
+    {
+      "series": "geo://GSE90546",
+      "series_title": "A multiplexed single-cell CRISPR screening platform enables systematic dissection of the unfolded protein response",
+      "sample": "GSM2406680",
+      "sample_title": "Epistasis experiment guide barcodes (gemgroup 3); K562 cells; cell line: K562",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "K562",
+      "topic_match": 0.5,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM2406676, GSM2406678, GSM2406679",
+      "files": [],
+      "why": "Guide barcodes gemgroup 3 for epistasis experiment cells."
+    },
+    {
+      "series": "geo://GSE90546",
+      "series_title": "A multiplexed single-cell CRISPR screening platform enables systematic dissection of the unfolded protein response",
+      "sample": "GSM2406682",
+      "sample_title": "UPR Perturb-seq experiment guide barcodes (gemgroup 1); K562 cells; cell line: K562",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "K562",
+      "topic_match": 1.0,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM2406676, GSM2406678, GSM2406679",
+      "files": [],
+      "why": "UPR Perturb-seq guide barcodes gemgroup 1; labels for GSM2406681."
+    },
+    {
+      "series": "geo://GSE90546",
+      "series_title": "A multiplexed single-cell CRISPR screening platform enables systematic dissection of the unfolded protein response",
+      "sample": "GSM2406683",
+      "sample_title": "UPR Perturb-seq experiment guide barcodes (gemgroup 2); K562 cells; cell line: K562",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "K562",
+      "topic_match": 1.0,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM2406676, GSM2406678, GSM2406679",
+      "files": [],
+      "why": "UPR Perturb-seq guide barcodes gemgroup 2; labels for GSM2406681."
+    },
+    {
+      "series": "geo://GSE90546",
+      "series_title": "A multiplexed single-cell CRISPR screening platform enables systematic dissection of the unfolded protein response",
+      "sample": "GSM2406684",
+      "sample_title": "UPR Perturb-seq experiment guide barcodes (gemgroup 3); K562 cells; cell line: K562",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "K562",
+      "topic_match": 1.0,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM2406676, GSM2406678, GSM2406679",
+      "files": [],
+      "why": "UPR Perturb-seq guide barcodes gemgroup 3; labels for GSM2406681."
+    },
+    {
+      "series": "geo://GSE90546",
+      "series_title": "A multiplexed single-cell CRISPR screening platform enables systematic dissection of the unfolded protein response",
+      "sample": "GSM2406685",
+      "sample_title": "UPR Perturb-seq experiment guide barcodes (gemgroup 4); K562 cells; cell line: K562",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "K562",
+      "topic_match": 1.0,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM2406676, GSM2406678, GSM2406679",
+      "files": [],
+      "why": "UPR Perturb-seq guide barcodes gemgroup 4; labels for GSM2406681."
+    },
+    {
+      "series": "geo://GSE90546",
+      "series_title": "A multiplexed single-cell CRISPR screening platform enables systematic dissection of the unfolded protein response",
+      "sample": "GSM2406686",
+      "sample_title": "UPR Perturb-seq experiment guide barcodes (gemgroup 5); K562 cells; cell line: K562",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "K562",
+      "topic_match": 1.0,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM2406676, GSM2406678, GSM2406679",
+      "files": [],
+      "why": "UPR Perturb-seq guide barcodes gemgroup 5; labels for GSM2406681."
+    },
+    {
+      "series": "geo://GSE90546",
+      "series_title": "A multiplexed single-cell CRISPR screening platform enables systematic dissection of the unfolded protein response",
+      "sample": "GSM2406687",
+      "sample_title": "UPR Perturb-seq experiment guide barcodes (gemgroup 6); K562 cells; cell line: K562",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "K562",
+      "topic_match": 1.0,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM2406676, GSM2406678, GSM2406679",
+      "files": [],
+      "why": "UPR Perturb-seq guide barcodes gemgroup 6; labels for GSM2406681."
+    },
+    {
+      "series": "geo://GSE90546",
+      "series_title": "A multiplexed single-cell CRISPR screening platform enables systematic dissection of the unfolded protein response",
+      "sample": "GSM2406688",
+      "sample_title": "UPR Perturb-seq experiment guide barcodes (gemgroup 7); K562 cells; cell line: K562",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "K562",
+      "topic_match": 1.0,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM2406676, GSM2406678, GSM2406679",
+      "files": [],
+      "why": "UPR Perturb-seq guide barcodes gemgroup 7; labels for GSM2406681."
+    },
+    {
+      "series": "geo://GSE90546",
+      "series_title": "A multiplexed single-cell CRISPR screening platform enables systematic dissection of the unfolded protein response",
+      "sample": "GSM2406689",
+      "sample_title": "UPR Perturb-seq experiment guide barcodes (gemgroup 8); K562 cells; cell line: K562",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "K562",
+      "topic_match": 1.0,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM2406676, GSM2406678, GSM2406679",
+      "files": [],
+      "why": "UPR Perturb-seq guide barcodes gemgroup 8; labels for GSM2406681."
+    },
+    {
+      "series": "geo://GSE90546",
+      "series_title": "A multiplexed single-cell CRISPR screening platform enables systematic dissection of the unfolded protein response",
+      "sample": "GSM2406690",
+      "sample_title": "UPR Perturb-seq experiment guide barcodes (gemgroup 9); K562 cells; cell line: K562",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "K562",
+      "topic_match": 1.0,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM2406676, GSM2406678, GSM2406679",
+      "files": [],
+      "why": "UPR Perturb-seq guide barcodes gemgroup 9; labels for GSM2406681."
+    },
+    {
+      "series": "geo://GSE90546",
+      "series_title": "A multiplexed single-cell CRISPR screening platform enables systematic dissection of the unfolded protein response",
+      "sample": "GSM2406691",
+      "sample_title": "UPR Perturb-seq experiment guide barcodes (gemgroup 10); K562 cells; cell line: K562",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "K562",
+      "topic_match": 1.0,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "guide companion sample(s) GSM2406676, GSM2406678, GSM2406679",
+      "files": [],
+      "why": "UPR Perturb-seq guide barcodes gemgroup 10; labels for GSM2406681."
+    },
+    {
+      "series": "geo://GSE343563",
+      "series_title": "Ubiquitin-directed remodeling of UPR by FBXO45-HYOU1-PPM1B axis drives chemoresistance in gastric cancer",
+      "sample": "GSE343563",
+      "sample_title": "Ubiquitin-directed remodeling of UPR by FBXO45-HYOU1-PPM1B axis drives chemoresistance in gastric cancer (series-level files; samples: GSM9957316, ... 6 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "human gastric cancer cells",
+      "topic_match": 0.3,
+      "bytes": 3040870,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE343563_gene_fpkm.xlsx",
+          "bytes": 3040870
+        }
+      ],
+      "why": "Bulk RNA-seq of gastric cancer line MKN45, not K562 single-cell perturbation screen.",
+      "samples": [
+        "GSM9957316",
+        "GSM9957317",
+        "GSM9957318",
+        "GSM9957319",
+        "GSM9957320",
+        "GSM9957321"
+      ]
+    },
+    {
+      "series": "hf://Upretiramesh/SyntheticECGData",
+      "series_title": "Upretiramesh/SyntheticECGData",
+      "sample": "hf://Upretiramesh/SyntheticECGData",
+      "sample_title": "Upretiramesh/SyntheticECGData",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": null,
+      "cell_type": null,
+      "topic_match": null,
+      "bytes": 2293,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 2265
+        },
+        {
+          "name": "README.md",
+          "bytes": 28
+        }
+      ],
+      "why": "not judged"
+    },
+    {
+      "series": "hf://Upretiramesh/conditional_gan",
+      "series_title": "Upretiramesh/conditional_gan",
+      "sample": "hf://Upretiramesh/conditional_gan",
+      "sample_title": "Upretiramesh/conditional_gan",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": null,
+      "cell_type": null,
+      "topic_match": null,
+      "bytes": 2265,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 2265
+        }
+      ],
+      "why": "not judged"
+    },
+    {
+      "series": "hf://open-llm-leaderboard-old/details_uproai__RosMistral-2x7B",
+      "series_title": "open-llm-leaderboard-old/details_uproai__RosMistral-2x7B",
+      "sample": "hf://open-llm-leaderboard-old/details_uproai__RosMistral-2x7B",
+      "sample_title": "open-llm-leaderboard-old/details_uproai__RosMistral-2x7B",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "none",
+      "topic_match": 0,
+      "bytes": 90653417,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 2307
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|arc:challenge|25_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 5385803
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|gsm8k|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 4900116
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hellaswag|10_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 55859212
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-abstract_algebra|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 60557
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-anatomy|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 102645
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-astronomy|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 170957
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-business_ethics|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 123020
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-clinical_knowledge|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 205357
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-college_biology|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 156972
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-college_chemistry|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 104691
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-college_computer_science|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 189086
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-college_mathematics|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 99047
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-college_medicine|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 221993
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-college_physics|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 105447
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-computer_security|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 94987
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-conceptual_physics|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 132084
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-econometrics|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 137282
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-electrical_engineering|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 116771
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-elementary_mathematics|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 273242
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-formal_logic|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 139610
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-global_facts|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 75544
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-high_school_biology|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 314049
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-high_school_chemistry|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 175656
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-high_school_computer_science|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 193574
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-high_school_european_history|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 1645561
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-high_school_geography|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 150583
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-high_school_government_and_politics|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 198197
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-high_school_macroeconomics|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 282320
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-high_school_mathematics|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 209786
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-high_school_microeconomics|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 196887
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-high_school_physics|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 170802
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-high_school_psychology|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 511526
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-high_school_statistics|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 322246
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-high_school_us_history|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 1339016
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-high_school_world_history|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 1050721
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-human_aging|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 150976
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-human_sexuality|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 108186
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-international_law|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 169701
+        },
+        {
+          "name": "2024-02-21T12-30-40.736831/details_harness|hendrycksTest-jurisprudence|5_2024-02-21T12-30-40.736831.parquet",
+          "bytes": 109644
+        }
+      ],
+      "why": "LLM evaluation benchmark results, not gene expression or single-cell data."
+    },
+    {
+      "series": "hf://open-llm-leaderboard-old/details_uproai__Rose-2x7B",
+      "series_title": "open-llm-leaderboard-old/details_uproai__Rose-2x7B",
+      "sample": "hf://open-llm-leaderboard-old/details_uproai__Rose-2x7B",
+      "sample_title": "open-llm-leaderboard-old/details_uproai__Rose-2x7B",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": null,
+      "cell_type": null,
+      "topic_match": null,
+      "bytes": 90653072,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 2307
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|arc:challenge|25_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 5385775
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|gsm8k|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 4908975
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hellaswag|10_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 55859142
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-abstract_algebra|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 60419
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-anatomy|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 102553
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-astronomy|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 170805
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-business_ethics|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 122989
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-clinical_knowledge|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 205222
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-college_biology|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 156913
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-college_chemistry|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 104579
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-college_computer_science|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 189037
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-college_mathematics|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 98978
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-college_medicine|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 221922
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-college_physics|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 105445
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-computer_security|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 94895
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-conceptual_physics|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 131915
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-econometrics|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 137247
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-electrical_engineering|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 116626
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-elementary_mathematics|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 273027
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-formal_logic|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 139549
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-global_facts|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 75549
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-high_school_biology|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 313871
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-high_school_chemistry|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 175488
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-high_school_computer_science|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 193477
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-high_school_european_history|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 1645480
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-high_school_geography|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 150426
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-high_school_government_and_politics|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 198041
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-high_school_macroeconomics|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 282156
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-high_school_mathematics|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 209388
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-high_school_microeconomics|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 196706
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-high_school_physics|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 170731
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-high_school_psychology|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 511001
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-high_school_statistics|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 322147
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-high_school_us_history|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 1338880
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-high_school_world_history|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 1050540
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-human_aging|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 150836
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-human_sexuality|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 108143
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-international_law|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 169609
+        },
+        {
+          "name": "2024-02-29T19-45-33.655754/details_harness|hendrycksTest-jurisprudence|5_2024-02-29T19-45-33.655754.parquet",
+          "bytes": 109628
+        }
+      ],
+      "why": "not judged"
+    },
+    {
+      "series": "hf://uproai/chat-90k",
+      "series_title": "uproai/chat-90k",
+      "sample": "hf://uproai/chat-90k",
+      "sample_title": "uproai/chat-90k",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": null,
+      "cell_type": null,
+      "topic_match": null,
+      "bytes": 19596024,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 2307
+        },
+        {
+          "name": "README.md",
+          "bytes": 633
+        },
+        {
+          "name": "messages.parquet",
+          "bytes": 19593084
+        }
+      ],
+      "why": "not judged"
+    },
+    {
+      "series": "hf://uproai/endex-700k",
+      "series_title": "uproai/endex-700k",
+      "sample": "hf://uproai/endex-700k",
+      "sample_title": "uproai/endex-700k",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": null,
+      "cell_type": null,
+      "topic_match": null,
+      "bytes": 248104128,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 2307
+        },
+        {
+          "name": "README.md",
+          "bytes": 687
+        },
+        {
+          "name": "data/train-00000-of-00001.parquet",
+          "bytes": 248101134
+        }
+      ],
+      "why": "not judged"
+    },
+    {
+      "series": "hf://huggingbahl21/causalbench-k562",
+      "series_title": "huggingbahl21/causalbench-k562",
+      "sample": "hf://huggingbahl21/causalbench-k562",
+      "sample_title": "huggingbahl21/causalbench-k562",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": null,
+      "cell_type": null,
+      "topic_match": null,
+      "bytes": 119115255,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 2504
+        },
+        {
+          "name": "README.md",
+          "bytes": 785
+        },
+        {
+          "name": "real/causalbench/data/causalbench_k562.tsv.gz",
+          "bytes": 119111966
+        }
+      ],
+      "why": "not judged"
+    },
+    {
+      "series": "hf://pvd232/k562-gwps-raw",
+      "series_title": "pvd232/k562-gwps-raw",
+      "sample": "hf://pvd232/k562-gwps-raw",
+      "sample_title": "pvd232/k562-gwps-raw",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": null,
+      "cell_type": null,
+      "topic_match": null,
+      "bytes": 867290179182,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file archive/critical/hct116_unperturbed_manifold.npz",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 6535
+        },
+        {
+          "name": "archive/critical/V223b_W8_L0.25.pt",
+          "bytes": 139162253
+        },
+        {
+          "name": "archive/critical/control_prior_random.npy",
+          "bytes": 2525824
+        },
+        {
+          "name": "archive/critical/dna_final.npy",
+          "bytes": 25728
+        },
+        {
+          "name": "archive/critical/esm_final.npy",
+          "bytes": 25728
+        },
+        {
+          "name": "archive/critical/gwps_learned_emb_256d.npy",
+          "bytes": 10103936
+        },
+        {
+          "name": "archive/critical/hct116_unperturbed_manifold.npz",
+          "bytes": 1632752
+        },
+        {
+          "name": "archive/critical/hvg100_in_vocab_idx.npy",
+          "bytes": 928
+        },
+        {
+          "name": "archive/critical/hvg100_in_vocab_idx_CNMF.npy",
+          "bytes": 928
+        },
+        {
+          "name": "archive/critical/hvg100_in_vocab_idx_smr.npy",
+          "bytes": 928
+        },
+        {
+          "name": "archive/critical/hvg100_names_smr.json",
+          "bytes": 923
+        },
+        {
+          "name": "archive/critical/hvg_100_names.json",
+          "bytes": 938
+        },
+        {
+          "name": "archive/critical/hvg_100_names_smr.json",
+          "bytes": 952
+        },
+        {
+          "name": "archive/critical/k562_unperturbed_manifold.npz",
+          "bytes": 1632752
+        },
+        {
+          "name": "archive/critical/learned_instance_emb_128d.npy",
+          "bytes": 5052032
+        },
+        {
+          "name": "archive/critical/learned_reg_emb_128d.npy",
+          "bytes": 5052032
+        },
+        {
+          "name": "archive/critical/metabolomics_final.npy",
+          "bytes": 25728
+        },
+        {
+          "name": "archive/critical/noise_floor_estimates.npy",
+          "bytes": 20128
+        },
+        {
+          "name": "archive/critical/ptm_final.npy",
+          "bytes": 25728
+        },
+        {
+          "name": "archive/critical/random_prior.npy",
+          "bytes": 3946528
+        },
+        {
+          "name": "archive/critical/train.npz",
+          "bytes": 5809768
+        },
+        {
+          "name": "archive/critical/train_v2_hvg_ALIGNED.npz",
+          "bytes": 8966568
+        },
+        {
+          "name": "archive/critical/v223_sota_404.pt",
+          "bytes": 71998539
+        },
+        {
+          "name": "archive/critical/v2_hvg100_in_v2000_idx.npy",
+          "bytes": 928
+        },
+        {
+          "name": "archive/critical/v2_hvg100_indices.npy",
+          "bytes": 928
+        },
+        {
+          "name": "archive/critical/v2_hvg100_mapping.json",
+          "bytes": 1047
+        },
+        {
+          "name": "archive/critical/v49_siamese_aligned_prior_clean.npy",
+          "bytes": 3946528
+        },
+        {
+          "name": "archive/critical/val.npz",
+          "bytes": 1454120
+        },
+        {
+          "name": "archive/data/external/encode_k562/tracks/ATAC/fold_change.ENCFF102ARJ.bigWig",
+          "bytes": 4514690311
+        },
+        {
+          "name": "archive/data/external/encode_k562/tracks/ATAC/signal_pvalue.ENCFF357GNC.bigWig",
+          "bytes": 2118644361
+        },
+        {
+          "name": "archive/data/external/encode_k562/tracks/H3K27ac/fold_change.ENCFF381NDD.bigWig",
+          "bytes": 1511112441
+        },
+        {
+          "name": "archive/data/external/encode_k562/tracks/H3K27ac/signal_pvalue.ENCFF465GBD.bigWig",
+          "bytes": 1314534644
+        },
+        {
+          "name": "archive/data/external/encode_k562/tracks/H3K27me3/fold_change.ENCFF242ENK.bigWig",
+          "bytes": 1476326780
+        },
+        {
+          "name": "archive/data/external/encode_k562/tracks/H3K27me3/signal_pvalue.ENCFF582IMB.bigWig",
+          "bytes": 1449902682
+        },
+        {
+          "name": "archive/data/external/encode_k562/tracks/H3K36me3/fold_change.ENCFF317VHO.bigWig",
+          "bytes": 1268133276
+        },
+        {
+          "name": "archive/data/external/encode_k562/tracks/H3K36me3/signal_pvalue.ENCFF605EVL.bigWig",
+          "bytes": 1320564946
+        },
+        {
+          "name": "archive/data/external/encode_k562/tracks/H3K4me1/fold_change.ENCFF399SGM.bigWig",
+          "bytes": 454641656
+        },
+        {
+          "name": "archive/data/external/encode_k562/tracks/H3K4me1/signal_pvalue.ENCFF287LBI.bigWig",
+          "bytes": 519654193
+        },
+        {
+          "name": "archive/data/external/encode_k562/tracks/H3K4me3/fold_change.ENCFF660WUG.bigWig",
+          "bytes": 533757939
+        },
+        {
+          "name": "archive/data/external/encode_k562/tracks/H3K4me3/signal_pvalue.ENCFF767UON.bigWig",
+          "bytes": 797629786
+        }
+      ],
+      "why": "not judged"
+    },
+    {
+      "series": "hf://SunnyLin/ABC-K562",
+      "series_title": "SunnyLin/ABC-K562",
+      "sample": "hf://SunnyLin/ABC-K562",
+      "sample_title": "SunnyLin/ABC-K562",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": null,
+      "cell_type": null,
+      "topic_match": null,
+      "bytes": 321126668,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 2461
+        },
+        {
+          "name": "README.md",
+          "bytes": 751
+        },
+        {
+          "name": "data/test-00000-of-00008.parquet",
+          "bytes": 2284637
+        },
+        {
+          "name": "data/test-00001-of-00008.parquet",
+          "bytes": 811379
+        },
+        {
+          "name": "data/test-00002-of-00008.parquet",
+          "bytes": 695731
+        },
+        {
+          "name": "data/test-00003-of-00008.parquet",
+          "bytes": 886327
+        },
+        {
+          "name": "data/test-00004-of-00008.parquet",
+          "bytes": 793959
+        },
+        {
+          "name": "data/test-00005-of-00008.parquet",
+          "bytes": 1401748
+        },
+        {
+          "name": "data/test-00006-of-00008.parquet",
+          "bytes": 728644
+        },
+        {
+          "name": "data/test-00007-of-00008.parquet",
+          "bytes": 435005
+        },
+        {
+          "name": "data/train-00000-of-00060.parquet",
+          "bytes": 4427220
+        },
+        {
+          "name": "data/train-00001-of-00060.parquet",
+          "bytes": 5858979
+        },
+        {
+          "name": "data/train-00002-of-00060.parquet",
+          "bytes": 5463924
+        },
+        {
+          "name": "data/train-00003-of-00060.parquet",
+          "bytes": 4542490
+        },
+        {
+          "name": "data/train-00004-of-00060.parquet",
+          "bytes": 4714360
+        },
+        {
+          "name": "data/train-00005-of-00060.parquet",
+          "bytes": 4751403
+        },
+        {
+          "name": "data/train-00006-of-00060.parquet",
+          "bytes": 4807136
+        },
+        {
+          "name": "data/train-00007-of-00060.parquet",
+          "bytes": 5447512
+        },
+        {
+          "name": "data/train-00008-of-00060.parquet",
+          "bytes": 5286501
+        },
+        {
+          "name": "data/train-00009-of-00060.parquet",
+          "bytes": 4413136
+        },
+        {
+          "name": "data/train-00010-of-00060.parquet",
+          "bytes": 4240838
+        },
+        {
+          "name": "data/train-00011-of-00060.parquet",
+          "bytes": 4815639
+        },
+        {
+          "name": "data/train-00012-of-00060.parquet",
+          "bytes": 5365847
+        },
+        {
+          "name": "data/train-00013-of-00060.parquet",
+          "bytes": 5482769
+        },
+        {
+          "name": "data/train-00014-of-00060.parquet",
+          "bytes": 5178105
+        },
+        {
+          "name": "data/train-00015-of-00060.parquet",
+          "bytes": 4885200
+        },
+        {
+          "name": "data/train-00016-of-00060.parquet",
+          "bytes": 4143568
+        },
+        {
+          "name": "data/train-00017-of-00060.parquet",
+          "bytes": 5040728
+        },
+        {
+          "name": "data/train-00018-of-00060.parquet",
+          "bytes": 4328517
+        },
+        {
+          "name": "data/train-00019-of-00060.parquet",
+          "bytes": 4922839
+        },
+        {
+          "name": "data/train-00020-of-00060.parquet",
+          "bytes": 4712175
+        },
+        {
+          "name": "data/train-00021-of-00060.parquet",
+          "bytes": 4642232
+        },
+        {
+          "name": "data/train-00022-of-00060.parquet",
+          "bytes": 4494261
+        },
+        {
+          "name": "data/train-00023-of-00060.parquet",
+          "bytes": 4074021
+        },
+        {
+          "name": "data/train-00024-of-00060.parquet",
+          "bytes": 4086522
+        },
+        {
+          "name": "data/train-00025-of-00060.parquet",
+          "bytes": 3613601
+        },
+        {
+          "name": "data/train-00026-of-00060.parquet",
+          "bytes": 3742346
+        },
+        {
+          "name": "data/train-00027-of-00060.parquet",
+          "bytes": 3758316
+        },
+        {
+          "name": "data/train-00028-of-00060.parquet",
+          "bytes": 4565603
+        },
+        {
+          "name": "data/train-00029-of-00060.parquet",
+          "bytes": 5337654
+        }
+      ],
+      "why": "not judged"
+    },
+    {
+      "series": "hf://Cuiting0906/ABC_K562_dataset",
+      "series_title": "Cuiting0906/ABC_K562_dataset",
+      "sample": "hf://Cuiting0906/ABC_K562_dataset",
+      "sample_title": "Cuiting0906/ABC_K562_dataset",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": null,
+      "cell_type": null,
+      "topic_match": null,
+      "bytes": 90321193,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 2504
+        },
+        {
+          "name": "README.md",
+          "bytes": 1536
+        },
+        {
+          "name": "data/train-00000-of-00002.parquet",
+          "bytes": 40739149
+        },
+        {
+          "name": "data/train-00001-of-00002.parquet",
+          "bytes": 49578004
+        }
+      ],
+      "why": "not judged"
+    },
+    {
+      "series": "hf://Cuiting0906/ABC_K562_dataset_split",
+      "series_title": "Cuiting0906/ABC_K562_dataset_split",
+      "sample": "hf://Cuiting0906/ABC_K562_dataset_split",
+      "sample_title": "Cuiting0906/ABC_K562_dataset_split",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": null,
+      "cell_type": null,
+      "topic_match": null,
+      "bytes": 89550714,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 2504
+        },
+        {
+          "name": "README.md",
+          "bytes": 1756
+        },
+        {
+          "name": "data/test-00000-of-00001.parquet",
+          "bytes": 5833018
+        },
+        {
+          "name": "data/train-00000-of-00001.parquet",
+          "bytes": 79657457
+        },
+        {
+          "name": "data/validation-00000-of-00001.parquet",
+          "bytes": 4055979
+        }
+      ],
+      "why": "not judged"
+    },
+    {
+      "series": "hf://Cuiting0906/ABC_K562_dataset_org",
+      "series_title": "Cuiting0906/ABC_K562_dataset_org",
+      "sample": "hf://Cuiting0906/ABC_K562_dataset_org",
+      "sample_title": "Cuiting0906/ABC_K562_dataset_org",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": null,
+      "cell_type": null,
+      "topic_match": null,
+      "bytes": 365451509,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 2504
+        },
+        {
+          "name": "README.md",
+          "bytes": 2384
+        },
+        {
+          "name": "data/train-00000-of-00044.parquet",
+          "bytes": 7294428
+        },
+        {
+          "name": "data/train-00001-of-00044.parquet",
+          "bytes": 7527500
+        },
+        {
+          "name": "data/train-00002-of-00044.parquet",
+          "bytes": 8433377
+        },
+        {
+          "name": "data/train-00003-of-00044.parquet",
+          "bytes": 8986233
+        },
+        {
+          "name": "data/train-00004-of-00044.parquet",
+          "bytes": 9256412
+        },
+        {
+          "name": "data/train-00005-of-00044.parquet",
+          "bytes": 9119427
+        },
+        {
+          "name": "data/train-00006-of-00044.parquet",
+          "bytes": 7714259
+        },
+        {
+          "name": "data/train-00007-of-00044.parquet",
+          "bytes": 7136173
+        },
+        {
+          "name": "data/train-00008-of-00044.parquet",
+          "bytes": 7219833
+        },
+        {
+          "name": "data/train-00009-of-00044.parquet",
+          "bytes": 8326088
+        },
+        {
+          "name": "data/train-00010-of-00044.parquet",
+          "bytes": 7421039
+        },
+        {
+          "name": "data/train-00011-of-00044.parquet",
+          "bytes": 9574887
+        },
+        {
+          "name": "data/train-00012-of-00044.parquet",
+          "bytes": 9484172
+        },
+        {
+          "name": "data/train-00013-of-00044.parquet",
+          "bytes": 6908679
+        },
+        {
+          "name": "data/train-00014-of-00044.parquet",
+          "bytes": 7396013
+        },
+        {
+          "name": "data/train-00015-of-00044.parquet",
+          "bytes": 6647283
+        },
+        {
+          "name": "data/train-00016-of-00044.parquet",
+          "bytes": 6766518
+        },
+        {
+          "name": "data/train-00017-of-00044.parquet",
+          "bytes": 6667345
+        },
+        {
+          "name": "data/train-00018-of-00044.parquet",
+          "bytes": 7053185
+        },
+        {
+          "name": "data/train-00019-of-00044.parquet",
+          "bytes": 7368663
+        },
+        {
+          "name": "data/train-00020-of-00044.parquet",
+          "bytes": 9275507
+        },
+        {
+          "name": "data/train-00021-of-00044.parquet",
+          "bytes": 8078875
+        },
+        {
+          "name": "data/train-00022-of-00044.parquet",
+          "bytes": 7195357
+        },
+        {
+          "name": "data/train-00023-of-00044.parquet",
+          "bytes": 7027187
+        },
+        {
+          "name": "data/train-00024-of-00044.parquet",
+          "bytes": 7151960
+        },
+        {
+          "name": "data/train-00025-of-00044.parquet",
+          "bytes": 7373465
+        },
+        {
+          "name": "data/train-00026-of-00044.parquet",
+          "bytes": 8390084
+        },
+        {
+          "name": "data/train-00027-of-00044.parquet",
+          "bytes": 9203701
+        },
+        {
+          "name": "data/train-00028-of-00044.parquet",
+          "bytes": 7633307
+        },
+        {
+          "name": "data/train-00029-of-00044.parquet",
+          "bytes": 7326862
+        },
+        {
+          "name": "data/train-00030-of-00044.parquet",
+          "bytes": 7245275
+        },
+        {
+          "name": "data/train-00031-of-00044.parquet",
+          "bytes": 8562170
+        },
+        {
+          "name": "data/train-00032-of-00044.parquet",
+          "bytes": 7012472
+        },
+        {
+          "name": "data/train-00033-of-00044.parquet",
+          "bytes": 11896968
+        },
+        {
+          "name": "data/train-00034-of-00044.parquet",
+          "bytes": 11647451
+        },
+        {
+          "name": "data/train-00035-of-00044.parquet",
+          "bytes": 7351782
+        },
+        {
+          "name": "data/train-00036-of-00044.parquet",
+          "bytes": 8191681
+        },
+        {
+          "name": "data/train-00037-of-00044.parquet",
+          "bytes": 10856606
+        }
+      ],
+      "why": "not judged"
+    },
+    {
+      "series": "hf://Cuiting0906/K562_ABC_CRISPRi_filtered_split",
+      "series_title": "Cuiting0906/K562_ABC_CRISPRi_filtered_split",
+      "sample": "hf://Cuiting0906/K562_ABC_CRISPRi_filtered_split",
+      "sample_title": "Cuiting0906/K562_ABC_CRISPRi_filtered_split",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": null,
+      "cell_type": null,
+      "topic_match": null,
+      "bytes": 294645425,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": ".gitattributes",
+          "bytes": 2504
+        },
+        {
+          "name": "README.md",
+          "bytes": 1490
+        },
+        {
+          "name": "data/test-00000-of-00003.parquet",
+          "bytes": 8604284
+        },
+        {
+          "name": "data/test-00001-of-00003.parquet",
+          "bytes": 9866359
+        },
+        {
+          "name": "data/test-00002-of-00003.parquet",
+          "bytes": 16035922
+        },
+        {
+          "name": "data/train-00000-of-00020.parquet",
+          "bytes": 8189255
+        },
+        {
+          "name": "data/train-00001-of-00020.parquet",
+          "bytes": 8593729
+        },
+        {
+          "name": "data/train-00002-of-00020.parquet",
+          "bytes": 9947771
+        },
+        {
+          "name": "data/train-00003-of-00020.parquet",
+          "bytes": 10939949
+        },
+        {
+          "name": "data/train-00004-of-00020.parquet",
+          "bytes": 16734002
+        },
+        {
+          "name": "data/train-00005-of-00020.parquet",
+          "bytes": 11350178
+        },
+        {
+          "name": "data/train-00006-of-00020.parquet",
+          "bytes": 9598046
+        },
+        {
+          "name": "data/train-00007-of-00020.parquet",
+          "bytes": 12379589
+        },
+        {
+          "name": "data/train-00008-of-00020.parquet",
+          "bytes": 8873815
+        },
+        {
+          "name": "data/train-00009-of-00020.parquet",
+          "bytes": 8441781
+        },
+        {
+          "name": "data/train-00010-of-00020.parquet",
+          "bytes": 13366224
+        },
+        {
+          "name": "data/train-00011-of-00020.parquet",
+          "bytes": 11480097
+        },
+        {
+          "name": "data/train-00012-of-00020.parquet",
+          "bytes": 9769979
+        },
+        {
+          "name": "data/train-00013-of-00020.parquet",
+          "bytes": 12492602
+        },
+        {
+          "name": "data/train-00014-of-00020.parquet",
+          "bytes": 17880337
+        },
+        {
+          "name": "data/train-00015-of-00020.parquet",
+          "bytes": 17238618
+        },
+        {
+          "name": "data/train-00016-of-00020.parquet",
+          "bytes": 8869958
+        },
+        {
+          "name": "data/train-00017-of-00020.parquet",
+          "bytes": 8282047
+        },
+        {
+          "name": "data/train-00018-of-00020.parquet",
+          "bytes": 8273466
+        },
+        {
+          "name": "data/train-00019-of-00020.parquet",
+          "bytes": 8514516
+        },
+        {
+          "name": "data/validation-00000-of-00003.parquet",
+          "bytes": 11325042
+        },
+        {
+          "name": "data/validation-00001-of-00003.parquet",
+          "bytes": 13277206
+        },
+        {
+          "name": "data/validation-00002-of-00003.parquet",
+          "bytes": 14316659
+        }
+      ],
+      "why": "not judged"
+    }
+  ],
+  "candidates": [
+    {
+      "reference": "geo://GSE90546",
+      "title": "A multiplexed single-cell CRISPR screening platform enables systematic dissection of the unfolded protein response",
+      "queries": [
+        "unfolded protein response Perturb-seq",
+        "unfolded protein response CRISPR screen",
+        "unfolded protein response K562",
+        "ER stress response Perturb-seq",
+        "UPR Perturb-seq",
+        "UPR CRISPR screen",
+        "UPR K562"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "geo://GSE343563",
+      "title": "Ubiquitin-directed remodeling of UPR by FBXO45-HYOU1-PPM1B axis drives chemoresistance in gastric cancer",
+      "queries": [
+        "ER stress response Perturb-seq",
+        "ER stress response K562",
+        "endoplasmic reticulum stress Perturb-seq"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "hf://Upretiramesh/SyntheticECGData",
+      "title": "Upretiramesh/SyntheticECGData",
+      "queries": [
+        "UPR Perturb-seq",
+        "UPR CRISPR screen",
+        "UPR K562"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "hf://Upretiramesh/conditional_gan",
+      "title": "Upretiramesh/conditional_gan",
+      "queries": [
+        "UPR Perturb-seq",
+        "UPR CRISPR screen",
+        "UPR K562"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "hf://open-llm-leaderboard-old/details_uproai__RosMistral-2x7B",
+      "title": "open-llm-leaderboard-old/details_uproai__RosMistral-2x7B",
+      "queries": [
+        "UPR Perturb-seq",
+        "UPR CRISPR screen",
+        "UPR K562"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "hf://open-llm-leaderboard-old/details_uproai__Rose-2x7B",
+      "title": "open-llm-leaderboard-old/details_uproai__Rose-2x7B",
+      "queries": [
+        "UPR Perturb-seq",
+        "UPR CRISPR screen",
+        "UPR K562"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "hf://uproai/chat-90k",
+      "title": "uproai/chat-90k",
+      "queries": [
+        "UPR Perturb-seq",
+        "UPR CRISPR screen",
+        "UPR K562"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "hf://uproai/endex-700k",
+      "title": "uproai/endex-700k",
+      "queries": [
+        "UPR Perturb-seq",
+        "UPR CRISPR screen",
+        "UPR K562"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "hf://huggingbahl21/causalbench-k562",
+      "title": "huggingbahl21/causalbench-k562",
+      "queries": [
+        "K562 Perturb-seq",
+        "K562 CROP-seq",
+        "K562 CRISPR screen single-cell",
+        "K562 single-cell RNA-seq",
+        "K562 scRNA-seq"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "hf://pvd232/k562-gwps-raw",
+      "title": "pvd232/k562-gwps-raw",
+      "queries": [
+        "K562 Perturb-seq",
+        "K562 CROP-seq",
+        "K562 CRISPR screen single-cell",
+        "K562 single-cell RNA-seq",
+        "K562 scRNA-seq"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "hf://SunnyLin/ABC-K562",
+      "title": "SunnyLin/ABC-K562",
+      "queries": [
+        "K562 Perturb-seq",
+        "K562 CROP-seq",
+        "K562 CRISPR screen single-cell",
+        "K562 single-cell RNA-seq",
+        "K562 scRNA-seq"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "hf://Cuiting0906/ABC_K562_dataset",
+      "title": "Cuiting0906/ABC_K562_dataset",
+      "queries": [
+        "K562 Perturb-seq",
+        "K562 CROP-seq",
+        "K562 CRISPR screen single-cell",
+        "K562 single-cell RNA-seq",
+        "K562 scRNA-seq"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "hf://Cuiting0906/ABC_K562_dataset_split",
+      "title": "Cuiting0906/ABC_K562_dataset_split",
+      "queries": [
+        "K562 Perturb-seq",
+        "K562 CROP-seq",
+        "K562 CRISPR screen single-cell",
+        "K562 single-cell RNA-seq",
+        "K562 scRNA-seq"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "hf://Cuiting0906/ABC_K562_dataset_org",
+      "title": "Cuiting0906/ABC_K562_dataset_org",
+      "queries": [
+        "K562 Perturb-seq",
+        "K562 CROP-seq",
+        "K562 CRISPR screen single-cell",
+        "K562 single-cell RNA-seq",
+        "K562 scRNA-seq"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "hf://Cuiting0906/K562_ABC_CRISPRi_filtered_split",
+      "title": "Cuiting0906/K562_ABC_CRISPRi_filtered_split",
+      "queries": [
+        "K562 Perturb-seq",
+        "K562 CROP-seq",
+        "K562 CRISPR screen single-cell",
+        "K562 single-cell RNA-seq",
+        "K562 scRNA-seq"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "hf://Cuiting0906/K562_ABC_CRISPRi_filtered",
+      "title": "Cuiting0906/K562_ABC_CRISPRi_filtered",
+      "queries": [
+        "K562 Perturb-seq",
+        "K562 CROP-seq",
+        "K562 CRISPR screen single-cell",
+        "K562 single-cell RNA-seq",
+        "K562 scRNA-seq"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    }
+  ],
+  "seconds": 136.5
+}

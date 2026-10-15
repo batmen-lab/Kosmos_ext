@@ -338,7 +338,7 @@ def test_the_summary_reports_baselines_and_flags_a_constant_arm(tmp_path):
     assert "## Reference baselines" in text
     assert "mean response (leave-one-out)" in text
     assert "No perturbation signal" in text
-    assert "`mlp_base`" in text
+    assert "`mlp base`" in text
 
 
 def test_a_stopped_run_still_leaves_a_report(tmp_path):
@@ -369,7 +369,7 @@ def test_a_stopped_run_still_leaves_a_report(tmp_path):
     path = write_summary(results, tmp_path)
     text = path.read_text()
 
-    assert "gears_base" in text
+    assert "`base`" in text
     assert "Partial run" in text
     assert "0.3553" in text
 

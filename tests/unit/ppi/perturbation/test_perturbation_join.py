@@ -115,8 +115,8 @@ def test_the_backend_trains_on_the_joined_pair(tmp_path):
         test_fraction=0.34,
         validation_fraction=0.17,
         config=PerturbationTrainingConfig(
-            epochs=1, patience=1, batch_size=8, embedding_dim=8, hidden_dim=8,
-            gnn_layers=1, top_k_deg=4, seed=0,
+            epochs=1, patience=1, batch_size=8, hidden_dim=8,
+            top_k_deg=4, seed=0,
         ),
     )
 

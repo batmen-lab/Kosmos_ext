@@ -1,0 +1,53 @@
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+<frozen runpy>:128: RuntimeWarning: 'kosmos.ppi.perturbation.dataprep.survey' found in sys.modules after import of package 'kosmos.ppi.perturbation.dataprep', but prior to execution of 'kosmos.ppi.perturbation.dataprep.survey'; this may result in unpredictable behaviour
+# survey: spec {"cell_type": "THP-1", "cell_type_aliases": ["acute monocytic leukemia cells", "monocytic leukemia cell line", "human monocytic cells"], "organism": "human", "modality": "CRISPRko", "topic": "PD-L1 regulation", "topic_aliases": ["immune checkpoint", "PD-L1 expression", "immune evasion"], "assays": ["Perturb-seq", "CROP-seq"]}
+# survey: search [gold] 'PD-L1 regulation Perturb-seq': 10 hit(s)
+# survey: search [gold] 'PD-L1 regulation CRISPR screen': 22 hit(s)
+# survey: search [gold] 'PD-L1 regulation THP-1': 10 hit(s)
+# survey: search [gold] 'immune checkpoint Perturb-seq': 24 hit(s)
+# survey: search [gold] 'immune checkpoint CRISPR screen': 48 hit(s)
+# survey: search [gold] 'immune checkpoint THP-1': 25 hit(s)
+# survey: search [gold] 'PD-L1 expression Perturb-seq': 11 hit(s)
+# survey: search [gold] 'PD-L1 expression CRISPR screen': 18 hit(s)
+# survey: search [gold] 'PD-L1 expression THP-1': 10 hit(s)
+# survey: search [gold] 'immune evasion Perturb-seq': 24 hit(s)
+# survey: search [gold] 'immune evasion CRISPR screen': 42 hit(s)
+# survey: search [gold] 'immune evasion THP-1': 25 hit(s)
+# survey: search [gold] 'THP-1 Perturb-seq': 4 hit(s)
+# survey: search [gold] 'THP-1 CROP-seq': 16 hit(s)
+# survey: search [gold] 'THP-1 CRISPR screen single-cell': 8 hit(s)
+# survey: search [gold] 'THP-1 CRISPR screen': 40 hit(s)
+# survey: search [gold] 'THP-1 CRISPRko': 18 hit(s)
+# survey: search [supplementary] 'THP-1 single-cell RNA-seq': 28 hit(s)
+# survey: search [supplementary] 'THP-1 scRNA-seq': 17 hit(s)
+# survey: search [supplementary] 'THP-1 Perturb-seq': 4 hit(s)
+# survey: describing 25 candidate(s)
+# survey: geo://GSE153056 (14 sample(s)) -> 3 kept
+# survey: geo://GSE336192 (8 sample(s)) -> 0 kept
+# survey: geo://GSE255700 (12 sample(s)) -> 0 kept
+# survey: geo://GSE255699 (24 sample(s)) -> 0 kept
+# survey: geo://GSE255698 (24 sample(s)) -> 0 kept
+# survey: geo://GSE250161 (3 sample(s)) -> 0 kept
+# survey: geo://GSE250160 (12 sample(s)) -> 0 kept
+# survey: geo://GSE268533 (2 sample(s)) -> 0 kept
+# survey: geo://GSE268534 (3 sample(s)) -> 0 kept
+# survey: geo://GSE342674 (9 sample(s)) -> 0 kept
+# survey: geo://GSE270890 (12 sample(s)) -> 0 kept
+# survey: geo://GSE268256 (17 sample(s)) -> 1 kept
+# survey: geo://GSE176294 (16 sample(s)) -> 16 kept
+# survey: geo://GSE302068 (9 sample(s)) -> 0 kept
+# survey: geo://GSE301119 (24 sample(s)) -> 0 kept
+# survey: geo://GSE288251 (24 sample(s)) -> 0 kept
+# survey: geo://GSE261920 (24 sample(s)) -> 0 kept
+# survey: geo://GSE317209 (6 sample(s)) -> 0 kept
+# survey: geo://GSE283851 (18 sample(s)) -> 0 kept
+# survey: geo://GSE262356 (4 sample(s)) -> 0 kept
+# survey: geo://GSE266045 (6 sample(s)) -> 0 kept
+# survey: geo://GSE249672 (24 sample(s)) -> 3 kept
+# survey: geo://GSE172333 (24 sample(s)) -> 0 kept
+# survey: geo://GSE301541 (8 sample(s)) -> 8 kept
+# survey: geo://GSE277678 (4 sample(s)) -> 0 kept
+# survey: scBaseCount: 35 sample(s) name the cells ['THP-1', 'acute monocytic leukemia cells', 'monocytic leukemia cell line', 'human monocytic cells']
+# survey: scBaseCount: 10 sample(s) are the gold's own runs; dropped
+# survey: scBaseCount: 0 supplementary sample(s), 0 cells (0 not from screens)
+# survey: 2 gold and 12 supplementary sample(s) in 379s -> artifacts/dataprep/thp1-pdl1-v2/survey.md

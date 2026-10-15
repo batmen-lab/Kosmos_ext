@@ -84,9 +84,17 @@ class ToolUniverseUnavailable(RuntimeError):
     """No usable ToolUniverse interpreter was configured."""
 
 
+#: Where the setup instructions put the interpreter; used when nothing is set,
+#: because a run without it has no search tools and names datasets from memory.
+DEFAULT_PYTHON = Path.home() / "venvs" / "tooluniverse" / "bin" / "python"
+
+
 def interpreter(explicit: str | None = None) -> str | None:
-    """The ToolUniverse interpreter: explicit argument, then the environment."""
+    """The ToolUniverse interpreter: explicit argument, the environment, then
+    the default location (`~/venvs/tooluniverse`) when it exists."""
     candidate = explicit or os.environ.get(ENV_PYTHON)
+    if not candidate and DEFAULT_PYTHON.exists():
+        candidate = str(DEFAULT_PYTHON)
     return candidate or None
 
 

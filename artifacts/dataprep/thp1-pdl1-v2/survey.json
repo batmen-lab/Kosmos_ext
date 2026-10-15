@@ -1,0 +1,4746 @@
+{
+  "question": "In THP-1 cells, can the transcriptional response to CRISPR knockout of regulators of PD-L1 expression not seen in training be predicted from a small labeled single-cell screen, using large single-cell profiles of THP-1 cells from other experiments, with their labels ignored, as supplementary evidence?",
+  "spec": {
+    "question": "In THP-1 cells, can the transcriptional response to CRISPR knockout of regulators of PD-L1 expression not seen in training be predicted from a small labeled single-cell screen, using large single-cell profiles of THP-1 cells from other experiments, with their labels ignored, as supplementary evidence?",
+    "cell_type": "THP-1",
+    "cell_type_aliases": [
+      "acute monocytic leukemia cells",
+      "monocytic leukemia cell line",
+      "human monocytic cells"
+    ],
+    "organism": "human",
+    "modality": "CRISPRko",
+    "topic": "PD-L1 regulation",
+    "topic_aliases": [
+      "immune checkpoint",
+      "PD-L1 expression",
+      "immune evasion"
+    ],
+    "assays": [
+      "Perturb-seq",
+      "CROP-seq"
+    ]
+  },
+  "gold": [
+    {
+      "series": "geo://GSE153056",
+      "series_title": "Characterizing the molecular regulation of inhibitory immune checkpoints with multi-modal single-cell screens.",
+      "sample": "GSM4633608",
+      "sample_title": "ECCITE-seq Arrayed cDNA: THP-1; Acute Myeloid Leukemia cell line THP-1; cell line: THP-1; cell type: Acute Myeloid Leukemia cell line; experiment type: ECCITE-seq Arrayed cDNA",
+      "role": "gold",
+      "proposed_role": "gold",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "THP-1",
+      "topic_match": 0.95,
+      "bytes": 39845888,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM4633608_ECCITE_Arrayed_cDNA_counts.tsv.gz",
+          "bytes": 39845888
+        }
+      ],
+      "why": "ECCITE-seq arrayed CRISPRko screen in THP-1 on PD-L1 regulators, guides recoverable.",
+      "scbasecount": {
+        "srx": [
+          "SRX8602660"
+        ],
+        "cells": 23706,
+        "chemistry": "5_prime_gex"
+      }
+    },
+    {
+      "series": "geo://GSE153056",
+      "series_title": "Characterizing the molecular regulation of inhibitory immune checkpoints with multi-modal single-cell screens.",
+      "sample": "GSM4633614",
+      "sample_title": "ECCITE-seq cDNA: THP-1; Acute Myeloid Leukemia cell line THP-1; cell line: THP-1; cell type: Acute Myeloid Leukemia cell line; experiment type: ECCITE-seq cDNA",
+      "role": "gold",
+      "proposed_role": "gold",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "THP-1",
+      "topic_match": 0.95,
+      "bytes": 63963136,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM4633614_ECCITE_cDNA_counts.tsv.gz",
+          "bytes": 63963136
+        }
+      ],
+      "why": "ECCITE-seq pooled CRISPRko screen in THP-1 on PD-L1 regulators, guides recoverable."
+    }
+  ],
+  "supplementary": [
+    {
+      "series": "geo://GSE301541",
+      "series_title": "Folate Receptor Beta Regulates Macrophage NLRP3 Inflammasome Activation and Pyroptosis in a Folate-Independent Manner",
+      "sample": "GSM9084977",
+      "sample_title": "THP-1 WT cells replicate 4; THP-1; cell line: THP-1; genotype: WT; treatment: Unstimulated",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.3,
+      "bytes": 210985984,
+      "cells_estimate": 17246,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9084977_WT_exp4_barcodes.tsv.gz",
+          "bytes": 65536
+        },
+        {
+          "name": "GSM9084977_WT_exp4_features.tsv.gz",
+          "bytes": 156672
+        },
+        {
+          "name": "GSM9084977_WT_exp4_matrix.mtx.gz",
+          "bytes": 210763776
+        }
+      ],
+      "why": "THP-1 single-cell WT expression, labels ignored, useful as unlabeled reference."
+    },
+    {
+      "series": "geo://GSE301541",
+      "series_title": "Folate Receptor Beta Regulates Macrophage NLRP3 Inflammasome Activation and Pyroptosis in a Folate-Independent Manner",
+      "sample": "GSM9084980",
+      "sample_title": "THP-1 FOLR2 KO cells replicate 3; THP-1; cell line: THP-1; genotype: FOLR2 KO; treatment: Unstimulated",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "THP-1",
+      "topic_match": 0.4,
+      "bytes": 163791872,
+      "cells_estimate": 15090,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9084980_KO_exp3_barcodes.tsv.gz",
+          "bytes": 57344
+        },
+        {
+          "name": "GSM9084980_KO_exp3_features.tsv.gz",
+          "bytes": 156672
+        },
+        {
+          "name": "GSM9084980_KO_exp3_matrix.mtx.gz",
+          "bytes": 163577856
+        }
+      ],
+      "why": "THP-1 FOLR2 KO single-cell, but no per-cell guide labels recoverable."
+    },
+    {
+      "series": "geo://GSE301541",
+      "series_title": "Folate Receptor Beta Regulates Macrophage NLRP3 Inflammasome Activation and Pyroptosis in a Folate-Independent Manner",
+      "sample": "GSM9084981",
+      "sample_title": "THP-1 FOLR2 KO cells replicate 4; THP-1; cell line: THP-1; genotype: FOLR2 KO; treatment: Unstimulated",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "THP-1",
+      "topic_match": 0.4,
+      "bytes": 170083328,
+      "cells_estimate": 15090,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9084981_KO_exp4_barcodes.tsv.gz",
+          "bytes": 57344
+        },
+        {
+          "name": "GSM9084981_KO_exp4_features.tsv.gz",
+          "bytes": 156672
+        },
+        {
+          "name": "GSM9084981_KO_exp4_matrix.mtx.gz",
+          "bytes": 169869312
+        }
+      ],
+      "why": "THP-1 FOLR2 KO single-cell, but no per-cell guide labels recoverable."
+    },
+    {
+      "series": "geo://GSE301541",
+      "series_title": "Folate Receptor Beta Regulates Macrophage NLRP3 Inflammasome Activation and Pyroptosis in a Folate-Independent Manner",
+      "sample": "GSM9084976",
+      "sample_title": "THP-1 WT cells replicate 3; THP-1; cell line: THP-1; genotype: WT; treatment: Unstimulated",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.3,
+      "bytes": 139668480,
+      "cells_estimate": 13473,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9084976_WT_exp3_barcodes.tsv.gz",
+          "bytes": 51200
+        },
+        {
+          "name": "GSM9084976_WT_exp3_features.tsv.gz",
+          "bytes": 156672
+        },
+        {
+          "name": "GSM9084976_WT_exp3_matrix.mtx.gz",
+          "bytes": 139460608
+        }
+      ],
+      "why": "THP-1 single-cell WT expression, labels ignored, useful as unlabeled reference."
+    },
+    {
+      "series": "geo://GSE301541",
+      "series_title": "Folate Receptor Beta Regulates Macrophage NLRP3 Inflammasome Activation and Pyroptosis in a Folate-Independent Manner",
+      "sample": "GSM9084979",
+      "sample_title": "THP-1 FOLR2 KO cells replicate 2; THP-1; cell line: THP-1; genotype: FOLR2 KO; treatment: Unstimulated",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "THP-1",
+      "topic_match": 0.4,
+      "bytes": 99818496,
+      "cells_estimate": 12395,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9084979_KO_exp2_barcodes.tsv.gz",
+          "bytes": 47104
+        },
+        {
+          "name": "GSM9084979_KO_exp2_features.tsv.gz",
+          "bytes": 156672
+        },
+        {
+          "name": "GSM9084979_KO_exp2_matrix.mtx.gz",
+          "bytes": 99614720
+        }
+      ],
+      "why": "THP-1 FOLR2 KO single-cell, but no per-cell guide labels recoverable."
+    },
+    {
+      "series": "geo://GSE301541",
+      "series_title": "Folate Receptor Beta Regulates Macrophage NLRP3 Inflammasome Activation and Pyroptosis in a Folate-Independent Manner",
+      "sample": "GSM9084975",
+      "sample_title": "THP-1 WT cells replicate 2; THP-1; cell line: THP-1; genotype: WT; treatment: Unstimulated",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.3,
+      "bytes": 108205056,
+      "cells_estimate": 11856,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9084975_WT_exp2_barcodes.tsv.gz",
+          "bytes": 45056
+        },
+        {
+          "name": "GSM9084975_WT_exp2_features.tsv.gz",
+          "bytes": 156672
+        },
+        {
+          "name": "GSM9084975_WT_exp2_matrix.mtx.gz",
+          "bytes": 108003328
+        }
+      ],
+      "why": "THP-1 single-cell WT expression, labels ignored, useful as unlabeled reference."
+    },
+    {
+      "series": "geo://GSE301541",
+      "series_title": "Folate Receptor Beta Regulates Macrophage NLRP3 Inflammasome Activation and Pyroptosis in a Folate-Independent Manner",
+      "sample": "GSM9084978",
+      "sample_title": "THP-1 FOLR2 KO cells replicate 1; THP-1; cell line: THP-1; genotype: FOLR2 KO; treatment: Unstimulated",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "THP-1",
+      "topic_match": 0.4,
+      "bytes": 88280064,
+      "cells_estimate": 11317,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9084978_KO_exp1_barcodes.tsv.gz",
+          "bytes": 43008
+        },
+        {
+          "name": "GSM9084978_KO_exp1_features.tsv.gz",
+          "bytes": 156672
+        },
+        {
+          "name": "GSM9084978_KO_exp1_matrix.mtx.gz",
+          "bytes": 88080384
+        }
+      ],
+      "why": "THP-1 FOLR2 KO single-cell, but no per-cell guide labels recoverable."
+    },
+    {
+      "series": "geo://GSE301541",
+      "series_title": "Folate Receptor Beta Regulates Macrophage NLRP3 Inflammasome Activation and Pyroptosis in a Folate-Independent Manner",
+      "sample": "GSM9084974",
+      "sample_title": "THP-1 WT cells replicate 1; THP-1; cell line: THP-1; genotype: WT; treatment: Unstimulated",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.3,
+      "bytes": 90373120,
+      "cells_estimate": 10240,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9084974_WT_exp1_barcodes.tsv.gz",
+          "bytes": 38912
+        },
+        {
+          "name": "GSM9084974_WT_exp1_features.tsv.gz",
+          "bytes": 156672
+        },
+        {
+          "name": "GSM9084974_WT_exp1_matrix.mtx.gz",
+          "bytes": 90177536
+        }
+      ],
+      "why": "THP-1 single-cell WT expression, labels ignored, useful as unlabeled reference."
+    },
+    {
+      "series": "geo://GSE268256",
+      "series_title": "Transcriptional profiling of DNA sensing signal activation of THP-1 cells using bulk RNA-seq and single cell RNA-seq",
+      "sample": "GSM8288773",
+      "sample_title": "pDNA_12h_scRNA-seq; THP-1; cell line: THP-1; cell type: Monocyte; genotype: WT; treatment: Transfected with 2 \u03bcg and 4 \u03bcg pDNA",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.3,
+      "bytes": 116605952,
+      "cells_estimate": 9701,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8288773_barcodes.tsv.gz",
+          "bytes": 36864
+        },
+        {
+          "name": "GSM8288773_features.tsv.gz",
+          "bytes": 177152
+        },
+        {
+          "name": "GSM8288773_matrix.mtx.gz",
+          "bytes": 116391936
+        }
+      ],
+      "why": "Single-cell THP-1 expression, no CRISPR labels; useful unlabeled supplementary data."
+    },
+    {
+      "series": "geo://GSE153056",
+      "series_title": "Characterizing the molecular regulation of inhibitory immune checkpoints with multi-modal single-cell screens.",
+      "sample": "GSM4633605",
+      "sample_title": "CITE-seq cDNA: THP-1; Acute Myeloid Leukemia cell line THP-1; cell line: THP-1; cell type: Acute Myeloid Leukemia cell line; experiment type: CITE-seq cDNA",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.3,
+      "bytes": 23068672,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM4633605_CITE_cDNA_counts.tsv.gz",
+          "bytes": 23068672
+        }
+      ],
+      "why": "CITE-seq cDNA of THP-1, same cell type, labels ignored as supplementary expression."
+    },
+    {
+      "series": "geo://GSE176294",
+      "series_title": "Revealing immune responses in the Mycobacterium avium subsp. paratuberculosis-infected THP-1 cells using single cell RNA-sequencing",
+      "sample": "GSE176294",
+      "sample_title": "Revealing immune responses in the Mycobacterium avium subsp. paratuberculosis-infected THP-1 cells using single cell RNA-sequencing (series-level files; samples: GSM5362313, ... 16 total)",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.1,
+      "bytes": 73744384,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE176294_THP-1_barcodes.tsv.gz",
+          "bytes": 33792
+        },
+        {
+          "name": "GSE176294_THP-1_features.tsv.gz",
+          "bytes": 310272
+        },
+        {
+          "name": "GSE176294_THP-1_matrix.mtx.gz",
+          "bytes": 73400320
+        }
+      ],
+      "why": "THP-1 single-cell expression, no CRISPR perturbation; useful unlabeled same-cell-type profiles.",
+      "samples": [
+        "GSM5362313",
+        "GSM5362314",
+        "GSM5362315",
+        "GSM5362316",
+        "GSM5362317",
+        "GSM5362318",
+        "GSM5362319",
+        "GSM5362320",
+        "GSM5362321",
+        "GSM5362322",
+        "GSM5362323",
+        "GSM5362324",
+        "GSM5362325",
+        "GSM5362326",
+        "GSM5362327",
+        "GSM5362328"
+      ],
+      "scbasecount": {
+        "srx": [
+          "SRX11084253",
+          "SRX11084254",
+          "SRX11084255",
+          "SRX11084256",
+          "SRX11084257",
+          "SRX11084258",
+          "SRX11084259",
+          "SRX11084260",
+          "SRX11084261",
+          "SRX11084262",
+          "SRX11084264",
+          "SRX11084265",
+          "SRX11084266",
+          "SRX11084267",
+          "SRX11084268"
+        ],
+        "cells": 39633,
+        "chemistry": "3_prime_gex"
+      }
+    },
+    {
+      "series": "geo://GSE249672",
+      "series_title": "A novel pancreatic ductal adenocarcinoma organoid recapitulating tumor microenvironment reveals macrophage-driven enhanced cancer cell survival [RNA-Seq]",
+      "sample": "GSE249672",
+      "sample_title": "A novel pancreatic ductal adenocarcinoma organoid recapitulating tumor microenvironment reveals macrophage-driven enhanced cancer cell survival [RNA-Seq] (series-level files; samples: GSM7957071, ... 3 total)",
+      "role": "supplementary",
+      "proposed_role": "supplementary",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 2306867,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE249672_CombineAlignments_CA_001.rpm.bcmatrix.csv.gz",
+          "bytes": 2306867
+        },
+        {
+          "name": "GSE249672_CombineAlignments_CA_001.bc_summary.csv.gz",
+          "bytes": null
+        }
+      ],
+      "why": "THP-1 single-cell expression, no perturbation; usable as unlabeled supplementary same-cell-type data.",
+      "samples": [
+        "GSM7957071",
+        "GSM7957072",
+        "GSM7957073"
+      ]
+    }
+  ],
+  "rejected": [
+    {
+      "series": "geo://GSE153056",
+      "series_title": "Characterizing the molecular regulation of inhibitory immune checkpoints with multi-modal single-cell screens.",
+      "sample": "GSM4633606",
+      "sample_title": "CITE-seq ADT: THP-1; Acute Myeloid Leukemia cell line THP-1; cell line: THP-1; cell type: Acute Myeloid Leukemia cell line; experiment type: CITE-seq ADT",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.1,
+      "bytes": 104448,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM4633606_CITE_ADT_Barcodes.csv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM4633606_CITE_ADT_counts.tsv.gz",
+          "bytes": 104448
+        }
+      ],
+      "why": "ADT counts only, serves CITE-seq sample, not expression."
+    },
+    {
+      "series": "geo://GSE153056",
+      "series_title": "Characterizing the molecular regulation of inhibitory immune checkpoints with multi-modal single-cell screens.",
+      "sample": "GSM4633607",
+      "sample_title": "CITE-seq HTO: THP-1; Acute Myeloid Leukemia cell line THP-1; cell line: THP-1; cell type: Acute Myeloid Leukemia cell line; experiment type: CITE-seq HTO",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.1,
+      "bytes": 72704,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM4633607_CITE_HTO_Barcodes.csv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM4633607_CITE_HTO_counts.tsv.gz",
+          "bytes": 72704
+        }
+      ],
+      "why": "HTO counts only, serves CITE-seq sample, not expression."
+    },
+    {
+      "series": "geo://GSE153056",
+      "series_title": "Characterizing the molecular regulation of inhibitory immune checkpoints with multi-modal single-cell screens.",
+      "sample": "GSM4633609",
+      "sample_title": "ECCITE-seq Arrayed ADT: THP-1; Acute Myeloid Leukemia cell line THP-1; cell line: THP-1; cell type: Acute Myeloid Leukemia cell line; experiment type: ECCITE-seq Arrayed ADT",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.1,
+      "bytes": 150528,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM4633609_ECCITE_Arrayed_ADT_Barcodes.csv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM4633609_ECCITE_Arrayed_ADT_counts.tsv.gz",
+          "bytes": 150528
+        }
+      ],
+      "why": "ADT counts only, serves arrayed ECCITE-seq screen."
+    },
+    {
+      "series": "geo://GSE153056",
+      "series_title": "Characterizing the molecular regulation of inhibitory immune checkpoints with multi-modal single-cell screens.",
+      "sample": "GSM4633610",
+      "sample_title": "ECCITE-seq Arrayed HTO1: THP-1; Acute Myeloid Leukemia cell line THP-1; cell line: THP-1; cell type: Acute Myeloid Leukemia cell line; experiment type: ECCITE-seq Arrayed HTO",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.1,
+      "bytes": 187392,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM4633610_ECCITE_Arrayed_HTO1_Barcodes.csv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM4633610_ECCITE_Arrayed_HTO_counts.tsv.gz",
+          "bytes": 187392
+        }
+      ],
+      "why": "HTO counts only, serves arrayed ECCITE-seq screen."
+    },
+    {
+      "series": "geo://GSE153056",
+      "series_title": "Characterizing the molecular regulation of inhibitory immune checkpoints with multi-modal single-cell screens.",
+      "sample": "GSM4633611",
+      "sample_title": "ECCITE-seq Arrayed HTO2: THP-1; Acute Myeloid Leukemia cell line THP-1; cell line: THP-1; cell type: Acute Myeloid Leukemia cell line; experiment type: ECCITE-seq Arrayed HTO",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.1,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM4633611_ECCITE_Arrayed_HTO2_Barcodes.csv.gz",
+          "bytes": null
+        }
+      ],
+      "why": "HTO barcodes only, serves arrayed ECCITE-seq screen."
+    },
+    {
+      "series": "geo://GSE153056",
+      "series_title": "Characterizing the molecular regulation of inhibitory immune checkpoints with multi-modal single-cell screens.",
+      "sample": "GSM4633612",
+      "sample_title": "ECCITE-seq Arrayed GDO CITE03: THP-1; Acute Myeloid Leukemia cell line THP-1; cell line: THP-1; cell type: Acute Myeloid Leukemia cell line; experiment type: ECCITE-seq Arrayed GDO CITE03",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.1,
+      "bytes": 169984,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM4633612_ECCITE_Arrayed_GDO_Barcodes.csv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM4633612_ECCITE_Arrayed_GO_CITE03_counts.tsv.gz",
+          "bytes": 169984
+        }
+      ],
+      "why": "GDO guide counts only, serves arrayed ECCITE-seq screen."
+    },
+    {
+      "series": "geo://GSE153056",
+      "series_title": "Characterizing the molecular regulation of inhibitory immune checkpoints with multi-modal single-cell screens.",
+      "sample": "GSM4633613",
+      "sample_title": "ECCITE-seq Arrayed GDO LENTI: THP-1; Acute Myeloid Leukemia cell line THP-1; cell line: THP-1; cell type: Acute Myeloid Leukemia cell line; experiment type: ECCITE-seq Arrayed GDO LENTI",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.1,
+      "bytes": 104448,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM4633613_ECCITE_Arrayed_GO_LENTI_counts.tsv.gz",
+          "bytes": 104448
+        }
+      ],
+      "why": "GDO guide counts only, serves arrayed ECCITE-seq screen."
+    },
+    {
+      "series": "geo://GSE153056",
+      "series_title": "Characterizing the molecular regulation of inhibitory immune checkpoints with multi-modal single-cell screens.",
+      "sample": "GSM4633615",
+      "sample_title": "ECCITE-seq ADT: THP-1; Acute Myeloid Leukemia cell line THP-1; cell line: THP-1; cell type: Acute Myeloid Leukemia cell line; experiment type: ECCITE-seq ADT",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.1,
+      "bytes": 196608,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM4633615_ECCITE_ADT_Barcodes.csv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM4633615_ECCITE_ADT_counts.tsv.gz",
+          "bytes": 196608
+        }
+      ],
+      "why": "ADT counts only, serves ECCITE-seq screen."
+    },
+    {
+      "series": "geo://GSE153056",
+      "series_title": "Characterizing the molecular regulation of inhibitory immune checkpoints with multi-modal single-cell screens.",
+      "sample": "GSM4633616",
+      "sample_title": "ECCITE-seq HTO1-4: THP-1; Acute Myeloid Leukemia cell line THP-1; cell line: THP-1; cell type: Acute Myeloid Leukemia cell line; experiment type: ECCITE-seq HTO",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.1,
+      "bytes": 169984,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM4633616_ECCITE_HTO_1-4_Barcodes.csv.gz",
+          "bytes": null
+        },
+        {
+          "name": "GSM4633616_ECCITE_HTO_counts.tsv.gz",
+          "bytes": 169984
+        }
+      ],
+      "why": "HTO counts only, serves ECCITE-seq screen."
+    },
+    {
+      "series": "geo://GSE153056",
+      "series_title": "Characterizing the molecular regulation of inhibitory immune checkpoints with multi-modal single-cell screens.",
+      "sample": "GSM4633617",
+      "sample_title": "ECCITE-seq HTO5-8: THP-1; Acute Myeloid Leukemia cell line THP-1; cell line: THP-1; cell type: Acute Myeloid Leukemia cell line; experiment type: ECCITE-seq HTO",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.1,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM4633617_ECCITE_HTO_5-8_Barcodes.csv.gz",
+          "bytes": null
+        }
+      ],
+      "why": "HTO barcodes only, serves ECCITE-seq screen."
+    },
+    {
+      "series": "geo://GSE153056",
+      "series_title": "Characterizing the molecular regulation of inhibitory immune checkpoints with multi-modal single-cell screens.",
+      "sample": "GSM4633618",
+      "sample_title": "ECCITE-seq GDO: THP-1; Acute Myeloid Leukemia cell line THP-1; cell line: THP-1; cell type: Acute Myeloid Leukemia cell line; experiment type: ECCITE-seq GDO",
+      "role": "companion",
+      "proposed_role": "companion",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.1,
+      "bytes": 339148,
+      "cells_estimate": 323,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM4633618_ECCITE_GDO_Barcodes.csv.gz",
+          "bytes": 1228
+        },
+        {
+          "name": "GSM4633618_ECCITE_GDO_counts.tsv.gz",
+          "bytes": 337920
+        }
+      ],
+      "why": "GDO guide counts only, serves ECCITE-seq screen."
+    },
+    {
+      "series": "geo://GSE336192",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (RNA-seq)",
+      "sample": "GSM9829757",
+      "sample_title": "BxPC3, no ko, Replicate1, RNA-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFN\u03b3 treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.6,
+      "bytes": 5138022,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM9829757_BxPC3_NTgRNA_Rep1_featurecounts.txt.gz",
+      "files": [
+        {
+          "name": "GSM9829757_BxPC3_NTgRNA_Rep1_featurecounts.txt.gz",
+          "bytes": 5138022
+        }
+      ],
+      "why": "Bulk RNA-seq in BxPC-3, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE336192",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (RNA-seq)",
+      "sample": "GSM9829758",
+      "sample_title": "BxPC3, no ko, Replicate2, RNA-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFN\u03b3 treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.6,
+      "bytes": 5138022,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM9829758_BxPC3_NTgRNA_Rep2_featurecounts.txt.gz",
+      "files": [
+        {
+          "name": "GSM9829758_BxPC3_NTgRNA_Rep2_featurecounts.txt.gz",
+          "bytes": 5138022
+        }
+      ],
+      "why": "Bulk RNA-seq in BxPC-3, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE336192",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (RNA-seq)",
+      "sample": "GSM9829759",
+      "sample_title": "BxPC3, no ko, Replicate3, RNA-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFN\u03b3 treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.6,
+      "bytes": 5138022,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM9829759_BxPC3_NTgRNA_Rep3_featurecounts.txt.gz",
+      "files": [
+        {
+          "name": "GSM9829759_BxPC3_NTgRNA_Rep3_featurecounts.txt.gz",
+          "bytes": 5138022
+        }
+      ],
+      "why": "Bulk RNA-seq in BxPC-3, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE336192",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (RNA-seq)",
+      "sample": "GSM9829760",
+      "sample_title": "BxPC3, no ko, Replicate4, RNA-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFN\u03b3 treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.6,
+      "bytes": 5138022,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM9829760_BxPC3_NTgRNA_Rep4_featurecounts.txt.gz",
+      "files": [
+        {
+          "name": "GSM9829760_BxPC3_NTgRNA_Rep4_featurecounts.txt.gz",
+          "bytes": 5138022
+        }
+      ],
+      "why": "Bulk RNA-seq in BxPC-3, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE336192",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (RNA-seq)",
+      "sample": "GSM9829761",
+      "sample_title": "BxPC3,FOXA3 ko, Replicate1, RNA-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFN\u03b3 treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.7,
+      "bytes": 5138022,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM9829761_BxPC3_FOXA3gRNA_Rep1_featurecounts.txt.gz",
+      "files": [
+        {
+          "name": "GSM9829761_BxPC3_FOXA3gRNA_Rep1_featurecounts.txt.gz",
+          "bytes": 5138022
+        }
+      ],
+      "why": "Bulk CRISPRko in BxPC-3, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE336192",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (RNA-seq)",
+      "sample": "GSM9829762",
+      "sample_title": "BxPC3,FOXA3 ko, Replicate2, RNA-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFN\u03b3 treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.7,
+      "bytes": 5138022,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM9829762_BxPC3_FOXA3gRNA_Rep2_featurecounts.txt.gz",
+      "files": [
+        {
+          "name": "GSM9829762_BxPC3_FOXA3gRNA_Rep2_featurecounts.txt.gz",
+          "bytes": 5138022
+        }
+      ],
+      "why": "Bulk CRISPRko in BxPC-3, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE336192",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (RNA-seq)",
+      "sample": "GSM9829763",
+      "sample_title": "BxPC3,FOXA3 ko, Replicate3, RNA-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFN\u03b3 treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.7,
+      "bytes": 5138022,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM9829763_BxPC3_FOXA3gRNA_Rep3_featurecounts.txt.gz",
+      "files": [
+        {
+          "name": "GSM9829763_BxPC3_FOXA3gRNA_Rep3_featurecounts.txt.gz",
+          "bytes": 5138022
+        }
+      ],
+      "why": "Bulk CRISPRko in BxPC-3, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE336192",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (RNA-seq)",
+      "sample": "GSM9829764",
+      "sample_title": "BxPC3,FOXA3 ko, Replicate4, RNA-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFN\u03b3 treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.7,
+      "bytes": 5138022,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "label file GSM9829764_BxPC3_FOXA3gRNA_Rep4_featurecounts.txt.gz",
+      "files": [
+        {
+          "name": "GSM9829764_BxPC3_FOXA3gRNA_Rep4_featurecounts.txt.gz",
+          "bytes": 5138022
+        }
+      ],
+      "why": "Bulk CRISPRko in BxPC-3, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE255700",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (HiChIP)",
+      "sample": "GSM8402311",
+      "sample_title": "BxPC3,noIFN\u03b3, Replicate1, H3K27ac HiChIP; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: no treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 685768704,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8402311_BXPC3_HiChIP_NoIFNr_Rep1.allValidPairs.txt.gz",
+          "bytes": 598736896
+        },
+        {
+          "name": "GSM8402311_SpikedNIH3T3NoIFNr_HiChIP_NoIFNr_Rep1.allValidPairs.txt.gz",
+          "bytes": 87031808
+        }
+      ],
+      "why": "Bulk HiChIP in BxPC-3, wrong cell type and not expression or single-cell."
+    },
+    {
+      "series": "geo://GSE255700",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (HiChIP)",
+      "sample": "GSM8402312",
+      "sample_title": "BxPC3,noIFN\u03b3, Replicate2, H3K27ac HiChIP; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: no treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 1093664768,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8402312_BXPC3_HiChIP_NoIFNr_Rep2.allValidPairs.txt.gz",
+          "bytes": 882900992
+        },
+        {
+          "name": "GSM8402312_SpikedNIH3T3NoIFNr_HiChIP_NoIFNr_Rep2.allValidPairs.txt.gz",
+          "bytes": 210763776
+        }
+      ],
+      "why": "Bulk HiChIP in BxPC-3, wrong cell type and not expression or single-cell."
+    },
+    {
+      "series": "geo://GSE255700",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (HiChIP)",
+      "sample": "GSM8402313",
+      "sample_title": "BxPC3,noIFN\u03b3, Replicate3, H3K27ac HiChIP; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: no treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 728760320,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8402313_BXPC3_HiChIP_NoIFNr_Rep3.allValidPairs.txt.gz",
+          "bytes": 624951296
+        },
+        {
+          "name": "GSM8402313_SpikedNIH3T3NoIFNr_HiChIP_NoIFNr_Rep3.allValidPairs.txt.gz",
+          "bytes": 103809024
+        }
+      ],
+      "why": "Bulk HiChIP in BxPC-3, wrong cell type and not expression or single-cell."
+    },
+    {
+      "series": "geo://GSE255700",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (HiChIP)",
+      "sample": "GSM8402314",
+      "sample_title": "BxPC3,noIFN\u03b3, Replicate4, H3K27ac HiChIP; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: no treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 684720128,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8402314_BXPC3_HiChIP_NoIFNr_Rep4.allValidPairs.txt.gz",
+          "bytes": 594542592
+        },
+        {
+          "name": "GSM8402314_SpikedNIH3T3NoIFNr_HiChIP_NoIFNr_Rep4.allValidPairs.txt.gz",
+          "bytes": 90177536
+        }
+      ],
+      "why": "Bulk HiChIP in BxPC-3, wrong cell type and not expression or single-cell."
+    },
+    {
+      "series": "geo://GSE255700",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (HiChIP)",
+      "sample": "GSM8402315",
+      "sample_title": "BxPC3,noIFN\u03b3, Replicate5, H3K27ac HiChIP; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: no treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 800063488,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8402315_BXPC3_HiChIP_NoIFNr_Rep5.allValidPairs.txt.gz",
+          "bytes": 661651456
+        },
+        {
+          "name": "GSM8402315_SpikedNIH3T3NoIFNr_HiChIP_NoIFNr_Rep5.allValidPairs.txt.gz",
+          "bytes": 138412032
+        }
+      ],
+      "why": "Bulk HiChIP in BxPC-3, wrong cell type and not expression or single-cell."
+    },
+    {
+      "series": "geo://GSE255700",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (HiChIP)",
+      "sample": "GSM8402316",
+      "sample_title": "BxPC3,noIFN\u03b3, Replicate6, H3K27ac HiChIP; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: no treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 688914432,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8402316_BXPC3_HiChIP_NoIFNr_Rep6.allValidPairs.txt.gz",
+          "bytes": 578813952
+        },
+        {
+          "name": "GSM8402316_SpikedNIH3T3NoIFNr_HiChIP_NoIFNr_Rep6.allValidPairs.txt.gz",
+          "bytes": 110100480
+        }
+      ],
+      "why": "Bulk HiChIP in BxPC-3, wrong cell type and not expression or single-cell."
+    },
+    {
+      "series": "geo://GSE255700",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (HiChIP)",
+      "sample": "GSM8402317",
+      "sample_title": "BxPC3,plusIFN\u03b3, Replicate1, H3K27ac HiChIP; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFNg treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 579862528,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8402317_BXPC3_HiChIP_PlusIFNr_Rep1.allValidPairs.txt.gz",
+          "bytes": 452984832
+        },
+        {
+          "name": "GSM8402317_SpikedNIH3T3NoIFNr_HiChIP_PlusIFNr_Rep1.allValidPairs.txt.gz",
+          "bytes": 126877696
+        }
+      ],
+      "why": "Bulk HiChIP in BxPC-3, wrong cell type and not expression or single-cell."
+    },
+    {
+      "series": "geo://GSE255700",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (HiChIP)",
+      "sample": "GSM8402318",
+      "sample_title": "BxPC3,plusIFN\u03b3, Replicate2, H3K27ac HiChIP; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFNg treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 1170210816,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8402318_BXPC3_HiChIP_PlusIFNr_Rep2.allValidPairs.txt.gz",
+          "bytes": 933232640
+        },
+        {
+          "name": "GSM8402318_SpikedNIH3T3NoIFNr_HiChIP_PlusIFNr_Rep2.allValidPairs.txt.gz",
+          "bytes": 236978176
+        }
+      ],
+      "why": "Bulk HiChIP in BxPC-3, wrong cell type and not expression or single-cell."
+    },
+    {
+      "series": "geo://GSE255700",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (HiChIP)",
+      "sample": "GSM8402319",
+      "sample_title": "BxPC3,plusIFN\u03b3, Replicate3, H3K27ac HiChIP; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFNg treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 871366656,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8402319_BXPC3_HiChIP_PlusIFNr_Rep3.allValidPairs.txt.gz",
+          "bytes": 662700032
+        },
+        {
+          "name": "GSM8402319_SpikedNIH3T3NoIFNr_HiChIP_PlusIFNr_Rep3.allValidPairs.txt.gz",
+          "bytes": 208666624
+        }
+      ],
+      "why": "Bulk HiChIP in BxPC-3, wrong cell type and not expression or single-cell."
+    },
+    {
+      "series": "geo://GSE255700",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (HiChIP)",
+      "sample": "GSM8402320",
+      "sample_title": "BxPC3,plusIFN\u03b3, Replicate4, H3K27ac HiChIP; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFNg treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 805306368,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8402320_BXPC3_HiChIP_PlusIFNr_Rep4.allValidPairs.txt.gz",
+          "bytes": 632291328
+        },
+        {
+          "name": "GSM8402320_SpikedNIH3T3NoIFNr_HiChIP_PlusIFNr_Rep4.allValidPairs.txt.gz",
+          "bytes": 173015040
+        }
+      ],
+      "why": "Bulk HiChIP in BxPC-3, wrong cell type and not expression or single-cell."
+    },
+    {
+      "series": "geo://GSE255700",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (HiChIP)",
+      "sample": "GSM8402321",
+      "sample_title": "BxPC3,plusIFN\u03b3, Replicate5, H3K27ac HiChIP; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFNg treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 1002438656,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8402321_BXPC3_HiChIP_PlusIFNr_Rep5.allValidPairs.txt.gz",
+          "bytes": 796917760
+        },
+        {
+          "name": "GSM8402321_SpikedNIH3T3NoIFNr_HiChIP_PlusIFNr_Rep5.allValidPairs.txt.gz",
+          "bytes": 205520896
+        }
+      ],
+      "why": "Bulk HiChIP in BxPC-3, wrong cell type and not expression or single-cell."
+    },
+    {
+      "series": "geo://GSE255700",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (HiChIP)",
+      "sample": "GSM8402322",
+      "sample_title": "BxPC3,plusIFN\u03b3, Replicate6, H3K27ac HiChIP; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFNg treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 624951296,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8402322_BXPC3_HiChIP_PlusIFNr_Rep6.allValidPairs.txt.gz",
+          "bytes": 498073600
+        },
+        {
+          "name": "GSM8402322_SpikedNIH3T3NoIFNr_HiChIP_PlusIFNr_Rep6.allValidPairs.txt.gz",
+          "bytes": 126877696
+        }
+      ],
+      "why": "Bulk HiChIP in BxPC-3, wrong cell type and not expression or single-cell."
+    },
+    {
+      "series": "geo://GSE255699",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (CUT&RUN)",
+      "sample": "GSE255699",
+      "sample_title": "Paired CRISPR screens to map gene regulation in cis and trans (CUT&RUN) (series-level files; samples: GSM8078015, ... 24 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "PDAC",
+      "topic_match": 0.3,
+      "bytes": 6238288075,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_IgG_noIFN___3reps_peaks.narrowPeak.gz",
+          "bytes": 12288
+        },
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_IgG_plusIFN___3reps_peaks.narrowPeak.gz",
+          "bytes": 45056
+        },
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_IgG_Rep123_peaks.narrowPeak.gz",
+          "bytes": 47104
+        },
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_H3K4me3_plusIFN___3reps_peaks.narrowPeak.gz",
+          "bytes": 485376
+        },
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_H3K4me3_noIFN___3reps_peaks.narrowPeak.gz",
+          "bytes": 486400
+        },
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_SRF_Rep123_peaks.narrowPeak.gz",
+          "bytes": 641024
+        },
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_H3K27ac_plusIFN___3reps_peaks.narrowPeak.gz",
+          "bytes": 899072
+        },
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_BPTF_Rep123_peaks.narrowPeak.gz",
+          "bytes": 1153433
+        },
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_H3K27ac_noIFN___3reps_peaks.narrowPeak.gz",
+          "bytes": 1887436
+        },
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_H3K4me3_Rep123_peaks.narrowPeak.gz",
+          "bytes": 1992294
+        },
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_H3K4me3_Rep123.bw",
+          "bytes": 207618048
+        },
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_H3K4me3_noIFN___3reps.bw",
+          "bytes": 512753664
+        },
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_IgG_noIFN___3reps.bw",
+          "bytes": 512753664
+        },
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_IgG_plusIFN___3reps.bw",
+          "bytes": 565182464
+        },
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_H3K4me3_plusIFN___3reps.bw",
+          "bytes": 584056832
+        },
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_IgG_Rep123.bw",
+          "bytes": 650117120
+        },
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_H3K27ac_noIFN___3reps.bw",
+          "bytes": 721420288
+        },
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_H3K27ac_plusIFN___3reps.bw",
+          "bytes": 803209216
+        },
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_BPTF_Rep123.bw",
+          "bytes": 830472192
+        },
+        {
+          "name": "GSE255699_BxPC3_CUTRUN_SRF_Rep123.bw",
+          "bytes": 843055104
+        }
+      ],
+      "why": "Bulk CUT&RUN in BxPC3, wrong cell type and not expression.",
+      "samples": [
+        "GSM8078015",
+        "GSM8078016",
+        "GSM8078017",
+        "GSM8078018",
+        "GSM8078019",
+        "GSM8078020",
+        "GSM8078021",
+        "GSM8078022",
+        "GSM8078023",
+        "GSM8078024",
+        "GSM8078025",
+        "GSM8078026",
+        "GSM9829716",
+        "GSM9829717",
+        "GSM9829718",
+        "GSM9829719",
+        "GSM9829720",
+        "GSM9829721",
+        "GSM9829722",
+        "GSM9829723",
+        "GSM9829724",
+        "GSM9829725",
+        "GSM9829726",
+        "GSM9829727"
+      ]
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM8077997",
+      "sample_title": "BxPC3,noIFN\u03b3, Replicate1, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: no treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk ATAC-seq in BxPC-3, wrong cell type and not expression."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM8077998",
+      "sample_title": "BxPC3,noIFN\u03b3, Replicate2, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: no treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk ATAC-seq in BxPC-3, wrong cell type and not expression."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM8077999",
+      "sample_title": "BxPC3,noIFN\u03b3, Replicate3, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: no treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk ATAC-seq in BxPC-3, wrong cell type and not expression."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM8078000",
+      "sample_title": "BxPC3,noIFN\u03b3, Replicate4, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: no treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk ATAC-seq in BxPC-3, wrong cell type and not expression."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM8078001",
+      "sample_title": "BxPC3,noIFN\u03b3, Replicate5, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: no treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk ATAC-seq in BxPC-3, wrong cell type and not expression."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM8078002",
+      "sample_title": "BxPC3,noIFN\u03b3, Replicate6, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: no treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk ATAC-seq in BxPC-3, wrong cell type and not expression."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM8078003",
+      "sample_title": "BxPC3,noIFN\u03b3, Replicate7, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: no treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk ATAC-seq in BxPC-3, wrong cell type and not expression."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM8078004",
+      "sample_title": "BxPC3,noIFN\u03b3, Replicate8, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: no treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk ATAC-seq in BxPC-3, wrong cell type and not expression."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM8078005",
+      "sample_title": "BxPC3,noIFN\u03b3, Replicate9, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: no treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk ATAC-seq in BxPC-3, wrong cell type and not expression."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM8078006",
+      "sample_title": "BxPC3,plusIFN\u03b3, Replicate1, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFNgamma treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk ATAC-seq in BxPC-3, wrong cell type and not expression."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM8078007",
+      "sample_title": "BxPC3,plusIFN\u03b3, Replicate2, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFNgamma treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk ATAC-seq in BxPC-3, wrong cell type and not expression."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM8078008",
+      "sample_title": "BxPC3,plusIFN\u03b3, Replicate3, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFNgamma treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk ATAC-seq in BxPC-3, wrong cell type and not expression."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM8078009",
+      "sample_title": "BxPC3,plusIFN\u03b3, Replicate4, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFNgamma treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk ATAC-seq in BxPC-3, wrong cell type and not expression."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM8078010",
+      "sample_title": "BxPC3,plusIFN\u03b3, Replicate5, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFNgamma treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk ATAC-seq in BxPC-3, wrong cell type and not expression."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM8078011",
+      "sample_title": "BxPC3,plusIFN\u03b3, Replicate6, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFNgamma treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk ATAC-seq in BxPC-3, wrong cell type and not expression."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM8078012",
+      "sample_title": "BxPC3,plusIFN\u03b3, Replicate7, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFNgamma treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk ATAC-seq in BxPC-3, wrong cell type and not expression."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM8078013",
+      "sample_title": "BxPC3,plusIFN\u03b3, Replicate8, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFNgamma treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk ATAC-seq in BxPC-3, wrong cell type and not expression."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM8078014",
+      "sample_title": "BxPC3,plusIFN\u03b3, Replicate9, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFNgamma treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.3,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk ATAC-seq in BxPC-3, wrong cell type and not expression."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM9829704",
+      "sample_title": "BxPC3,FOXA3 ko, GFP vector Resue, Replicate1, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFN\u03b3 treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.5,
+      "bytes": 229533286,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9829704_FOXA3KO_GFP_noRescue_Rep1.bw",
+          "bytes": 226492416
+        },
+        {
+          "name": "GSM9829704_FOXA3KO_GFP_noRescue_Rep1.narrowPeak.gz",
+          "bytes": 3040870
+        }
+      ],
+      "why": "Bulk ATAC-seq FOXA3 KO in BxPC-3, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM9829705",
+      "sample_title": "BxPC3,FOXA3 ko, GFP vector Resue, Replicate2, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFN\u03b3 treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.5,
+      "bytes": 229638144,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9829705_FOXA3KO_GFP_noRescue_Rep2.bw",
+          "bytes": 226492416
+        },
+        {
+          "name": "GSM9829705_FOXA3KO_GFP_noRescue_Rep2.narrowPeak.gz",
+          "bytes": 3145728
+        }
+      ],
+      "why": "Bulk ATAC-seq FOXA3 KO in BxPC-3, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM9829706",
+      "sample_title": "BxPC3,FOXA3 ko, GFP vector Resue, Replicate3, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFN\u03b3 treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.5,
+      "bytes": 254279680,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9829706_FOXA3KO_GFP_noRescue_Rep3.bw",
+          "bytes": 251658240
+        },
+        {
+          "name": "GSM9829706_FOXA3KO_GFP_noRescue_Rep3.narrowPeak.gz",
+          "bytes": 2621440
+        }
+      ],
+      "why": "Bulk ATAC-seq FOXA3 KO in BxPC-3, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM9829707",
+      "sample_title": "BxPC3,FOXA3 ko, wild-type FOXA3 Resue, Replicate1, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFN\u03b3 treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.5,
+      "bytes": 226282700,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9829707_FOXA3KO_FOXA3_Rescue_Rep1.bw",
+          "bytes": 223346688
+        },
+        {
+          "name": "GSM9829707_FOXA3KO_FOXA3_Rescue_Rep1.narrowPeak.gz",
+          "bytes": 2936012
+        }
+      ],
+      "why": "Bulk ATAC-seq FOXA3 KO in BxPC-3, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM9829708",
+      "sample_title": "BxPC3,FOXA3 ko, wild-type FOXA3 Resue, Replicate2, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFN\u03b3 treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.5,
+      "bytes": 205206323,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9829708_FOXA3KO_FOXA3_Rescue_Rep2.bw",
+          "bytes": 202375168
+        },
+        {
+          "name": "GSM9829708_FOXA3KO_FOXA3_Rescue_Rep2.narrowPeak.gz",
+          "bytes": 2831155
+        }
+      ],
+      "why": "Bulk ATAC-seq FOXA3 KO in BxPC-3, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE255698",
+      "series_title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "sample": "GSM9829709",
+      "sample_title": "BxPC3,FOXA3 ko, wild-type FOXA3 Resue, Replicate3, ATAC-seq; BxPC-3; tissue: BxPC-3; cell line: PDAC; treatment: IFN\u03b3 treatment",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "BxPC-3",
+      "topic_match": 0.5,
+      "bytes": 270113177,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM9829709_FOXA3KO_FOXA3_Rescue_Rep3.bw",
+          "bytes": 267386880
+        },
+        {
+          "name": "GSM9829709_FOXA3KO_FOXA3_Rescue_Rep3.narrowPeak.gz",
+          "bytes": 2726297
+        }
+      ],
+      "why": "Bulk ATAC-seq FOXA3 KO in BxPC-3, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE250161",
+      "series_title": "IRF2BP2-mediated MHC-I expression controls cytotoxic T cell responses in acute myeloid leukemia [ChIP-Seq]",
+      "sample": "GSM7974881",
+      "sample_title": "THP1, Input; THP-1; cell line: THP-1; cell type: human AML; genotype: WT; chip antibody: None",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 4089446,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM7974881_THP1_input.bin1.rpkm.bw",
+          "bytes": 4089446
+        }
+      ],
+      "why": "Bulk ChIP-seq input, not single-cell expression or perturbation screen."
+    },
+    {
+      "series": "geo://GSE250161",
+      "series_title": "IRF2BP2-mediated MHC-I expression controls cytotoxic T cell responses in acute myeloid leukemia [ChIP-Seq]",
+      "sample": "GSM7974882",
+      "sample_title": "THP1, scramble, H3K27ac, ChIP; THP-1; cell line: THP-1; cell type: human AML; genotype: WT; chip antibody: H3K27ac (Active Motif, # 39034)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.3,
+      "bytes": 97517568,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM7974882_THP1_scramble_H3K27ac.bin1.rpkm.bw",
+          "bytes": 97517568
+        }
+      ],
+      "why": "Bulk ChIP-seq H3K27ac, not single-cell expression data."
+    },
+    {
+      "series": "geo://GSE250161",
+      "series_title": "IRF2BP2-mediated MHC-I expression controls cytotoxic T cell responses in acute myeloid leukemia [ChIP-Seq]",
+      "sample": "GSM7974883",
+      "sample_title": "THP1, shIRF2BP2, H3K27ac, ChIP; THP-1; cell line: THP-1; cell type: human AML; genotype: IRF2BP2 knockdown; chip antibody: H3K27ac (Active Motif, # 39034)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.3,
+      "bytes": 68157440,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM7974883_THP1_shIRF2BP2_H3K27ac.bin1.rpkm.bw",
+          "bytes": 68157440
+        }
+      ],
+      "why": "Bulk ChIP-seq after knockdown, not single-cell CRISPRko screen."
+    },
+    {
+      "series": "geo://GSE250160",
+      "series_title": "IRF2BP2-mediated MHC-I expression controls cytotoxic T cell responses in acute myeloid leukemia [RNA-Seq]",
+      "sample": "GSE250160",
+      "sample_title": "IRF2BP2-mediated MHC-I expression controls cytotoxic T cell responses in acute myeloid leukemia [RNA-Seq] (series-level files; samples: GSM7974869, ... 12 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "MOLM-13",
+      "topic_match": 0.3,
+      "bytes": 5662309,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE250160_MOLM13_counts.tpm.xlsx",
+          "bytes": 2726297
+        },
+        {
+          "name": "GSE250160_THP1_counts.tpm.xlsx",
+          "bytes": 2936012
+        }
+      ],
+      "why": "Bulk RNA-seq of MOLM-13, wrong cell type, not single-cell.",
+      "samples": [
+        "GSM7974869",
+        "GSM7974870",
+        "GSM7974871",
+        "GSM7974872",
+        "GSM7974873",
+        "GSM7974874",
+        "GSM7974875",
+        "GSM7974876",
+        "GSM7974877",
+        "GSM7974878",
+        "GSM7974879",
+        "GSM7974880"
+      ]
+    },
+    {
+      "series": "geo://GSE268533",
+      "series_title": "Synthetic lethal CRISPR screen identifies a cancer cell-intrinsic role of PD-L1 in regulation of vulnerability to ferroptosis [CRISPR screening]",
+      "sample": "GSE268533",
+      "sample_title": "Synthetic lethal CRISPR screen identifies a cancer cell-intrinsic role of PD-L1 in regulation of vulnerability to ferroptosis [CRISPR screening] (series-level files; samples: GSM8335571, ... 2 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "CAL27",
+      "topic_match": 0.6,
+      "bytes": 2207129,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE268533_sgCD274_vs_sgControl.gene_summary.txt.gz",
+          "bytes": 529408
+        },
+        {
+          "name": "GSE268533_CP_all.count_normalized.txt.gz",
+          "bytes": 1677721
+        }
+      ],
+      "why": "Bulk CRISPR screen in CAL27 HNSCC, not THP-1 single-cell.",
+      "samples": [
+        "GSM8335571",
+        "GSM8335572"
+      ]
+    },
+    {
+      "series": "geo://GSE268534",
+      "series_title": "Synthetic lethal CRISPR screen identifies a cancer cell-intrinsic role of PD-L1 in regulation of vulnerability to ferroptosis [CUT&Tag]",
+      "sample": "GSE268534",
+      "sample_title": "Synthetic lethal CRISPR screen identifies a cancer cell-intrinsic role of PD-L1 in regulation of vulnerability to ferroptosis [CUT&Tag] (series-level files; samples: GSM8293953, ... 3 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "HSC3",
+      "topic_match": 0.3,
+      "bytes": 990208,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE268534_ip_peaks.narrowPeak.gz",
+          "bytes": 990208
+        }
+      ],
+      "why": "CUT&Tag bulk data in HSC3, not THP-1 single-cell expression.",
+      "samples": [
+        "GSM8293953",
+        "GSM8293954",
+        "GSM8293955"
+      ]
+    },
+    {
+      "series": "geo://GSE342674",
+      "series_title": "Suppressing phosphatidylserine externalization overcomes cancer immune evasion and enhances immunotherapy",
+      "sample": "GSE342674",
+      "sample_title": "Suppressing phosphatidylserine externalization overcomes cancer immune evasion and enhances immunotherapy (series-level files; samples: GSM9936283, ... 9 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRko",
+      "cell_type": "HCT116",
+      "topic_match": 0.2,
+      "bytes": 504365056,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "label file GSE342674_crispr_immune_invivo_umi_counts_long.csv.gz",
+      "files": [
+        {
+          "name": "GSE342674_crispr_immune_invivo_umi_counts_long.csv.gz",
+          "bytes": 137363456
+        },
+        {
+          "name": "GSE342674_siha_screen_data.csv.gz",
+          "bytes": 168820736
+        },
+        {
+          "name": "GSE342674_hct116_screen_data.csv.gz",
+          "bytes": 198180864
+        }
+      ],
+      "why": "Bulk CRISPR screen in HCT116 colorectal cells, not THP-1 single-cell.",
+      "samples": [
+        "GSM9936283",
+        "GSM9936284",
+        "GSM9936285",
+        "GSM9936286",
+        "GSM9936287",
+        "GSM9936288",
+        "GSM9936289",
+        "GSM9936290",
+        "GSM9936291"
+      ]
+    },
+    {
+      "series": "geo://GSE270890",
+      "series_title": "RNA-seq profiling of macrophage polarization in THP-1 cells co-cultured with GPNMB-knockdown TNBC spheroids",
+      "sample": "GSM8354246",
+      "sample_title": "THP-1 without any treatment replication 1; THP-1; cell line: THP-1; cell type: Monocyte - Macrophage; genotype: WT; treatment: only THP-1",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 733184,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8354246_only1_Expression.txt.gz",
+          "bytes": 733184
+        }
+      ],
+      "why": "Bulk RNA-seq, no CRISPR perturbation, not single-cell."
+    },
+    {
+      "series": "geo://GSE270890",
+      "series_title": "RNA-seq profiling of macrophage polarization in THP-1 cells co-cultured with GPNMB-knockdown TNBC spheroids",
+      "sample": "GSM8354247",
+      "sample_title": "THP-1 without any treatment replication 2; THP-1; cell line: THP-1; cell type: Monocyte - Macrophage; genotype: WT; treatment: only THP-1",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 731136,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8354247_only2_Expression.txt.gz",
+          "bytes": 731136
+        }
+      ],
+      "why": "Bulk RNA-seq, no CRISPR perturbation, not single-cell."
+    },
+    {
+      "series": "geo://GSE270890",
+      "series_title": "RNA-seq profiling of macrophage polarization in THP-1 cells co-cultured with GPNMB-knockdown TNBC spheroids",
+      "sample": "GSM8354248",
+      "sample_title": "THP-1 without any treatment replication 3; THP-1; cell line: THP-1; cell type: Monocyte - Macrophage; genotype: WT; treatment: only THP-1",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 731136,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8354248_only3_Expression.txt.gz",
+          "bytes": 731136
+        }
+      ],
+      "why": "Bulk RNA-seq, no CRISPR perturbation, not single-cell."
+    },
+    {
+      "series": "geo://GSE270890",
+      "series_title": "RNA-seq profiling of macrophage polarization in THP-1 cells co-cultured with GPNMB-knockdown TNBC spheroids",
+      "sample": "GSM8354249",
+      "sample_title": "THP-1 coculture with Hs578T replication 1; THP-1; cell line: THP-1; cell type: Monocyte - Macrophage; genotype: WT; treatment: coculture",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 748544,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8354249_C1_Expression.txt.gz",
+          "bytes": 748544
+        }
+      ],
+      "why": "Bulk RNA-seq coculture, no CRISPR perturbation, not single-cell."
+    },
+    {
+      "series": "geo://GSE270890",
+      "series_title": "RNA-seq profiling of macrophage polarization in THP-1 cells co-cultured with GPNMB-knockdown TNBC spheroids",
+      "sample": "GSM8354250",
+      "sample_title": "THP-1 coculture with Hs578T replication 2; THP-1; cell line: THP-1; cell type: Monocyte - Macrophage; genotype: WT; treatment: coculture",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 745472,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8354250_C2_Expression.txt.gz",
+          "bytes": 745472
+        }
+      ],
+      "why": "Bulk RNA-seq coculture, no CRISPR perturbation, not single-cell."
+    },
+    {
+      "series": "geo://GSE270890",
+      "series_title": "RNA-seq profiling of macrophage polarization in THP-1 cells co-cultured with GPNMB-knockdown TNBC spheroids",
+      "sample": "GSM8354251",
+      "sample_title": "THP-1 coculture with Hs578T replication 3; THP-1; cell line: THP-1; cell type: Monocyte - Macrophage; genotype: WT; treatment: coculture",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 748544,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8354251_C3_Expression.txt.gz",
+          "bytes": 748544
+        }
+      ],
+      "why": "Bulk RNA-seq coculture, no CRISPR perturbation, not single-cell."
+    },
+    {
+      "series": "geo://GSE270890",
+      "series_title": "RNA-seq profiling of macrophage polarization in THP-1 cells co-cultured with GPNMB-knockdown TNBC spheroids",
+      "sample": "GSM8354252",
+      "sample_title": "THP-1 coculture with SiGPNMB1 - Hs578T replication 1; THP-1; cell line: THP-1; cell type: Monocyte - Macrophage; genotype: Knock down GPNMB on Hs578T; treatment: coculture",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 747520,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8354252_Si1_1_Expression.txt.gz",
+          "bytes": 747520
+        }
+      ],
+      "why": "Bulk RNA-seq, siRNA knockdown not CRISPRko, not single-cell."
+    },
+    {
+      "series": "geo://GSE270890",
+      "series_title": "RNA-seq profiling of macrophage polarization in THP-1 cells co-cultured with GPNMB-knockdown TNBC spheroids",
+      "sample": "GSM8354253",
+      "sample_title": "THP-1 coculture with SiGPNMB1 - Hs578T replication 2; THP-1; cell line: THP-1; cell type: Monocyte - Macrophage; genotype: Knock down GPNMB on Hs578T; treatment: coculture",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 743424,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8354253_Si1_2_Expression.txt.gz",
+          "bytes": 743424
+        }
+      ],
+      "why": "Bulk RNA-seq, siRNA knockdown not CRISPRko, not single-cell."
+    },
+    {
+      "series": "geo://GSE270890",
+      "series_title": "RNA-seq profiling of macrophage polarization in THP-1 cells co-cultured with GPNMB-knockdown TNBC spheroids",
+      "sample": "GSM8354254",
+      "sample_title": "THP-1 coculture with SiGPNMB1 - Hs578T replication 3; THP-1; cell line: THP-1; cell type: Monocyte - Macrophage; genotype: Knock down GPNMB on Hs578T; treatment: coculture",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 742400,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8354254_Si1_3_Expression.txt.gz",
+          "bytes": 742400
+        }
+      ],
+      "why": "Bulk RNA-seq, siRNA knockdown not CRISPRko, not single-cell."
+    },
+    {
+      "series": "geo://GSE270890",
+      "series_title": "RNA-seq profiling of macrophage polarization in THP-1 cells co-cultured with GPNMB-knockdown TNBC spheroids",
+      "sample": "GSM8354255",
+      "sample_title": "THP-1 coculture with SiGPNMB2 - Hs578T replication 1; THP-1; cell line: THP-1; cell type: Monocyte - Macrophage; genotype: Knock down GPNMB on Hs578T; treatment: coculture",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 734208,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8354255_Si2_1_Expression.txt.gz",
+          "bytes": 734208
+        }
+      ],
+      "why": "Bulk RNA-seq, siRNA knockdown not CRISPRko, not single-cell."
+    },
+    {
+      "series": "geo://GSE270890",
+      "series_title": "RNA-seq profiling of macrophage polarization in THP-1 cells co-cultured with GPNMB-knockdown TNBC spheroids",
+      "sample": "GSM8354256",
+      "sample_title": "THP-1 coculture with SiGPNMB2 - Hs578T replication 2; THP-1; cell line: THP-1; cell type: Monocyte - Macrophage; genotype: Knock down GPNMB on Hs578T; treatment: coculture",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 743424,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8354256_Si2_2_Expression.txt.gz",
+          "bytes": 743424
+        }
+      ],
+      "why": "Bulk RNA-seq, siRNA knockdown not CRISPRko, not single-cell."
+    },
+    {
+      "series": "geo://GSE270890",
+      "series_title": "RNA-seq profiling of macrophage polarization in THP-1 cells co-cultured with GPNMB-knockdown TNBC spheroids",
+      "sample": "GSM8354257",
+      "sample_title": "THP-1 coculture with SiGPNMB2 - Hs578T replication 3; THP-1; cell line: THP-1; cell type: Monocyte - Macrophage; genotype: Knock down GPNMB on Hs578T; treatment: coculture",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 741376,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8354257_Si2_3_Expression.txt.gz",
+          "bytes": 741376
+        }
+      ],
+      "why": "Bulk RNA-seq, siRNA knockdown not CRISPRko, not single-cell."
+    },
+    {
+      "series": "geo://GSE268256",
+      "series_title": "Transcriptional profiling of DNA sensing signal activation of THP-1 cells using bulk RNA-seq and single cell RNA-seq",
+      "sample": "GSM8288757",
+      "sample_title": "NC_12h; THP-1; cell line: THP-1; cell type: Monocyte; genotype: WT; treatment: Treated with same amount of DMSO and transfection reagent",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk RNA-seq, no CRISPR perturbation, not single-cell."
+    },
+    {
+      "series": "geo://GSE268256",
+      "series_title": "Transcriptional profiling of DNA sensing signal activation of THP-1 cells using bulk RNA-seq and single cell RNA-seq",
+      "sample": "GSM8288758",
+      "sample_title": "NC_24h; THP-1; cell line: THP-1; cell type: Monocyte; genotype: WT; treatment: Treated with same amount of DMSO and transfection reagent",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk RNA-seq, no CRISPR perturbation, not single-cell."
+    },
+    {
+      "series": "geo://GSE268256",
+      "series_title": "Transcriptional profiling of DNA sensing signal activation of THP-1 cells using bulk RNA-seq and single cell RNA-seq",
+      "sample": "GSM8288759",
+      "sample_title": "NC_36h; THP-1; cell line: THP-1; cell type: Monocyte; genotype: WT; treatment: Treated with same amount of DMSO and transfection reagent",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk RNA-seq, no CRISPR perturbation, not single-cell."
+    },
+    {
+      "series": "geo://GSE268256",
+      "series_title": "Transcriptional profiling of DNA sensing signal activation of THP-1 cells using bulk RNA-seq and single cell RNA-seq",
+      "sample": "GSM8288760",
+      "sample_title": "H151_12h; THP-1; cell line: THP-1; cell type: Monocyte; genotype: WT; treatment: Treated with 1 \u03bcM H151 and transfection reagent",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk RNA-seq, drug treatment not CRISPR, not single-cell."
+    },
+    {
+      "series": "geo://GSE268256",
+      "series_title": "Transcriptional profiling of DNA sensing signal activation of THP-1 cells using bulk RNA-seq and single cell RNA-seq",
+      "sample": "GSM8288761",
+      "sample_title": "H151_24h; THP-1; cell line: THP-1; cell type: Monocyte; genotype: WT; treatment: Treated with 1 \u03bcM H151 and transfection reagent",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk RNA-seq, drug treatment not CRISPR, not single-cell."
+    },
+    {
+      "series": "geo://GSE268256",
+      "series_title": "Transcriptional profiling of DNA sensing signal activation of THP-1 cells using bulk RNA-seq and single cell RNA-seq",
+      "sample": "GSM8288762",
+      "sample_title": "H151_36h; THP-1; cell line: THP-1; cell type: Monocyte; genotype: WT; treatment: Treated with 1 \u03bcM H151 and transfection reagent",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk RNA-seq, drug treatment not CRISPR, not single-cell."
+    },
+    {
+      "series": "geo://GSE268256",
+      "series_title": "Transcriptional profiling of DNA sensing signal activation of THP-1 cells using bulk RNA-seq and single cell RNA-seq",
+      "sample": "GSM8288763",
+      "sample_title": "pDNA_12h; THP-1; cell line: THP-1; cell type: Monocyte; genotype: WT; treatment: Treated with same amount of DMSO and transfected with 3\u03bcg pDNA",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk RNA-seq, pDNA transfection not CRISPR, not single-cell."
+    },
+    {
+      "series": "geo://GSE268256",
+      "series_title": "Transcriptional profiling of DNA sensing signal activation of THP-1 cells using bulk RNA-seq and single cell RNA-seq",
+      "sample": "GSM8288764",
+      "sample_title": "pDNA _24h; THP-1; cell line: THP-1; cell type: Monocyte; genotype: WT; treatment: Treated with same amount of DMSO and transfected with 3\u03bcg pDNA",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk RNA-seq, pDNA transfection not CRISPR, not single-cell."
+    },
+    {
+      "series": "geo://GSE268256",
+      "series_title": "Transcriptional profiling of DNA sensing signal activation of THP-1 cells using bulk RNA-seq and single cell RNA-seq",
+      "sample": "GSM8288765",
+      "sample_title": "pDNA _36h; THP-1; cell line: THP-1; cell type: Monocyte; genotype: WT; treatment: Treated with same amount of DMSO and transfected with 3\u03bcg pDNA",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk RNA-seq, pDNA transfection not CRISPR, not single-cell."
+    },
+    {
+      "series": "geo://GSE268256",
+      "series_title": "Transcriptional profiling of DNA sensing signal activation of THP-1 cells using bulk RNA-seq and single cell RNA-seq",
+      "sample": "GSM8288766",
+      "sample_title": "pDNA_H151_12h; THP-1; cell line: THP-1; cell type: Monocyte; genotype: WT; treatment: Treated with 1 \u03bcM H151 and transfected with 3\u03bcg pDNA",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk RNA-seq, drug and pDNA treatment, not CRISPR."
+    },
+    {
+      "series": "geo://GSE268256",
+      "series_title": "Transcriptional profiling of DNA sensing signal activation of THP-1 cells using bulk RNA-seq and single cell RNA-seq",
+      "sample": "GSM8288767",
+      "sample_title": "pDNA_H151_24h; THP-1; cell line: THP-1; cell type: Monocyte; genotype: WT; treatment: Treated with 1 \u03bcM H151 and transfected with 3\u03bcg pDNA",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk RNA-seq, drug and pDNA treatment, not CRISPR."
+    },
+    {
+      "series": "geo://GSE268256",
+      "series_title": "Transcriptional profiling of DNA sensing signal activation of THP-1 cells using bulk RNA-seq and single cell RNA-seq",
+      "sample": "GSM8288768",
+      "sample_title": "pDNA_H151_36h; THP-1; cell line: THP-1; cell type: Monocyte; genotype: WT; treatment: Treated with 1 \u03bcM H151 and transfected with 3\u03bcg pDNA",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk RNA-seq, drug and pDNA treatment, not CRISPR."
+    },
+    {
+      "series": "geo://GSE268256",
+      "series_title": "Transcriptional profiling of DNA sensing signal activation of THP-1 cells using bulk RNA-seq and single cell RNA-seq",
+      "sample": "GSM8288769",
+      "sample_title": "GFP_neg1 (biol rep1); THP-1; cell line: THP-1; cell type: Monocyte; genotype: WT; treatment: Transfected with 3\u03bcg pDNA",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk RNA-seq of sorted cells, no CRISPR perturbation."
+    },
+    {
+      "series": "geo://GSE268256",
+      "series_title": "Transcriptional profiling of DNA sensing signal activation of THP-1 cells using bulk RNA-seq and single cell RNA-seq",
+      "sample": "GSM8288770",
+      "sample_title": "GFP_neg2 (biol rep2); THP-1; cell line: THP-1; cell type: Monocyte; genotype: WT; treatment: Transfected with 3\u03bcg pDNA",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk RNA-seq of sorted cells, no CRISPR perturbation."
+    },
+    {
+      "series": "geo://GSE268256",
+      "series_title": "Transcriptional profiling of DNA sensing signal activation of THP-1 cells using bulk RNA-seq and single cell RNA-seq",
+      "sample": "GSM8288771",
+      "sample_title": "GFP_pos1 (biol rep1); THP-1; cell line: THP-1; cell type: Monocyte; genotype: WT; treatment: Transfected with 3\u03bcg pDNA",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk RNA-seq of sorted cells, no CRISPR perturbation."
+    },
+    {
+      "series": "geo://GSE268256",
+      "series_title": "Transcriptional profiling of DNA sensing signal activation of THP-1 cells using bulk RNA-seq and single cell RNA-seq",
+      "sample": "GSM8288772",
+      "sample_title": "GFP_pos2 (biol rep2); THP-1; cell line: THP-1; cell type: Monocyte; genotype: WT; treatment: Transfected with 3\u03bcg pDNA",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 0,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [],
+      "why": "Bulk RNA-seq of sorted cells, no CRISPR perturbation."
+    },
+    {
+      "series": "geo://GSE302068",
+      "series_title": "Single-Cell Atlas of Pan-Cancer Immunotherapy Reveals the Role of Ferroptosis in Exhausted Macrophages and Immune Therapy Resistance",
+      "sample": "GSE302068",
+      "sample_title": "Single-Cell Atlas of Pan-Cancer Immunotherapy Reveals the Role of Ferroptosis in Exhausted Macrophages and Immune Therapy Resistance (series-level files; samples: GSM9095273, ... 9 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.3,
+      "bytes": 740352,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE302068_counts.txt.gz",
+          "bytes": 740352
+        }
+      ],
+      "why": "Bulk RNA-seq, siRNA knockdown not CRISPRko, not single-cell.",
+      "samples": [
+        "GSM9095273",
+        "GSM9095274",
+        "GSM9095275",
+        "GSM9095276",
+        "GSM9095277",
+        "GSM9095278",
+        "GSM9095279",
+        "GSM9095280",
+        "GSM9095281"
+      ]
+    },
+    {
+      "series": "geo://GSE301119",
+      "series_title": "Integrative analysis of pooled CRISPR screens provide functional insights into AD GWAS risk genes",
+      "sample": "GSE301119",
+      "sample_title": "Integrative analysis of pooled CRISPR screens provide functional insights into AD GWAS risk genes (series-level files; samples: GSM9075670, ... 24 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "CRISPRi",
+      "cell_type": "macrophage",
+      "topic_match": 0.2,
+      "bytes": 752877568,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "label file GSE301119_CRISPRa_seurat5.rds",
+      "files": [
+        {
+          "name": "GSE301119_CRISPRa_seurat5.rds",
+          "bytes": 346030080
+        },
+        {
+          "name": "GSE301119_CRISPRi_seurat5.rds",
+          "bytes": 406847488
+        }
+      ],
+      "why": "Primary macrophage, not THP-1; wrong cell type for study.",
+      "samples": [
+        "GSM9075670",
+        "GSM9075671",
+        "GSM9075672",
+        "GSM9075673",
+        "GSM9075674",
+        "GSM9075675",
+        "GSM9075676",
+        "GSM9075677",
+        "GSM9075678",
+        "GSM9075679",
+        "GSM9075680",
+        "GSM9075681",
+        "GSM9075682",
+        "GSM9075683",
+        "GSM9075684",
+        "GSM9075685",
+        "GSM9075686",
+        "GSM9075687",
+        "GSM9075688",
+        "GSM9075689",
+        "GSM9075690",
+        "GSM9075691",
+        "GSM9075692",
+        "GSM9075693"
+      ]
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761977",
+      "sample_title": "A549 cells, Ctrl, mock 18h, rep1; A549; cell line: A549; cell type: epithelial cell; genotype: GFP knockdown; treatment: mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 373760,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761977_KJ163_ReadsPerGene.tsv.gz",
+          "bytes": 373760
+        }
+      ],
+      "why": "Bulk A549 RNA-seq, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761978",
+      "sample_title": "A549 cells, Ctrl, H1N1 18h, rep1; A549; cell line: A549; cell type: epithelial cell; genotype: GFP knockdown; treatment: IAV CA/09 H1N1",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 360448,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761978_KJ164_ReadsPerGene.tsv.gz",
+          "bytes": 360448
+        }
+      ],
+      "why": "Bulk A549 RNA-seq, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761979",
+      "sample_title": "A549 cells, VILMIRg1, mock 18h, rep1; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 374784,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761979_KJ165_ReadsPerGene.tsv.gz",
+          "bytes": 374784
+        }
+      ],
+      "why": "Bulk A549 knockdown, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761980",
+      "sample_title": "A549 cells, VILMIRg1, H1N1 18h rep1; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: IAV CA/09 H1N1",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 369664,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761980_KJ166_ReadsPerGene.tsv.gz",
+          "bytes": 369664
+        }
+      ],
+      "why": "Bulk A549 knockdown, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761981",
+      "sample_title": "A549 cells, VILMIRg2, mock 18h rep1; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 373760,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761981_KJ167_ReadsPerGene.tsv.gz",
+          "bytes": 373760
+        }
+      ],
+      "why": "Bulk A549 knockdown, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761982",
+      "sample_title": "A549 cells, VILMIRg2, H1N1 18h rep1; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: IAV CA/09 H1N1",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 358400,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761982_KJ168_ReadsPerGene.tsv.gz",
+          "bytes": 358400
+        }
+      ],
+      "why": "Bulk A549 knockdown, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761983",
+      "sample_title": "A549 cells, STAT1g1, mock 18h, rep1; A549; cell line: A549; cell type: epithelial cell; genotype: STAT1 knockdown; treatment: mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 374784,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761983_KJ169_ReadsPerGene.tsv.gz",
+          "bytes": 374784
+        }
+      ],
+      "why": "Bulk A549 knockdown, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761984",
+      "sample_title": "A549 cells, STAT1g1 H1N1 18h, rep1; A549; cell line: A549; cell type: epithelial cell; genotype: STAT1 knockdown; treatment: IAV CA/09 H1N1",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 370688,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761984_KJ170_ReadsPerGene.tsv.gz",
+          "bytes": 370688
+        }
+      ],
+      "why": "Bulk A549 knockdown, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761985",
+      "sample_title": "A549 cells, Ctrl, mock 18h, rep2; A549; cell line: A549; cell type: epithelial cell; genotype: GFP knockdown; treatment: mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 374784,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761985_KJ171_ReadsPerGene.tsv.gz",
+          "bytes": 374784
+        }
+      ],
+      "why": "Bulk A549 RNA-seq, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761986",
+      "sample_title": "A549 cells, Ctrl, H1N1 18h, rep2; A549; cell line: A549; cell type: epithelial cell; genotype: GFP knockdown; treatment: IAV CA/09 H1N1",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 357376,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761986_KJ172_ReadsPerGene.tsv.gz",
+          "bytes": 357376
+        }
+      ],
+      "why": "Bulk A549 RNA-seq, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761987",
+      "sample_title": "A549 cells, VILMIRg1, mock 18h, rep2; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 373760,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761987_KJ173_ReadsPerGene.tsv.gz",
+          "bytes": 373760
+        }
+      ],
+      "why": "Bulk A549 knockdown, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761988",
+      "sample_title": "A549 cells, VILMIRg1, H1N1 18h rep2; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: IAV CA/09 H1N1",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 365568,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761988_KJ174_ReadsPerGene.tsv.gz",
+          "bytes": 365568
+        }
+      ],
+      "why": "Bulk A549 knockdown, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761989",
+      "sample_title": "A549 cells, VILMIRg2, mock 18h rep2; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 374784,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761989_KJ175_ReadsPerGene.tsv.gz",
+          "bytes": 374784
+        }
+      ],
+      "why": "Bulk A549 knockdown, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761990",
+      "sample_title": "A549 cells, VILMIRg2, H1N1 18h rep2; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: IAV CA/09 H1N1",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 355328,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761990_KJ176_ReadsPerGene.tsv.gz",
+          "bytes": 355328
+        }
+      ],
+      "why": "Bulk A549 knockdown, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761991",
+      "sample_title": "A549 cells, STAT1g1, mock 18h, rep2; A549; cell line: A549; cell type: epithelial cell; genotype: STAT1 knockdown; treatment: mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 377856,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761991_KJ177_ReadsPerGene.tsv.gz",
+          "bytes": 377856
+        }
+      ],
+      "why": "Bulk A549 knockdown, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761992",
+      "sample_title": "A549 cells, STAT1g1 H1N1 18h, rep2; A549; cell line: A549; cell type: epithelial cell; genotype: STAT1 knockdown; treatment: IAV CA/09 H1N1",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 370688,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761992_KJ178_ReadsPerGene.tsv.gz",
+          "bytes": 370688
+        }
+      ],
+      "why": "Bulk A549 knockdown, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761993",
+      "sample_title": "A549 cells, Ctrl, mock 18h, rep3; A549; cell line: A549; cell type: epithelial cell; genotype: GFP knockdown; treatment: mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 374784,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761993_KJ179_ReadsPerGene.tsv.gz",
+          "bytes": 374784
+        }
+      ],
+      "why": "Bulk A549 RNA-seq, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761994",
+      "sample_title": "A549 cells, Ctrl, H1N1 18h, rep3; A549; cell line: A549; cell type: epithelial cell; genotype: GFP knockdown; treatment: IAV CA/09 H1N1",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 361472,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761994_KJ180_ReadsPerGene.tsv.gz",
+          "bytes": 361472
+        }
+      ],
+      "why": "Bulk A549 RNA-seq, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761995",
+      "sample_title": "A549 cells, VILMIRg1, mock 18h, rep3; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 376832,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761995_KJ181_ReadsPerGene.tsv.gz",
+          "bytes": 376832
+        }
+      ],
+      "why": "Bulk A549 knockdown, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761996",
+      "sample_title": "A549 cells, VILMIRg1, H1N1 18h rep3; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: IAV CA/09 H1N1",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 369664,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761996_KJ182_ReadsPerGene.tsv.gz",
+          "bytes": 369664
+        }
+      ],
+      "why": "Bulk A549 knockdown, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761997",
+      "sample_title": "A549 cells, VILMIRg2, mock 18h rep3; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 375808,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761997_KJ183_ReadsPerGene.tsv.gz",
+          "bytes": 375808
+        }
+      ],
+      "why": "Bulk A549 knockdown, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761998",
+      "sample_title": "A549 cells, VILMIRg2, H1N1 18h rep3; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: IAV CA/09 H1N1",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 359424,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761998_KJ184_ReadsPerGene.tsv.gz",
+          "bytes": 359424
+        }
+      ],
+      "why": "Bulk A549 knockdown, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8761999",
+      "sample_title": "A549 cells, STAT1g1, mock 18h, rep3; A549; cell line: A549; cell type: epithelial cell; genotype: STAT1 knockdown; treatment: mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 372736,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8761999_KJ185_ReadsPerGene.tsv.gz",
+          "bytes": 372736
+        }
+      ],
+      "why": "Bulk A549 knockdown, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE288251",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8762000",
+      "sample_title": "A549 cells, STAT1g1 H1N1 18h, rep3; A549; cell line: A549; cell type: epithelial cell; genotype: STAT1 knockdown; treatment: IAV CA/09 H1N1",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 364544,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8762000_KJ186_ReadsPerGene.tsv.gz",
+          "bytes": 364544
+        }
+      ],
+      "why": "Bulk A549 knockdown, wrong cell type, not single-cell."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154179",
+      "sample_title": "A549 cells, Ctrl, mock, rep1; A549; cell line: A549; cell type: epithelial cell; genotype: GFP knockdown; treatment: mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 345088,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154179_KJ01_ReadsPerGene.tsv.gz",
+          "bytes": 345088
+        }
+      ],
+      "why": "Bulk A549 epithelial cells, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154180",
+      "sample_title": "A549 cells, Ctrl, 1 ng/mL IFN, rep1; A549; cell line: A549; cell type: epithelial cell; genotype: GFP knockdown; treatment: 1 ng/mL IFN-B",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 345088,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154180_KJ02_ReadsPerGene.tsv.gz",
+          "bytes": 345088
+        }
+      ],
+      "why": "Bulk A549 epithelial cells, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154181",
+      "sample_title": "A549 cells, Ctrl, 10 ng/mL IFN, rep1; A549; cell line: A549; cell type: epithelial cell; genotype: GFP knockdown; treatment: 10 ng/mL IFN-B",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 349184,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154181_KJ03_ReadsPerGene.tsv.gz",
+          "bytes": 349184
+        }
+      ],
+      "why": "Bulk A549 epithelial cells, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154182",
+      "sample_title": "A549 cells, Ctrl, 1 ng/mL IFN, rep2; A549; cell line: A549; cell type: epithelial cell; genotype: GFP knockdown; treatment: 1 ng/mL IFN-B",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 349184,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154182_KJ04_ReadsPerGene.tsv.gz",
+          "bytes": 349184
+        }
+      ],
+      "why": "Bulk A549 epithelial cells, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154183",
+      "sample_title": "A549 cells, Ctrl, 10 ng/mL IFN, rep2; A549; cell line: A549; cell type: epithelial cell; genotype: GFP knockdown; treatment: 10 ng/mL IFN-B",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 349184,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154183_KJ05_ReadsPerGene.tsv.gz",
+          "bytes": 349184
+        }
+      ],
+      "why": "Bulk A549 epithelial cells, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154184",
+      "sample_title": "A549 cells, STAT1g1, mock, rep1; A549; cell line: A549; cell type: epithelial cell; genotype: STAT1 knockdown; treatment: mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 348160,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154184_KJ06_ReadsPerGene.tsv.gz",
+          "bytes": 348160
+        }
+      ],
+      "why": "Bulk A549 knockdown, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154185",
+      "sample_title": "A549 cells, STAT1g1, 1 ng/mL IFN, rep1; A549; cell line: A549; cell type: epithelial cell; genotype: STAT1 knockdown; treatment: 1 ng/mL IFN-B",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 350208,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154185_KJ07_ReadsPerGene.tsv.gz",
+          "bytes": 350208
+        }
+      ],
+      "why": "Bulk A549 knockdown, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154186",
+      "sample_title": "A549 cells, STAT1g1, 10 ng/mL IFN, rep1; A549; cell line: A549; cell type: epithelial cell; genotype: STAT1 knockdown; treatment: 10 ng/mL IFN-B",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 345088,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154186_KJ08_ReadsPerGene.tsv.gz",
+          "bytes": 345088
+        }
+      ],
+      "why": "Bulk A549 knockdown, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154187",
+      "sample_title": "A549 cells, VILMIRg1, mock, rep1; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 347136,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154187_KJ09_ReadsPerGene.tsv.gz",
+          "bytes": 347136
+        }
+      ],
+      "why": "Bulk A549 knockdown, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154188",
+      "sample_title": "A549 cells, VILMIRg1, 1 ng/mL IFN, rep1; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: 1 ng/mL IFN-B",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 347136,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154188_KJ10_ReadsPerGene.tsv.gz",
+          "bytes": 347136
+        }
+      ],
+      "why": "Bulk A549 knockdown, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154189",
+      "sample_title": "A549 cells, STAT1g1, mock, rep2; A549; cell line: A549; cell type: epithelial cell; genotype: STAT1 knockdown; treatment: mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 348160,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154189_KJ11_ReadsPerGene.tsv.gz",
+          "bytes": 348160
+        }
+      ],
+      "why": "Bulk A549 knockdown, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154190",
+      "sample_title": "A549 cells, STAT1g1, 1 ng/mL IFN, rep2; A549; cell line: A549; cell type: epithelial cell; genotype: STAT1 knockdown; treatment: 1 ng/mL IFN-B",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 346112,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154190_KJ12_ReadsPerGene.tsv.gz",
+          "bytes": 346112
+        }
+      ],
+      "why": "Bulk A549 knockdown, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154191",
+      "sample_title": "A549 cells, STAT1g1, 10 ng/mL IFN, rep2; A549; cell line: A549; cell type: epithelial cell; genotype: STAT1 knockdown; treatment: 10 ng/mL IFN-B",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 350208,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154191_KJ13_ReadsPerGene.tsv.gz",
+          "bytes": 350208
+        }
+      ],
+      "why": "Bulk A549 knockdown, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154192",
+      "sample_title": "A549 cells, VILMIRg1, 1 ng/mL IFN, rep3; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: 1 ng/mL IFN-B",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 347136,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154192_KJ14_ReadsPerGene.tsv.gz",
+          "bytes": 347136
+        }
+      ],
+      "why": "Bulk A549 knockdown, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154193",
+      "sample_title": "A549 cells, VILMIRg1, 10 ng/mL IFN, rep1; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: 10 ng/mL IFN-B",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 349184,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154193_KJ15_ReadsPerGene.tsv.gz",
+          "bytes": 349184
+        }
+      ],
+      "why": "Bulk A549 knockdown, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154194",
+      "sample_title": "A549 cells, VILMIRg1, 10 ng/mL IFN, rep2; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: 10 ng/mL IFN-B",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 345088,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154194_KJ16_ReadsPerGene.tsv.gz",
+          "bytes": 345088
+        }
+      ],
+      "why": "Bulk A549 knockdown, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154195",
+      "sample_title": "A549 cells, VILMIRg1, 10 ng/mL IFN, rep3; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: 10 ng/mL IFN-B",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 347136,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154195_KJ17_ReadsPerGene.tsv.gz",
+          "bytes": 347136
+        }
+      ],
+      "why": "Bulk A549 knockdown, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154196",
+      "sample_title": "A549 cells, VILMIRg2, mock, rep1; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 350208,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154196_KJ18_ReadsPerGene.tsv.gz",
+          "bytes": 350208
+        }
+      ],
+      "why": "Bulk A549 knockdown, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154197",
+      "sample_title": "A549 cells, VILMIRg2, mock, rep2; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 344064,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154197_KJ19_ReadsPerGene.tsv.gz",
+          "bytes": 344064
+        }
+      ],
+      "why": "Bulk A549 knockdown, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154198",
+      "sample_title": "A549 cells, VILMIRg2, mock, rep3; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: mock",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 346112,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154198_KJ20_ReadsPerGene.tsv.gz",
+          "bytes": 346112
+        }
+      ],
+      "why": "Bulk A549 knockdown, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154199",
+      "sample_title": "A549 cells, VILMIRg2, 1 ng/mL IFN, rep1; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: 1 ng/mL IFN-B",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 347136,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154199_KJ21_ReadsPerGene.tsv.gz",
+          "bytes": 347136
+        }
+      ],
+      "why": "Bulk A549 knockdown, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154200",
+      "sample_title": "A549 cells, VILMIRg2, 1 ng/mL IFN, rep2; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: 1 ng/mL IFN-B",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 347136,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154200_KJ22_ReadsPerGene.tsv.gz",
+          "bytes": 347136
+        }
+      ],
+      "why": "Bulk A549 knockdown, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154201",
+      "sample_title": "A549 cells, VILMIRg2, 1 ng/mL IFN, rep3; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: 1 ng/mL IFN-B",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 347136,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154201_KJ23_ReadsPerGene.tsv.gz",
+          "bytes": 347136
+        }
+      ],
+      "why": "Bulk A549 knockdown, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE261920",
+      "series_title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "sample": "GSM8154202",
+      "sample_title": "A549 cells, VILMIRg2, 10 ng/mL IFN, rep1; A549; cell line: A549; cell type: epithelial cell; genotype: VILMIR knockdown; treatment: 10 ng/mL IFN-B",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "epithelial cell",
+      "topic_match": 0.1,
+      "bytes": 345088,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8154202_KJ24_ReadsPerGene.tsv.gz",
+          "bytes": 345088
+        }
+      ],
+      "why": "Bulk A549 knockdown, not THP-1 single-cell; wrong cell type."
+    },
+    {
+      "series": "geo://GSE317209",
+      "series_title": "Mapping Endothelial-Macrophage Interactions in Diabetic Vasculature: Role of TREM2 in Vascular Inflammation and Ischemic Response [bulk RNA-Seq]",
+      "sample": "GSE317209",
+      "sample_title": "Mapping Endothelial-Macrophage Interactions in Diabetic Vasculature: Role of TREM2 in Vascular Inflammation and Ischemic Response [bulk RNA-Seq] (series-level files; samples: GSM9467039, ... 6 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1 derived macrophages",
+      "topic_match": 0.2,
+      "bytes": 796672,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE317209_All_samples_counts_file.txt.gz",
+          "bytes": 796672
+        }
+      ],
+      "why": "Bulk RNA-Seq, not single-cell; siRNA knockdown not CRISPRko; topic is vascular TREM2, not PD-L1.",
+      "samples": [
+        "GSM9467039",
+        "GSM9467040",
+        "GSM9467041",
+        "GSM9467042",
+        "GSM9467043",
+        "GSM9467044"
+      ]
+    },
+    {
+      "series": "geo://GSE283851",
+      "series_title": "S100A9 Overexpression Drives Chemoresistance and Poor Prognosis in AML with Adavivint as a Targeted Therapeutic",
+      "sample": "GSE283851",
+      "sample_title": "S100A9 Overexpression Drives Chemoresistance and Poor Prognosis in AML with Adavivint as a Targeted Therapeutic (series-level files; samples: GSM8673142, ... 18 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "U937",
+      "topic_match": 0.1,
+      "bytes": 605184,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE283851_AllSamples_Genes_ReadsCount.txt.gz",
+          "bytes": 605184
+        }
+      ],
+      "why": "Bulk RNA-seq of U937, wrong cell type, no CRISPRko, not single-cell.",
+      "samples": [
+        "GSM8673142",
+        "GSM8673143",
+        "GSM8673144",
+        "GSM8673145",
+        "GSM8673146",
+        "GSM8673147",
+        "GSM8673148",
+        "GSM8673149",
+        "GSM8673150",
+        "GSM8673151",
+        "GSM8673152",
+        "GSM8673153",
+        "GSM8673154",
+        "GSM8673155",
+        "GSM8673156",
+        "GSM8673157",
+        "GSM8673158",
+        "GSM8673159"
+      ]
+    },
+    {
+      "series": "geo://GSE262356",
+      "series_title": "Small non-coding RNAs encapsulating mammalian cells fuels innate immunity",
+      "sample": "GSE262356",
+      "sample_title": "Small non-coding RNAs encapsulating mammalian cells fuels innate immunity (series-level files; samples: GSM8163785, ... 4 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.1,
+      "bytes": 273408,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE262356_count.txt.gz",
+          "bytes": 273408
+        }
+      ],
+      "why": "Bulk surface RNA counts, no CRISPR perturbation, off-topic PD-L1 regulation.",
+      "samples": [
+        "GSM8163785",
+        "GSM8163786",
+        "GSM8163787",
+        "GSM8163788"
+      ]
+    },
+    {
+      "series": "geo://GSE266045",
+      "series_title": "Multiomic analyses on the contribution of transposable elements to the cis-regulatory landscape of different types of immune cells[RNA-seq]",
+      "sample": "GSM8239772",
+      "sample_title": "THP-1 cell line, SPI1 knockdown, RNA-seq, rep1; THP-1 cell line; cell line: THP-1 cell line; cell type: human monocyte; genotype: SPI1 knockdown",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 1572864,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8239772_RNA.SPI1_KD.rep1.genes.results.gz",
+          "bytes": 1572864
+        }
+      ],
+      "why": "Bulk RNA-seq knockdown, not single-cell CRISPRko screen."
+    },
+    {
+      "series": "geo://GSE266045",
+      "series_title": "Multiomic analyses on the contribution of transposable elements to the cis-regulatory landscape of different types of immune cells[RNA-seq]",
+      "sample": "GSM8239773",
+      "sample_title": "THP-1 cell line, SPI1 knockdown, RNA-seq, rep2; THP-1 cell line; cell line: THP-1 cell line; cell type: human monocyte; genotype: SPI1 knockdown",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 1572864,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8239773_RNA.SPI1_KD.rep2.genes.results.gz",
+          "bytes": 1572864
+        }
+      ],
+      "why": "Bulk RNA-seq knockdown, not single-cell CRISPRko screen."
+    },
+    {
+      "series": "geo://GSE266045",
+      "series_title": "Multiomic analyses on the contribution of transposable elements to the cis-regulatory landscape of different types of immune cells[RNA-seq]",
+      "sample": "GSM8239774",
+      "sample_title": "THP-1 cell line, SPI1 knockdown, RNA-seq, rep3; THP-1 cell line; cell line: THP-1 cell line; cell type: human monocyte; genotype: SPI1 knockdown",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.2,
+      "bytes": 1572864,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8239774_RNA.SPI1_KD.rep3.genes.results.gz",
+          "bytes": 1572864
+        }
+      ],
+      "why": "Bulk RNA-seq knockdown, not single-cell CRISPRko screen."
+    },
+    {
+      "series": "geo://GSE266045",
+      "series_title": "Multiomic analyses on the contribution of transposable elements to the cis-regulatory landscape of different types of immune cells[RNA-seq]",
+      "sample": "GSM8239775",
+      "sample_title": "THP-1 cell line, WT, RNA-seq, rep1; THP-1 cell line; cell line: THP-1 cell line; cell type: human monocyte; genotype: WT",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.1,
+      "bytes": 1572864,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8239775_RNA.WT.rep1.genes.results.gz",
+          "bytes": 1572864
+        }
+      ],
+      "why": "Bulk WT RNA-seq, not single-cell expression."
+    },
+    {
+      "series": "geo://GSE266045",
+      "series_title": "Multiomic analyses on the contribution of transposable elements to the cis-regulatory landscape of different types of immune cells[RNA-seq]",
+      "sample": "GSM8239776",
+      "sample_title": "THP-1 cell line, WT, RNA-seq, rep2; THP-1 cell line; cell line: THP-1 cell line; cell type: human monocyte; genotype: WT",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.1,
+      "bytes": 1572864,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8239776_RNA.WT.rep2.genes.results.gz",
+          "bytes": 1572864
+        }
+      ],
+      "why": "Bulk WT RNA-seq, not single-cell expression."
+    },
+    {
+      "series": "geo://GSE266045",
+      "series_title": "Multiomic analyses on the contribution of transposable elements to the cis-regulatory landscape of different types of immune cells[RNA-seq]",
+      "sample": "GSM8239777",
+      "sample_title": "THP-1 cell line, WT, RNA-seq, rep3; THP-1 cell line; cell line: THP-1 cell line; cell type: human monocyte; genotype: WT",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "THP-1",
+      "topic_match": 0.1,
+      "bytes": 1572864,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": false,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSM8239777_RNA.WT.rep3.genes.results.gz",
+          "bytes": 1572864
+        }
+      ],
+      "why": "Bulk WT RNA-seq, not single-cell expression."
+    },
+    {
+      "series": "geo://GSE249672",
+      "series_title": "A novel pancreatic ductal adenocarcinoma organoid recapitulating tumor microenvironment reveals macrophage-driven enhanced cancer cell survival [RNA-Seq]",
+      "sample": "GSE249672",
+      "sample_title": "A novel pancreatic ductal adenocarcinoma organoid recapitulating tumor microenvironment reveals macrophage-driven enhanced cancer cell survival [RNA-Seq] (series-level files; samples: GSM7957074, ... 21 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "Macrophages derived from THP-1",
+      "topic_match": 0.1,
+      "bytes": 2306867,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE249672_CombineAlignments_CA_001.rpm.bcmatrix.csv.gz",
+          "bytes": 2306867
+        },
+        {
+          "name": "GSE249672_CombineAlignments_CA_001.bc_summary.csv.gz",
+          "bytes": null
+        }
+      ],
+      "why": "Differentiated macrophage, not THP-1 cell type; no CRISPR perturbation.",
+      "samples": [
+        "GSM7957074",
+        "GSM7957075",
+        "GSM7957076",
+        "GSM7957077",
+        "GSM7957078",
+        "GSM7957079",
+        "GSM7957080",
+        "GSM7957081",
+        "GSM7957082",
+        "GSM7957083",
+        "GSM7957084",
+        "GSM7957085",
+        "GSM7957086",
+        "GSM7957087",
+        "GSM7957088",
+        "GSM7957089",
+        "GSM7957090",
+        "GSM7957091",
+        "GSM7957092",
+        "GSM7957093",
+        "GSM7957094"
+      ]
+    },
+    {
+      "series": "geo://GSE172333",
+      "series_title": "A myeloid maturation program initiated by nucleotide depletion during S phase [RNA-Seq]",
+      "sample": "GSE172333",
+      "sample_title": "A myeloid maturation program initiated by nucleotide depletion during S phase [RNA-Seq] (series-level files; samples: GSM5252676, ... 24 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "mouse GMP",
+      "topic_match": 0.1,
+      "bytes": 83152073,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE172333_633_brq_raw_counts.tsv.gz",
+          "bytes": 4928307
+        },
+        {
+          "name": "GSE172333_ER-Hoxa9_brq_raw_counts.tsv.gz",
+          "bytes": 4928307
+        },
+        {
+          "name": "GSE172333_240316_thp1_early_hu_vs_unt_raw_counts.csv.gz",
+          "bytes": 5242880
+        },
+        {
+          "name": "GSE172333_k562_brq_sggata1_raw_counts.tsv.gz",
+          "bytes": 5557452
+        },
+        {
+          "name": "GSE172333_k562_sgbcr_raw_counts.tsv.gz",
+          "bytes": 5557452
+        },
+        {
+          "name": "GSE172333_thp1_kd_raw_counts.tsv.gz",
+          "bytes": 5662310
+        },
+        {
+          "name": "GSE172333_thp1_medium_raw_counts.tsv.gz",
+          "bytes": 5767168
+        },
+        {
+          "name": "GSE172333_thp1_short_raw_counts.tsv.gz",
+          "bytes": 5976883
+        },
+        {
+          "name": "GSE172333_633_kd_rnaseq_raw_counts.tsv.gz",
+          "bytes": 9332326
+        },
+        {
+          "name": "GSE172333_ER-Hoxa9_sgspi1_raw_counts.tsv.gz",
+          "bytes": 9332326
+        },
+        {
+          "name": "GSE172333_u937_raw_counts.tsv.gz",
+          "bytes": 9332326
+        },
+        {
+          "name": "GSE172333_thp1_raw_counts.tsv.gz",
+          "bytes": 11534336
+        }
+      ],
+      "why": "Mouse GMP bulk RNA-seq, wrong cell type and organism.",
+      "samples": [
+        "GSM5252676",
+        "GSM5252677",
+        "GSM5252678",
+        "GSM5252679",
+        "GSM5252680",
+        "GSM5252681",
+        "GSM5252682",
+        "GSM5252683",
+        "GSM5252684",
+        "GSM5252685",
+        "GSM5252686",
+        "GSM5252687",
+        "GSM5252688",
+        "GSM5252689",
+        "GSM5252690",
+        "GSM5252691",
+        "GSM5252692",
+        "GSM5252693",
+        "GSM5252694",
+        "GSM5252695",
+        "GSM5252696",
+        "GSM5252697",
+        "GSM5252698",
+        "GSM5252699"
+      ]
+    },
+    {
+      "series": "geo://GSE277678",
+      "series_title": "Overexpression of the fructose transporter SLC2A5 (GLUT5) in association with PHGDH splicing dynamics is a venetoclax resistance mechanism in acute myeloid leukemia",
+      "sample": "GSE277678",
+      "sample_title": "Overexpression of the fructose transporter SLC2A5 (GLUT5) in association with PHGDH splicing dynamics is a venetoclax resistance mechanism in acute myeloid leukemia (series-level files; samples: GSM8527505, ... 4 total)",
+      "role": "reject",
+      "proposed_role": "reject",
+      "refused": "",
+      "modality": "none",
+      "cell_type": "Acute Myeloid Leukemia hematopoietic cells",
+      "topic_match": 0.1,
+      "bytes": 3865470566,
+      "cells_estimate": null,
+      "raw_barcodes": false,
+      "series_level": true,
+      "labels": "",
+      "files": [
+        {
+          "name": "GSE277678_AML_CR_Pre_Treatment_HMA-VEN_Refractory.RData.gz",
+          "bytes": 1073741824
+        },
+        {
+          "name": "GSE277678_AML_CR_Pre_treatment.h5ad",
+          "bytes": 1395864371
+        },
+        {
+          "name": "GSE277678_AML_HMA-VEN_Refractory.h5ad",
+          "bytes": 1395864371
+        }
+      ],
+      "why": "Primary AML bone marrow scRNA-seq, not THP-1, no CRISPR perturbation screen.",
+      "samples": [
+        "GSM8527505",
+        "GSM8527506",
+        "GSM8527507",
+        "GSM8527508"
+      ]
+    }
+  ],
+  "fit": [
+    {
+      "series": "geo://GSE153056",
+      "samples": [
+        "GSM4633608",
+        "GSM4633614"
+      ],
+      "gold_cells": 23706,
+      "gold_cells_unknown": 1,
+      "gold_chemistry": "5_prime_gex",
+      "supp_samples": 11,
+      "supp_cells": 156041,
+      "supp_unlabeled_cells": 102149,
+      "supp_same_chemistry_cells": 0,
+      "supp_cells_unknown": 1,
+      "ratio": 6.6,
+      "enough": true
+    }
+  ],
+  "candidates": [
+    {
+      "reference": "geo://GSE153056",
+      "title": "Characterizing the molecular regulation of inhibitory immune checkpoints with multi-modal single-cell screens.",
+      "queries": [
+        "PD-L1 regulation CRISPR screen",
+        "PD-L1 regulation THP-1",
+        "immune checkpoint THP-1",
+        "PD-L1 expression CRISPR screen",
+        "PD-L1 expression THP-1",
+        "THP-1 CRISPR screen single-cell",
+        "THP-1 scRNA-seq"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE336192",
+      "title": "Paired CRISPR screens to map gene regulation in cis and trans (RNA-seq)",
+      "queries": [
+        "PD-L1 regulation Perturb-seq",
+        "PD-L1 regulation CRISPR screen",
+        "immune checkpoint CRISPR screen",
+        "PD-L1 expression Perturb-seq",
+        "PD-L1 expression CRISPR screen"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "geo://GSE255700",
+      "title": "Paired CRISPR screens to map gene regulation in cis and trans (HiChIP)",
+      "queries": [
+        "PD-L1 regulation CRISPR screen",
+        "immune checkpoint CRISPR screen",
+        "PD-L1 expression CRISPR screen"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "geo://GSE255699",
+      "title": "Paired CRISPR screens to map gene regulation in cis and trans (CUT&RUN)",
+      "queries": [
+        "PD-L1 regulation CRISPR screen",
+        "immune checkpoint CRISPR screen",
+        "PD-L1 expression CRISPR screen"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "geo://GSE255698",
+      "title": "Paired CRISPR screens to map gene regulation in cis and trans (ATAC-seq)",
+      "queries": [
+        "PD-L1 regulation CRISPR screen",
+        "immune checkpoint CRISPR screen",
+        "PD-L1 expression CRISPR screen"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "geo://GSE250161",
+      "title": "IRF2BP2-mediated MHC-I expression controls cytotoxic T cell responses in acute myeloid leukemia [ChIP-Seq]",
+      "queries": [
+        "immune checkpoint CRISPR screen",
+        "immune checkpoint THP-1",
+        "THP-1 CRISPR screen"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "geo://GSE250160",
+      "title": "IRF2BP2-mediated MHC-I expression controls cytotoxic T cell responses in acute myeloid leukemia [RNA-Seq]",
+      "queries": [
+        "immune checkpoint CRISPR screen",
+        "immune checkpoint THP-1",
+        "THP-1 CRISPR screen"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "geo://GSE268533",
+      "title": "Synthetic lethal CRISPR screen identifies a cancer cell-intrinsic role of PD-L1 in regulation of vulnerability to ferroptosis [CRISPR screening]",
+      "queries": [
+        "PD-L1 regulation CRISPR screen",
+        "PD-L1 expression CRISPR screen"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "geo://GSE268534",
+      "title": "Synthetic lethal CRISPR screen identifies a cancer cell-intrinsic role of PD-L1 in regulation of vulnerability to ferroptosis [CUT&Tag]",
+      "queries": [
+        "PD-L1 regulation CRISPR screen",
+        "PD-L1 expression CRISPR screen"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "geo://GSE342674",
+      "title": "Suppressing phosphatidylserine externalization overcomes cancer immune evasion and enhances immunotherapy",
+      "queries": [
+        "immune checkpoint CRISPR screen",
+        "immune evasion CRISPR screen"
+      ],
+      "pools": [
+        "gold"
+      ]
+    },
+    {
+      "reference": "geo://GSE270890",
+      "title": "RNA-seq profiling of macrophage polarization in THP-1 cells co-cultured with GPNMB-knockdown TNBC spheroids",
+      "queries": [
+        "THP-1 single-cell RNA-seq",
+        "THP-1 scRNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE268256",
+      "title": "Transcriptional profiling of DNA sensing signal activation of THP-1 cells using bulk RNA-seq and single cell RNA-seq",
+      "queries": [
+        "THP-1 single-cell RNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE176294",
+      "title": "Revealing immune responses in the Mycobacterium avium subsp. paratuberculosis-infected THP-1 cells using single cell RNA-sequencing",
+      "queries": [
+        "THP-1 single-cell RNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE302068",
+      "title": "Single-Cell Atlas of Pan-Cancer Immunotherapy Reveals the Role of Ferroptosis in Exhausted Macrophages and Immune Therapy Resistance",
+      "queries": [
+        "immune checkpoint THP-1",
+        "THP-1 single-cell RNA-seq"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE301119",
+      "title": "Integrative analysis of pooled CRISPR screens provide functional insights into AD GWAS risk genes",
+      "queries": [
+        "THP-1 Perturb-seq",
+        "THP-1 CRISPR screen"
+      ],
+      "pools": [
+        "gold",
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE288251",
+      "title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "queries": [
+        "THP-1 single-cell RNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE261920",
+      "title": "Human long noncoding RNA, VILMIR, is induced by major respiratory viral infections and modulates the host interferon response",
+      "queries": [
+        "THP-1 single-cell RNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE317209",
+      "title": "Mapping Endothelial-Macrophage Interactions in Diabetic Vasculature: Role of TREM2 in Vascular Inflammation and Ischemic Response [bulk RNA-Seq]",
+      "queries": [
+        "THP-1 single-cell RNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE283851",
+      "title": "S100A9 Overexpression Drives Chemoresistance and Poor Prognosis in AML with Adavivint as a Targeted Therapeutic",
+      "queries": [
+        "THP-1 single-cell RNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE262356",
+      "title": "Small non-coding RNAs encapsulating mammalian cells fuels innate immunity",
+      "queries": [
+        "THP-1 single-cell RNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE266045",
+      "title": "Multiomic analyses on the contribution of transposable elements to the cis-regulatory landscape of different types of immune cells[RNA-seq]",
+      "queries": [
+        "THP-1 single-cell RNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE249672",
+      "title": "A novel pancreatic ductal adenocarcinoma organoid recapitulating tumor microenvironment reveals macrophage-driven enhanced cancer cell survival [RNA-Seq]",
+      "queries": [
+        "THP-1 single-cell RNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE172333",
+      "title": "A myeloid maturation program initiated by nucleotide depletion during S phase [RNA-Seq]",
+      "queries": [
+        "THP-1 single-cell RNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE301541",
+      "title": "Folate Receptor Beta Regulates Macrophage NLRP3 Inflammasome Activation and Pyroptosis in a Folate-Independent Manner",
+      "queries": [
+        "THP-1 scRNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    },
+    {
+      "reference": "geo://GSE277678",
+      "title": "Overexpression of the fructose transporter SLC2A5 (GLUT5) in association with PHGDH splicing dynamics is a venetoclax resistance mechanism in acute myeloid leukemia",
+      "queries": [
+        "THP-1 scRNA-seq"
+      ],
+      "pools": [
+        "supplementary"
+      ]
+    }
+  ],
+  "seconds": 378.6
+}

@@ -1,0 +1,100 @@
+{
+  "question": "In K562 cells, can the transcriptional response to CRISPRi knockdown of unfolded protein response (UPR) genes not seen in training be predicted from the other knockdowns, using single-cell profiles of K562 cells from independent Perturb-seq experiments as supplementary evidence?",
+  "backend": "perturbation",
+  "kind": "perturbation_response",
+  "data_source": "plan",
+  "staged": {
+    "how": "plan",
+    "plan": "Perturb_middle/output_adamson_upr/plan.json",
+    "assembled_screens": [],
+    "study": {
+      "question": "In K562 cells, can the transcriptional response to CRISPRi knockdown of unfolded protein response (UPR) genes not seen in training be predicted from the other knockdowns, using single-cell profiles of K562 cells from independent Perturb-seq experiments as supplementary evidence?",
+      "dataset": "GSE90546 GSM2406681_10X010 (Adamson 2016 UPR Perturb-seq)",
+      "held_out_unit": "perturbed genes never seen in training",
+      "condition_column": "condition",
+      "split_mode": "unseen_single",
+      "test_fraction": 0.25,
+      "validation_fraction": 0.1,
+      "max_panel_genes": 0,
+      "normalize": "log1p(CPM 10000)"
+    }
+  },
+  "gold": "Perturb_middle/output_adamson_upr/gold.parquet",
+  "supplementary": [
+    "Perturb_middle/output_adamson_upr/supp_dixit_k562_wt.parquet"
+  ],
+  "contract": {
+    "n_genes": 5014,
+    "n_perturbation_genes": 9853,
+    "condition_column": "condition",
+    "control_labels": [
+      "ctrl",
+      "control",
+      "control_ctrl",
+      "vehicle",
+      "none",
+      "non-targeting",
+      "non_targeting",
+      "nt",
+      "wt",
+      "unperturbed"
+    ],
+    "delta_scale": 1.0,
+    "genes_sha256": "f45316461fd73562d02dd218d6dc9a94e81e6ddd6c63a1f9d86b094550358576"
+  },
+  "split_sizes": {
+    "train": 28638,
+    "validation": 3550,
+    "test": 10307
+  },
+  "sources": {
+    "gold": {
+      "path": "Perturb_middle/output_adamson_upr/gold.parquet",
+      "cells": 50440,
+      "control_cells": 5241,
+      "genes": 5014,
+      "panel_after_intersection": 5014,
+      "modality": "unknown",
+      "modality_source": "plan"
+    },
+    "supp_0": {
+      "path": "Perturb_middle/output_adamson_upr/supp_dixit_k562_wt.parquet",
+      "cells": 5409,
+      "used_cells": 5409,
+      "how": "all cells (no condition column: an unperturbed source)",
+      "edges": 5062
+    }
+  },
+  "graph_edge_overlap": {
+    "edges_first": 5574,
+    "edges_second": 5038,
+    "shared": 5027,
+    "jaccard": 0.9000895255147717,
+    "of_first": 0.9018658055256549,
+    "of_second": 0.9978165938864629
+  },
+  "modality": {
+    "requested": {
+      "modality": "crispri",
+      "decided_by": "words",
+      "rationale": "the question's words name 'crispri' (3 hit(s): crispri x3)",
+      "hits": {
+        "crispra": 0,
+        "crispri": 3,
+        "crisprko": 0
+      }
+    },
+    "provided": {
+      "gold": "unknown",
+      "gold_source": "plan",
+      "gold_description": "",
+      "supplementary": {}
+    },
+    "verdict": {
+      "status": "unchecked",
+      "message": "perturbation modality was not compared: the data does not declare one",
+      "requested": "crispri",
+      "provided": "unknown"
+    }
+  }
+}

@@ -97,7 +97,12 @@ def test_geo_and_huggingface_payloads_are_read_from_their_real_envelopes():
     assert [hit.reference for hit in hf] == ["hf://Plashkar/diabetes-predict-db"]
 
 
-def test_null_references_are_not_offered_for_download():
+def test_null_references_are_not_offered_for_download(monkeypatch, tmp_path):
+    from datafetcher import tooluniverse
+
+    # no interpreter, explicitly: the default location may exist on this machine
+    monkeypatch.delenv(tooluniverse.ENV_PYTHON, raising=False)
+    monkeypatch.setattr(tooluniverse, "DEFAULT_PYTHON", tmp_path / "missing")
     search = mechanical_search("q", downloader=None)
     # No interpreter configured in the test environment: the round reports that
     # rather than pretending it searched.

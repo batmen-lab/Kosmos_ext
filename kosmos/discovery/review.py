@@ -337,6 +337,13 @@ def review_table(
     if profile.extract is not None:
         fields = dict(profile.extract(response, visible))
         forced = fields.pop("force_role", None)
+        promote = fields.pop("promote_role", None)
+        if promote:
+            # The perturbation profile's label half: a table with the condition
+            # column and no measurements is exactly what the backend joins its
+            # counts matrix to, so it supervises even though it is not a full
+            # screen on its own.
+            review.role = promote  # type: ignore[assignment]
         if forced and review.role == "gold":
             # The guard the profile exists for: the model called it gold, but a
             # table without the column this task needs cannot supervise it.

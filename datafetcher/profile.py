@@ -667,7 +667,15 @@ def profile_table(
         )
     else:
         columns = _columns_of(frame)
-    if frame.shape[1] <= 1:
+    if frame.shape[1] <= 1 and str(path).lower().endswith(
+        (".mtx", ".mtx.gz", ".mtx.txt", ".mtx.txt.gz")
+    ):
+        notes.append(
+            "a matrix-market (sparse) file, not a table: it becomes one only "
+            "together with its barcodes/features companion files (and a cell "
+            "label table), which were not staged beside it"
+        )
+    elif frame.shape[1] <= 1:
         # A GEO series matrix, an archive, or anything that is not a plain
         # table: say so instead of reporting a one-column dataset.
         notes.append(

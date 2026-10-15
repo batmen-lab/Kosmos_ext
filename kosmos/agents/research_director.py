@@ -2026,17 +2026,21 @@ class ResearchDirectorAgent(BaseAgent):
                              "n_gold", "n_supplementary",
                              # Perturbation-response metrics: a response vector
                              # is scored on MSE/Pearson, not accuracy, and the
-                             # run's headline is the gated arm against the base.
+                             # run's headline is the signed PPI arm against the
+                             # base.
                              "mse", "mse_deg", "pearson", "spearman",
                              "direction_accuracy", "top_k_overlap",
-                             "base_mse_deg", "ungated_mse_deg", "gated_mse_deg",
-                             "base_pearson", "gated_pearson", "gated_spearman",
-                             "gated_direction_accuracy", "gated_top_k_overlap",
+                             "base_mse_deg", "signed_ppi_mse_deg",
+                             "base_pearson", "signed_ppi_pearson",
+                             "finetune_ppi_mse_deg", "finetune_ppi_pearson",
+                             "perturbnet_base_mse_deg", "perturbnet_base_pearson",
+                             "perturbnet_supp_mse_deg", "perturbnet_supp_pearson",
+                             "headline_arm",
                              "n_perturbations_test", "data_source", "staging",
-                             # Graph-free MLP baselines (mlp_base / mlp_augmented).
-                             "mlp_base_mse_deg", "mlp_augmented_mse_deg",
-                             "mlp_base_pearson", "mlp_augmented_pearson",
-                             "mlp_delta_mse_deg", "gated_minus_mlp_base_mse_deg",
+                             # Graph-free MLP arms (mlp_base / mlp signed ppi).
+                             "mlp_base_mse_deg", "mlp_signed_ppi_mse_deg",
+                             "mlp_base_pearson", "mlp_signed_ppi_pearson",
+                             "mlp_delta_mse_deg", "headline_minus_mlp_base_mse_deg",
                              # Which kind of perturbation the data provides
                              # and whether it matches what was asked.
                              "modality_requested", "modality_provided",

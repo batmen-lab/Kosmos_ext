@@ -1,0 +1,90 @@
+{
+  "G_C": {
+    "name": "G_C",
+    "n_edges": 6732,
+    "n_nodes": 2000,
+    "density": 0.0016838419209604803,
+    "weight_mean": 0.6584616303443909,
+    "weight_min": 0.40008777379989624,
+    "weight_max": 1.0,
+    "degree_mean": 3.366,
+    "degree_p50": 1.0,
+    "degree_p90": 4.0,
+    "degree_max": 96,
+    "isolated_nodes": 0,
+    "kind": "coexpression",
+    "threshold": 0.4,
+    "k": 20,
+    "source_cells": 2386,
+    "absolute": true
+  },
+  "G_S": {
+    "name": "G_S",
+    "n_edges": 12464,
+    "n_nodes": 2000,
+    "density": 0.003117558779389695,
+    "weight_mean": 0.609795331954956,
+    "weight_min": 0.4000166654586792,
+    "weight_max": 1.0,
+    "degree_mean": 6.232,
+    "degree_p50": 1.0,
+    "degree_p90": 20.0,
+    "degree_max": 235,
+    "isolated_nodes": 0,
+    "kind": "coexpression",
+    "threshold": 0.4,
+    "k": 20,
+    "source_cells": 5000,
+    "absolute": true
+  },
+  "G_GO": {
+    "name": "G_GO",
+    "n_edges": 62822,
+    "n_nodes": 2000,
+    "density": 0.01571335667833917,
+    "weight_mean": 0.2757400870323181,
+    "weight_min": 0.10059171915054321,
+    "weight_max": 1.0,
+    "degree_mean": 31.411,
+    "degree_p50": 29.0,
+    "degree_p90": 63.0,
+    "degree_max": 151,
+    "isolated_nodes": 397,
+    "kind": "go_similarity",
+    "k": 20,
+    "reference": "data/perturbation/reference/go_essential_all.csv",
+    "reference_sha256": "99622d9215462e7b",
+    "rows_read": 307399
+  },
+  "edge_overlap": {
+    "G_S": {
+      "edges_first": 4366,
+      "edges_second": 7232,
+      "shared": 2868,
+      "jaccard": 0.32852233676975945,
+      "of_first": 0.6568941823179111,
+      "of_second": 0.396570796460177
+    }
+  },
+  "additional_auxiliary_graphs": [
+    {
+      "name": "G_S1",
+      "n_edges": 3428,
+      "n_nodes": 2000,
+      "density": 0.0008574287143571786,
+      "weight_mean": 0.779849112033844,
+      "weight_min": 0.40013477206230164,
+      "weight_max": 1.0,
+      "degree_mean": 1.714,
+      "degree_p50": 1.0,
+      "degree_p90": 2.0,
+      "degree_max": 52,
+      "isolated_nodes": 0,
+      "kind": "coexpression",
+      "threshold": 0.4,
+      "k": 20,
+      "source_cells": 5000,
+      "absolute": true
+    }
+  ]
+}

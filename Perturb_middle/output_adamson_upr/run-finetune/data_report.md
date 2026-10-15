@@ -1,0 +1,27 @@
+# data report: In K562 cells, can the transcriptional response to CRISPRi knockdown of unfolded protein response (UPR) genes not seen in training be predicted from the other knockdowns, using single-cell profiles of K562 cells from independent Perturb-seq experiments as supplementary evidence?
+
+- backend: `perturbation_response`
+- data source: `plan`
+- gold: `Perturb_middle/output_adamson_upr/gold.parquet`
+- requested perturbation type: `crispri` (from the question)
+- provided perturbation type: `unknown`
+- type verdict: **unchecked** - perturbation modality was not compared: the data does not declare one
+- supplementary: `Perturb_middle/output_adamson_upr/supp_dixit_k562_wt.parquet`
+
+## contract
+
+- measured genes (the shared panel): 5014
+- condition column: `condition`
+- control labels: ctrl, control, control_ctrl, vehicle, none, non-targeting, non_targeting, nt, wt, unperturbed
+- perturbations per split: train 24341, validation 7847, test 10307
+
+## sources
+
+| source | path | cells | used | how | edges |
+|---|---|---|---|---|---|
+| gold | Perturb_middle/output_adamson_upr/gold.parquet | 50440 | 5241 |  |  |
+| supp_0 | Perturb_middle/output_adamson_upr/supp_dixit_k562_wt.parquet | 5409 | 5409 | all cells (no condition column: an unperturbed source) | 5062 |
+
+## auxiliary graph
+
+- G_C/G_S edge overlap: 5027 shared (jaccard 0.896)

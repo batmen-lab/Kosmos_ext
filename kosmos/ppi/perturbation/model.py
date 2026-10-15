@@ -1,25 +1,28 @@
-"""A plain-torch GEARS-shaped model: gene embeddings, GNN, compositional encoder.
+"""GEARS (`gears/model.py::GEARS_Model`) in plain torch, plus two optional extensions.
 
-The pieces are GEARS' (`gears/model.py`), re-implemented without PyTorch
-Geometric so it runs on CPU in this repo's environment:
+The port follows the original layer for layer (no PyTorch Geometric: `SGConv`
+with K=1 is `Linear(Â x)` with PyG's GCN normalisation, see `sparse_adjacency`):
 
-  * a learnable **gene embedding** `E`, the same for every graph;
-  * **GNN** message passing over a gene graph (co-expression, and optionally an
-    auxiliary co-expression graph), which is how a gene's representation borrows
-    from the genes it covaries with. The gold and auxiliary branches **share the
-    GNN parameters** -- they are the same relation type measured on different
-    cells -- and the augmented representation is `H_A = H_C + η·H_S`;
-  * a **compositional module**: the perturbation is encoded from the sum of its
-    perturbed genes' embeddings, so a two-gene perturbation is a composition of
-    the two rather than a new vocabulary item;
-  * a **cross-gene decoder** over the per-gene scalar (the shape GEARS uses:
-    `Linear(n_genes -> hidden)` over the gene axis), and **gene-specific output
-    layers** (`gene_out`, `gene_bias`) producing one number per gene;
-  * optional **context** (cell type, dose, time, donor, batch) added to the
-    perturbation encoding.
+  * gene embedding -> BatchNorm -> ReLU, plus `0.2 ×` a positional embedding
+    propagated over the **co-expression graph** (`G_C`), then an MLP;
+  * a **perturbation embedding** over its own vocabulary (the GO graph's genes,
+    not the measured panel), propagated over the **GO graph** (`G_GO`); a cell's
+    perturbation is the sum of its genes' embeddings, through `pert_fuse`, added
+    to every gene of that cell;
+  * BatchNorm -> ReLU -> `recovery_w` MLP -> gene-specific weights (`indv_w1`,
+    `indv_b1`) -> a cross-gene MLP over all genes -> gene-specific output
+    (`indv_w2`, `indv_b2`) = Δ̂, and the prediction is `control + Δ̂`.
 
-The model predicts the **change**, and the post-perturbation expression is
-`control + Δ`, so the control profile is always part of the prediction.
+Extensions, both off in the original:
+
+  * `auxiliary_adjacency` (`G_S`, the signed PPI arm): the positional embedding
+    is also propagated over the supplementary co-expression graph with the same
+    layer, `pos = SG(G_C) + η·SG(G_S)`;
+  * `condition_on_control`: each gene's control expression is embedded
+    (`x_g · w_g`) and added to that gene's state, so Δ̂ depends on the input
+    cell. In the original, Δ̂ is a function of the perturbation alone.
+
+Optional context (cell type, ...) embeddings are added to every gene's state.
 """
 
 from __future__ import annotations
@@ -34,145 +37,163 @@ from torch import nn
 def sparse_adjacency(
     edge_index: torch.Tensor, edge_weight: torch.Tensor, n_nodes: int
 ) -> torch.Tensor:
-    """Symmetric normalised adjacency `D^-1/2 (A+I) D^-1/2` as a sparse tensor."""
-    loops = torch.arange(n_nodes, dtype=torch.long)
-    rows = torch.cat([edge_index[0], loops])
-    columns = torch.cat([edge_index[1], loops])
-    weights = torch.cat([edge_weight, torch.ones(n_nodes, dtype=edge_weight.dtype)])
-    degrees = torch.zeros(n_nodes, dtype=weights.dtype)
-    degrees.index_add_(0, rows, weights)
-    degrees = degrees.clamp_min(1e-12)
-    scale = degrees.pow(-0.5)
-    normalised = weights * scale[rows] * scale[columns]
-    indices = torch.stack([rows, columns])
-    return torch.sparse_coo_tensor(indices, normalised, (n_nodes, n_nodes)).coalesce()
+    """PyG's `gcn_norm` as a sparse matrix `M` with `M @ x` = one SGConv step.
+
+    `edge_index[0]` is the source and `edge_index[1]` the target (GEARS' edge
+    lists: the top-k sources of every target). Self loops are added where a node
+    has none (`add_remaining_self_loops`, weight 1), the degree is the weighted
+    in-degree of the target, and messages flow source -> target:
+    `M[target, source] = w / sqrt(deg[source] · deg[target])`.
+    """
+    sources, targets = edge_index[0].long(), edge_index[1].long()
+    weights = edge_weight.float()
+    has_loop = torch.zeros(n_nodes, dtype=torch.bool)
+    has_loop[sources[sources == targets]] = True
+    missing = torch.nonzero(~has_loop).reshape(-1)
+    sources = torch.cat([sources, missing])
+    targets = torch.cat([targets, missing])
+    weights = torch.cat([weights, torch.ones(len(missing))])
+    degree = torch.zeros(n_nodes).index_add_(0, targets, weights)
+    scale = degree.clamp_min(1e-12).pow(-0.5)
+    values = scale[sources] * weights * scale[targets]
+    indices = torch.stack([targets, sources])
+    return torch.sparse_coo_tensor(indices, values, (n_nodes, n_nodes)).coalesce()
 
 
-class _GcnLayer(nn.Module):
-    """One message-passing step with a residual and a layer norm."""
+class SGConv(nn.Module):
+    """`torch_geometric.nn.SGConv(dim, dim, K=1)`: propagate once, then a linear map."""
 
     def __init__(self, dim: int):
         super().__init__()
-        self.linear = nn.Linear(dim, dim)
-        self.norm = nn.LayerNorm(dim)
+        self.lin = nn.Linear(dim, dim)
 
-    def forward(self, hidden: torch.Tensor, adjacency: torch.Tensor) -> torch.Tensor:
-        message = torch.sparse.mm(adjacency, hidden)
-        return self.norm(hidden + torch.relu(self.linear(message)))
+    def forward(self, x: torch.Tensor, adjacency: torch.Tensor) -> torch.Tensor:
+        return self.lin(torch.sparse.mm(adjacency, x))
+
+
+def _mlp(sizes: list[int]) -> nn.Sequential:
+    """GEARS' `MLP(sizes, batch_norm=True)`: Linear-BN-ReLU blocks minus the last ReLU."""
+    layers: list[nn.Module] = []
+    for index in range(len(sizes) - 1):
+        layers += [nn.Linear(sizes[index], sizes[index + 1]), nn.BatchNorm1d(sizes[index + 1]), nn.ReLU()]
+    return nn.Sequential(*layers[:-1])
+
+
+def _batched(module: nn.Module, x: torch.Tensor) -> torch.Tensor:
+    """Apply a BatchNorm-containing module; a batch of one is duplicated (GEARS does)."""
+    if x.shape[0] == 1 and module.training:
+        return module(torch.cat([x, x]))[:1]
+    return module(x)
 
 
 @dataclass
 class ModelConfig:
     n_genes: int
-    embedding_dim: int = 64
+    #: size of the perturbation vocabulary; None = the panel (n_genes)
+    n_perturbations: int | None = None
     hidden_dim: int = 64
-    gnn_layers: int = 2
+    go_layers: int = 1
+    gene_layers: int = 1
     eta: float = 1.0
     context_categorical: Mapping[str, int] | None = None
     context_numeric: int = 0
-    dropout: float = 0.1
+    condition_on_control: bool = True
 
 
 class GearsModel(nn.Module):
-    """GEARS-shaped predictor of Δy, with one or two co-expression graphs."""
+    """GEARS' Δ predictor; see the module docstring."""
 
     def __init__(self, config: ModelConfig):
         super().__init__()
         self.config = config
-        n = config.n_genes
-        self.gene_emb = nn.Embedding(n, config.embedding_dim)
-        nn.init.normal_(self.gene_emb.weight, std=0.02)
-        self.gnn = nn.ModuleList(
-            [_GcnLayer(config.embedding_dim) for _ in range(config.gnn_layers)]
+        n, hidden = config.n_genes, config.hidden_dim
+        n_perts = config.n_perturbations or n
+        self.gene_emb = nn.Embedding(n, hidden, max_norm=True)
+        self.emb_pos = nn.Embedding(n, hidden, max_norm=True)
+        self.pert_emb = nn.Embedding(n_perts, hidden, max_norm=True)
+        self.bn_emb = nn.BatchNorm1d(hidden)
+        self.emb_trans_v2 = _mlp([hidden, hidden, hidden])
+        self.layers_emb_pos = nn.ModuleList(SGConv(hidden) for _ in range(config.gene_layers))
+        self.sim_layers = nn.ModuleList(SGConv(hidden) for _ in range(config.go_layers))
+        self.pert_fuse = _mlp([hidden, hidden, hidden])
+        self.bn_pert_base = nn.BatchNorm1d(hidden)
+        self.recovery_w = _mlp([hidden, hidden * 2, hidden])
+        self.indv_w1 = nn.Parameter(torch.empty(n, hidden, 1))
+        self.indv_b1 = nn.Parameter(torch.empty(n, 1))
+        self.cross_gene_state = _mlp([n, hidden, hidden])
+        self.indv_w2 = nn.Parameter(torch.empty(1, n, hidden + 1))
+        self.indv_b2 = nn.Parameter(torch.empty(1, n))
+        for parameter in (self.indv_w1, self.indv_b1, self.indv_w2, self.indv_b2):
+            nn.init.xavier_normal_(parameter)
+        self.expression_weight = (
+            nn.Parameter(torch.randn(n, hidden) * 0.02) if config.condition_on_control else None
         )
-        self.perturbation_encoder = nn.Sequential(
-            nn.Linear(config.embedding_dim, config.hidden_dim),
-            nn.ReLU(),
-            nn.Linear(config.hidden_dim, config.hidden_dim),
-        )
-        # `states` keeps the embedding width (the GNN does not change it) while
-        # the perturbation encoder outputs `hidden_dim`; the two need not be the
-        # same size, so the fusion layer takes their sum rather than 2*hidden.
-        self.fuse = nn.Sequential(
-            nn.Linear(config.embedding_dim + config.hidden_dim, config.hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(config.dropout),
-        )
-        self.cross_gene = nn.Sequential(
-            nn.Linear(n, config.hidden_dim),
-            nn.ReLU(),
-            nn.Linear(config.hidden_dim, config.hidden_dim),
-        )
-        # gene-specific output layers: one weight vector and one bias per gene
-        self.gene_in = nn.Parameter(torch.randn(n, config.hidden_dim) * 0.02)
-        self.gene_out = nn.Parameter(torch.randn(n, config.hidden_dim) * 0.02)
-        self.gene_bias = nn.Parameter(torch.zeros(n))
         self.context_embeddings = nn.ModuleDict(
             {
-                name: nn.Embedding(int(cardinality), config.hidden_dim)
+                name: nn.Embedding(int(cardinality), hidden)
                 for name, cardinality in (config.context_categorical or {}).items()
             }
         )
         self.context_numeric = (
-            nn.Linear(config.context_numeric, config.hidden_dim)
-            if config.context_numeric
-            else None
+            nn.Linear(config.context_numeric, hidden) if config.context_numeric else None
         )
 
-    # -- graph branches -----------------------------------------------------
-
-    def gene_states(self, gold_adjacency: torch.Tensor, auxiliary_adjacency: torch.Tensor | None = None):
-        """`H_C` (gold graph alone) or `H_A = H_C + η·H_S` when a second graph is given."""
-        hidden = self.gene_emb.weight
-        for layer in self.gnn:
-            hidden = layer(hidden, gold_adjacency)
-        if auxiliary_adjacency is None:
-            return hidden
-        supplementary = self.gene_emb.weight
-        for layer in self.gnn:
-            supplementary = layer(supplementary, auxiliary_adjacency)
-        return hidden + self.config.eta * supplementary
-
-    # -- forward ------------------------------------------------------------
+    def _propagate(self, x: torch.Tensor, layers: nn.ModuleList, adjacency: torch.Tensor) -> torch.Tensor:
+        for index, layer in enumerate(layers):
+            x = layer(x, adjacency)
+            if index < len(layers) - 1:
+                x = x.relu()
+        return x
 
     def forward(
         self,
         control: torch.Tensor,                 # (B, G) control expression
-        perturbation_index: torch.Tensor,      # (B, P) perturbed gene indices
+        perturbation_index: torch.Tensor,      # (B, P) vocabulary indices, -1 = padding
         gold_adjacency: torch.Tensor,
         auxiliary_adjacency: torch.Tensor | None = None,
         go_adjacency: torch.Tensor | None = None,
         context: dict[str, torch.Tensor] | None = None,
-        gene_states: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Returns `(post_perturbation_expression, delta)` for the batch.
+        """Returns `(control + Δ̂, Δ̂)`."""
+        batch, n = control.shape
+        device = control.device
+        genes = torch.arange(n, device=device)
+        base = torch.relu(self.bn_emb(self.gene_emb(genes)))                  # (G, H)
+        positions = self.emb_pos(genes)
+        pos = self._propagate(positions, self.layers_emb_pos, gold_adjacency)
+        if auxiliary_adjacency is not None:
+            pos = pos + self.config.eta * self._propagate(positions, self.layers_emb_pos, auxiliary_adjacency)
+        base = self.emb_trans_v2(base + 0.2 * pos)                           # (G, H)
 
-        The GO graph feeds the **perturbation branch**, the way GEARS uses it:
-        the perturbed gene's representation is pooled with its GO-similar genes,
-        so `G_C + G_GO` (base) and `G_C + G_S + G_GO` (augmented) are the two
-        graphs each pass sees.
-        """
-        states = gene_states if gene_states is not None else self.gene_states(
-            gold_adjacency, auxiliary_adjacency
-        )
-        batch = control.shape[0]
-        pooled = states
+        perts = self.pert_emb(torch.arange(self.pert_emb.num_embeddings, device=device))
         if go_adjacency is not None:
-            pooled = states + torch.sparse.mm(go_adjacency, states)
-        # compositional encoding: sum of the perturbed genes' states, then MLP
-        chosen = pooled[perturbation_index.reshape(-1)].reshape(
-            batch, perturbation_index.shape[1], -1
-        )
-        encoded = self.perturbation_encoder(chosen.sum(dim=1))
+            perts = self._propagate(perts, self.sim_layers, go_adjacency)
+        valid = perturbation_index >= 0
+        chosen = perts[perturbation_index.clamp_min(0)] * valid.unsqueeze(-1)
+        total = chosen.sum(dim=1)                                             # (B, H)
+        has_perturbation = valid.any(dim=1)
+        added = torch.zeros_like(total)
+        if has_perturbation.any():
+            added[has_perturbation] = _batched(self.pert_fuse, total[has_perturbation])
+
+        states = base.unsqueeze(0) + added.unsqueeze(1)                       # (B, G, H)
+        if self.expression_weight is not None:
+            states = states + control.unsqueeze(-1) * self.expression_weight
         if context:
+            extra = torch.zeros_like(total)
             for name, values in context.items():
                 if name in self.context_embeddings:
-                    encoded = encoded + self.context_embeddings[name](values)
+                    extra = extra + self.context_embeddings[name](values)
             numeric = [values for name, values in context.items() if name not in self.context_embeddings]
             if numeric and self.context_numeric is not None:
-                encoded = encoded + self.context_numeric(torch.stack(numeric, dim=1))
-        fused = self.fuse(torch.cat([states.unsqueeze(0).expand(batch, -1, -1), encoded.unsqueeze(1).expand(-1, states.shape[0], -1)], dim=-1))
-        per_gene = (self.gene_in.unsqueeze(0) * fused).sum(dim=-1)          # (B, G)
-        cross = self.cross_gene(per_gene)                                   # (B, hidden)
-        delta = (self.gene_out.unsqueeze(0) * cross.unsqueeze(1)).sum(dim=-1) + self.gene_bias
+                extra = extra + self.context_numeric(torch.cat(numeric, dim=-1).float())
+            states = states + extra.unsqueeze(1)
+
+        hidden = states.reshape(batch * n, -1)
+        hidden = torch.relu(self.bn_pert_base(hidden))
+        out = self.recovery_w(hidden).reshape(batch, n, -1)                  # (B, G, H)
+        out = (out.unsqueeze(-1) * self.indv_w1).sum(dim=2) + self.indv_b1    # (B, G, 1)
+        cross = _batched(self.cross_gene_state, out.squeeze(-1))              # (B, H)
+        cross = cross.unsqueeze(1).expand(-1, n, -1)
+        delta = (torch.cat([out, cross], dim=2) * self.indv_w2).sum(dim=2) + self.indv_b2
         return control + delta, delta

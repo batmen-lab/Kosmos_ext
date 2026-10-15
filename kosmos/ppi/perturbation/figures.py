@@ -23,6 +23,33 @@ import numpy as np
 
 METRICS = ("mse_deg", "pearson", "direction_accuracy", "top_k_overlap")
 
+#: The word a reader sees for an arm: the internal keys are implementation
+#: names, not the comparison the report is about.
+_ARM_LABELS = {
+    "gears_base": "base",
+    "gears_augmented_ungated": "signed ppi",
+    "mlp_base": "mlp base",
+    "mlp_augmented_ungated": "mlp signed ppi",
+    "gears_gated": "gated",
+    "mlp_gated": "mlp gated",
+    "gears_finetune_ppi": "finetune ppi",
+    "perturbnet_base": "perturbnet base",
+    "perturbnet_supp": "perturbnet supp",
+}
+
+
+def _number(value: Any, digits: int = 3) -> str:
+    """A metric cell; `-` for a missing or NaN value (e.g. a constant prediction)."""
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return "-"
+    return f"{value:.{digits}f}" if np.isfinite(value) else "-"
+
+
+def _arm_label(arm: str) -> str:
+    return _ARM_LABELS.get(str(arm), str(arm).replace("_", " "))
+
 
 def _load(path: str | Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     with np.load(path, allow_pickle=False) as data:
@@ -76,27 +103,20 @@ def write_perturbation_figures(results: dict[str, Any], out_dir: str | Path) -> 
     axes[0, 1].legend(fontsize=7)
     axes[0, 1].grid(alpha=0.3)
 
-    # 3. the gate, per epoch
-    for gate_arm, style in (("gears_augmented", "o"), ("mlp_augmented", "s")):
-        gated = results["arms"].get(gate_arm, {}).get("history") or []
-        gate_epochs = [entry for entry in gated if "gate" in entry]
-        if not gate_epochs:
-            continue
-        epochs = [entry["epoch"] for entry in gate_epochs]
+    # 3. held-out error per epoch, per arm (the early-stopping signal)
+    for arm in arms:
+        history = results["arms"][arm].get("history") or []
         axes[1, 0].plot(
-            epochs, [entry["gate"]["cosine"] for entry in gate_epochs],
-            marker=style, label=f"{gate_arm}: cos",
+            [entry["epoch"] for entry in history],
+            [entry.get("validation_mse_deg", float("nan")) for entry in history],
+            marker="o",
+            label=arm,
         )
-        axes[1, 0].plot(
-            epochs, [entry["gate"]["weight"] for entry in gate_epochs],
-            marker=style, linestyle="--", label=f"{gate_arm}: λ_t",
-        )
-    if axes[1, 0].lines:
-        axes[1, 0].axhline(0.0, color="grey", linewidth=0.8)
-        axes[1, 0].set_xlabel("epoch")
-        axes[1, 0].set_title("gate: alignment and weight")
-        axes[1, 0].legend(fontsize=7)
-        axes[1, 0].grid(alpha=0.3)
+    axes[1, 0].set_xlabel("epoch")
+    axes[1, 0].set_ylabel("validation mse_deg")
+    axes[1, 0].set_title("held-out error (the early-stopping signal)")
+    axes[1, 0].legend(fontsize=7)
+    axes[1, 0].grid(alpha=0.3)
 
     # 4. training loss
     for arm in arms:
@@ -129,7 +149,7 @@ def write_summary(results: dict[str, Any], out_dir: str | Path) -> Path:
         "",
         f"- panel: {task.get('n_genes')} gene(s), condition column `{task.get('condition_column')}`",
         f"- splits (by perturbation): {results.get('split_sizes')}",
-        f"- arms: {', '.join(results.get('arms') or [])}",
+        f"- arms: {', '.join(_arm_label(arm) for arm in (results.get('arms') or []))}",
     ]
     if results.get("partial"):
         lines += [
@@ -155,14 +175,15 @@ def write_summary(results: dict[str, Any], out_dir: str | Path) -> Path:
         "",
         "## Test metrics (held-out perturbations)",
         "",
-        "| arm | mse | mse_deg | pearson | spearman | direction | top-K overlap | epochs |",
-        "|---|---|---|---|---|---|---|---|",
+        "| arm | mse | mse_deg | pearson | specific pearson | spearman | direction | top-K overlap | epochs |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for arm, payload in (results.get("arms") or {}).items():
         summary = payload["test"]["summary"]
         lines.append(
-            f"| `{arm}` | {summary['mse']:.4f} | {summary['mse_deg']:.4f} | "
-            f"{summary['pearson']:.3f} | {summary['spearman']:.3f} | "
+            f"| `{_arm_label(arm)}` | {summary['mse']:.4f} | {summary['mse_deg']:.4f} | "
+            f"{summary['pearson']:.3f} | {_number(summary.get('pearson_specific'))} | "
+            f"{summary['spearman']:.3f} | "
             f"{summary['direction_accuracy']:.3f} | {summary['top_k_overlap']:.3f} | "
             f"{payload.get('epochs_run')} |"
         )
@@ -172,22 +193,25 @@ def write_summary(results: dict[str, Any], out_dir: str | Path) -> Path:
             "",
             "## Reference baselines (same metrics, same held-out perturbations)",
             "",
-            "| baseline | mse | mse_deg | pearson | direction | top-K |",
-            "|---|---|---|---|---|---|",
+            "| baseline | mse | mse_deg | pearson | specific pearson | direction | top-K |",
+            "|---|---|---|---|---|---|---|",
         ]
         for name, summary in baselines.items():
-            pearson = summary.get("pearson")
             lines.append(
                 f"| {name} | {summary['mse']:.4f} | {summary['mse_deg']:.4f} | "
-                + (f"{pearson:.3f} | " if pearson is not None and pearson == pearson else "- | ")
-                + f"{summary['direction_accuracy']:.3f} | {summary['top_k_overlap']:.3f} |"
+                f"{_number(summary.get('pearson'))} | {_number(summary.get('pearson_specific'))} | "
+                f"{summary['direction_accuracy']:.3f} | {summary['top_k_overlap']:.3f} |"
             )
         lines += [
             "",
             "`predict 0` is the no-change reference; `mean response (leave-one-out)` "
             "predicts each held-out perturbation with the average response of the "
             "others. An arm that does not beat both is not predicting the "
-            "perturbation.",
+            "perturbation. `specific pearson` correlates each perturbation's "
+            "Δ minus the mean Δ of the held-out perturbations, so it only credits "
+            "what tells perturbations apart (`-` = the prediction is the same for "
+            "all of them). The best epoch is chosen by validation `mse_deg` "
+            "(GEARS' rule) unless `KOSMOS_PERTURBATION_SELECTION` says otherwise.",
         ]
 
     signals = [
@@ -209,10 +233,10 @@ def write_summary(results: dict[str, Any], out_dir: str | Path) -> Path:
         ]
         for arm, signal in signals:
             lines.append(
-                f"| `{arm}` | {signal['across_perturbation_std']:.4f} | "
+                f"| `{_arm_label(arm)}` | {signal['across_perturbation_std']:.4f} | "
                 f"{signal['signal']:.1%} |"
             )
-        faded = [arm for arm, signal in signals if signal.get("signal", 1.0) < 0.1]
+        faded = [_arm_label(arm) for arm, signal in signals if signal.get("signal", 1.0) < 0.1]
         if faded:
             lines += [
                 "",
@@ -225,6 +249,25 @@ def write_summary(results: dict[str, Any], out_dir: str | Path) -> Path:
                 "'did not learn the perturbation', not as a ranking result.",
             ]
 
+    gated = [(arm, payload["gating"]) for arm, payload in (results.get("arms") or {}).items() if payload.get("gating")]
+    if gated:
+        lines += [
+            "",
+            "## Gradient gate (gated arms, mean over epochs)",
+            "",
+            "Each step uses `g_G + max(0, cos)·min(1, κ‖g_G‖/‖g_S‖)·g_S`; weight 0 = the "
+            "supplementary gradient conflicted with the gold one and the step was gold-only.",
+            "",
+            "| arm | cos(g_G, g_S) | synthetic weight | steps with weight > 0 | ‖g_G‖ | ‖g_S‖ |",
+            "|---|---|---|---|---|---|",
+        ]
+        for arm, gate in gated:
+            lines.append(
+                f"| `{_arm_label(arm)}` | {gate['gradient_cosine']:+.3f} | {gate['synthetic_weight']:.3f} | "
+                f"{gate['synthetic_active_fraction']:.0%} | {gate['gold_grad_norm']:.3g} | "
+                f"{gate['synthetic_grad_norm']:.3g} |"
+            )
+
     overlap = results.get("graph_edge_overlap") or {}
     if overlap:
         lines += [
@@ -234,18 +277,6 @@ def write_summary(results: dict[str, Any], out_dir: str | Path) -> Path:
             f"- gold co-expression vs supplementary: {overlap.get('shared')} shared edge(s), "
             f"Jaccard {overlap.get('jaccard', 0):.3f} "
             f"(first {overlap.get('edges_first')}, second {overlap.get('edges_second')})",
-        ]
-    gated = results["arms"].get("gears_augmented", {}) if results.get("arms") else {}
-    history = [entry for entry in (gated.get("history") or []) if "gate" in entry]
-    if history:
-        last = history[-1]
-        lines += [
-            "",
-            "## Gate (last epoch)",
-            "",
-            f"- cos(g_G, g_ΔG) = {last['gate']['cosine']:.3f}, λ_t = {last['gate']['weight']:.4f}",
-            f"- ‖g_G‖ = {last['gate']['gold_norm']:.3f}, ‖g_ΔG‖ = {last['gate']['increment_norm']:.3f}",
-            f"- active in {last.get('gate_active_fraction', 0):.0%} of that epoch's steps",
         ]
     panel_warning = (results.get("sources") or {}).get("panel_warning")
     if panel_warning:

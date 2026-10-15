@@ -145,20 +145,19 @@ def test_graphs_carry_their_statistics_and_overlap(tmp_path):
 
 
 def test_the_model_consumes_control_and_perturbation_and_predicts_a_vector():
-    model = GearsModel(ModelConfig(n_genes=len(GENES), embedding_dim=8, hidden_dim=8))
-    index = torch.tensor([[0, 1], [2, 0]])
-    states = torch.randn(len(GENES), 8)
+    model = GearsModel(ModelConfig(n_genes=len(GENES), hidden_dim=8))
+    index = torch.tensor([[0, 1], [2, -1]])  # a combination and a padded single
     adjacency = sparse_adjacency(
         torch.tensor([[0, 1, 2], [1, 2, 3]]), torch.ones(3), len(GENES)
     )
     control = torch.zeros(2, len(GENES))
-    expression, delta = model(control, index, adjacency, None, adjacency, gene_states=states)
+    expression, delta = model(control, index, adjacency, None, adjacency)
     assert expression.shape == (2, len(GENES)) == delta.shape
     assert torch.allclose(expression, control + delta)
 
 
-def test_the_ungated_arm_runs_the_two_stage_schedule(tmp_path):
-    """The column task's warm-up / correction cycle, on the perturbation objective."""
+def test_the_signed_arm_runs_the_two_stage_schedule(tmp_path):
+    """Stage 1 trains on L_true; stage 2 on L_u − λ·L_pg."""
     frame = synthetic_screen()
     task = build_task(frame, condition_column="condition", gene_columns=GENES)
     examples, _ = build_examples(frame, task, context_columns=["cell_type"])
@@ -177,34 +176,30 @@ def test_the_ungated_arm_runs_the_two_stage_schedule(tmp_path):
         epochs=3,
         patience=3,
         batch_size=16,
-        embedding_dim=8,
         hidden_dim=8,
-        gnn_layers=1,
         top_k_deg=6,
         context_categorical={"cell_type": 2},
         seed=0,
-        schedule="two_stage",
         stage1_epochs=1,
         stage2_epochs=1,
-        stage2_lr_multiplier=0.1,
     )
     results = run_perturbation_experiment(
         splits=splits, task=task, graphs=graphs, out_dir=tmp_path / "run",
         config=config, supplementary_controls=controls,
     )
 
-    assert results["stage_epochs"] == {"true_loss": 1, "correction": 1}
-    ungated = results["arms"]["gears_augmented_ungated"]
-    phases = [entry["phase"] for entry in ungated["history"]]
-    # stage 1 warms up on gold alone, stage 2 switches the correction in
-    assert "true" in phases and "correction" in phases
-    # the synthetic term is only applied in the correction stage
-    correction_epochs = [e for e in ungated["history"] if e["phase"] == "correction"]
-    assert all("train_synthetic_loss" in e for e in correction_epochs)
+    assert results["stage_epochs"] == {"stage1": 1, "stage2": 1}
+    history = results["arms"]["gears_augmented_ungated"]["history"]
+    assert [entry["phase"] for entry in history] == ["stage1", "stage2", "stage1"]
+    for entry in history:
+        if entry["phase"] == "stage2":
+            assert "loss_u" in entry and "loss_pg" in entry and "correction" in entry
+        else:
+            assert "loss_true" in entry and "loss_u" not in entry
 
 
-def test_the_three_arms_train_and_report_perturbation_level_metrics(tmp_path):
-    """The comparison the design asks for: base, ungated three-graph, gated."""
+def test_the_four_arms_train_and_report_perturbation_level_metrics(tmp_path):
+    """Base and signed PPI, for GEARS and for the MLP."""
     frame = synthetic_screen()
     task = build_task(frame, condition_column="condition", gene_columns=GENES)
     examples, report = build_examples(frame, task, context_columns=["cell_type"])
@@ -225,11 +220,11 @@ def test_the_three_arms_train_and_report_perturbation_level_metrics(tmp_path):
         epochs=3,
         patience=3,
         batch_size=16,
-        embedding_dim=8,
         hidden_dim=8,
-        gnn_layers=1,
         top_k_deg=6,
         context_categorical={"cell_type": 2},
+        mlp_hidden_size=16,
+        stage1_epochs=1,
         seed=0,
     )
     results = run_perturbation_experiment(
@@ -244,19 +239,11 @@ def test_the_three_arms_train_and_report_perturbation_level_metrics(tmp_path):
         assert test["n_perturbations"] >= 1
         for key in ("mse", "mse_deg", "pearson", "direction_accuracy", "top_k_overlap"):
             assert key in test["summary"]
-    gated = results["arms"]["gears_augmented"]["history"]
-    assert any("gate" in entry for entry in gated), "the gated arm must log its controller"
-    # The mechanism is "teacher labels the supplementary cells", so the two
-    # augmented arms must report a synthetic loss; the base arm must not.
-    assert all("train_synthetic_loss" in entry for entry in gated)
-    assert all(
-        "train_synthetic_loss" in entry
-        for entry in results["arms"]["gears_augmented_ungated"]["history"]
-    )
-    assert all(
-        "train_synthetic_loss" not in entry
-        for entry in results["arms"]["gears_base"]["history"]
-    )
+    # Only the signed arms ever reach stage 2 (and read the supplementary cells).
+    for arm in ("gears_augmented_ungated", "mlp_augmented_ungated"):
+        assert any("loss_u" in entry for entry in results["arms"][arm]["history"])
+    for arm in ("gears_base", "mlp_base"):
+        assert all(entry["phase"] == "stage1" for entry in results["arms"][arm]["history"])
     assert "graph_edge_overlap" in results and results["graph_edge_overlap"]["shared"] >= 0
     written = json.loads((tmp_path / "run" / "perturbation_results.json").read_text())
     assert set(written["arms"]) == set(ARMS)
@@ -310,9 +297,7 @@ def test_the_backend_runs_from_tables_the_way_the_agent_will_call_it(tmp_path):
             epochs=3,
             patience=3,
             batch_size=16,
-            embedding_dim=8,
             hidden_dim=8,
-            gnn_layers=1,
             top_k_deg=6,
             seed=0,
         ),
@@ -361,8 +346,8 @@ def test_a_supplementary_source_is_used_for_its_control_cells_not_its_labels(tmp
         test_fraction=0.34,
         validation_fraction=0.17,
         config=PerturbationTrainingConfig(
-            epochs=2, patience=2, batch_size=16, embedding_dim=8, hidden_dim=8,
-            gnn_layers=1, top_k_deg=6, seed=0,
+            epochs=2, patience=2, batch_size=16, hidden_dim=8,
+            top_k_deg=6, seed=0,
         ),
     )
 
@@ -416,14 +401,6 @@ def test_the_bridge_fetches_the_registered_screens_itself(tmp_path, monkeypatch)
                                                                  "direction_accuracy": 0.8,
                                                                  "top_k_overlap": 0.2},
                                                      "n_perturbations": 1}, "history": []},
-                "gears_augmented": {"test": {"summary": {"mse_deg": 0.29, "mse": 0.4, "pearson": 0.3,
-                                                         "spearman": 0.2, "direction_accuracy": 0.9,
-                                                         "top_k_overlap": 0.3},
-                                             "n_perturbations": 1},
-                                    "history": [{"epoch": 1, "gate": {"cosine": 0.4, "weight": 0.3,
-                                                                      "gold_norm": 1.0, "increment_norm": 2.0,
-                                                                      "active": 1.0},
-                                                 "gate_active_fraction": 1.0}]},
             },
         }
 
@@ -439,7 +416,8 @@ def test_the_bridge_fetches_the_registered_screens_itself(tmp_path, monkeypatch)
     assert outcome.ok is True
     assert called == {"gold": "norman", "supp": ["replogle_k562_essential"]}
     assert outcome.metrics["data_source"] == "registry"
-    assert "gated_mse_deg" in outcome.metrics and outcome.metrics["value"] == 0.29
+    assert outcome.metrics["headline_arm"] == "signed_ppi"
+    assert "signed_ppi_mse_deg" in outcome.metrics and outcome.metrics["value"] == 0.31
 
 
 def test_run_data_task_routes_a_perturbation_question_to_the_registry(tmp_path, monkeypatch):
@@ -504,7 +482,6 @@ def test_run_data_task_routes_a_perturbation_question_to_the_registry(tmp_path, 
             "arms": {
                 "gears_base": arm(0.30, 0.2),
                 "gears_augmented_ungated": arm(0.31, 0.2),
-                "gears_augmented": arm(0.29, 0.3),
             },
         }
 
@@ -535,7 +512,7 @@ def test_run_data_task_routes_a_perturbation_question_to_the_registry(tmp_path, 
     returned = outcome.as_return_value()
     assert returned["data_source"] == "data_task"
     assert returned["staging"] == "registry"
-    assert "gated_mse_deg" in returned
+    assert "signed_ppi_mse_deg" in returned
 
 
 
@@ -543,3 +520,13 @@ def _perturbation_kind():
     from kosmos.ppi.task_ontology import classify_task
 
     return classify_task("Does knocking out a gene change its module?")
+
+
+def test_metrics_keys_use_the_names_summary_md_shows():
+    """`metrics.json` and `summary.md` must call an arm by the same name."""
+    from kosmos.ppi.discovery_bridge import _arm_key
+
+    assert _arm_key("gears_base") == "base"
+    assert _arm_key("gears_augmented_ungated") == "signed_ppi"
+    assert _arm_key("mlp_base") == "mlp_base"
+    assert _arm_key("mlp_augmented_ungated") == "mlp_signed_ppi"

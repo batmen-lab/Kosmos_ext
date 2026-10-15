@@ -207,7 +207,7 @@ def test_a_triplet_with_metadata_becomes_a_labeled_table(tmp_path):
     assert table.shape == (80, 6)  # 4 genes + barcode + cell_type
     assert set(table["cell_type"]) <= set(types)
     assert table["barcode"].is_unique
-    assert any("labels from metadata.csv" in note for note in selection.notes)
+    assert any("metadata column(s) from metadata.csv" in note for note in selection.notes)
 
 
 def test_a_triplet_without_metadata_is_evidence_not_gold(tmp_path):

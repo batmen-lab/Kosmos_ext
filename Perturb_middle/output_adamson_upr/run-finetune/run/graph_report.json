@@ -1,0 +1,70 @@
+{
+  "G_C": {
+    "name": "G_C",
+    "n_edges": 6148,
+    "n_nodes": 5014,
+    "density": 0.00024459739340658047,
+    "weight_mean": 0.9027541875839233,
+    "weight_min": 0.4000062942504883,
+    "weight_max": 1.0,
+    "degree_mean": 1.226166733147188,
+    "degree_p50": 1.0,
+    "degree_p90": 1.0,
+    "degree_max": 38,
+    "isolated_nodes": 0,
+    "kind": "coexpression",
+    "threshold": 0.4,
+    "k": 20,
+    "source_cells": 29582,
+    "absolute": true
+  },
+  "G_S": {
+    "name": "G_S",
+    "n_edges": 5062,
+    "n_nodes": 5014,
+    "density": 0.00020139102235265294,
+    "weight_mean": 0.995054304599762,
+    "weight_min": 0.40220707654953003,
+    "weight_max": 1.0,
+    "degree_mean": 1.0095731950538491,
+    "degree_p50": 1.0,
+    "degree_p90": 1.0,
+    "degree_max": 7,
+    "isolated_nodes": 0,
+    "kind": "coexpression",
+    "threshold": 0.4,
+    "k": 20,
+    "source_cells": 5409,
+    "absolute": true
+  },
+  "G_GO": {
+    "name": "G_GO",
+    "n_edges": 202314,
+    "n_nodes": 9853,
+    "density": 0.0020841695703949148,
+    "weight_mean": 0.3706470727920532,
+    "weight_min": 0.10041841119527817,
+    "weight_max": 1.0,
+    "degree_mean": 20.533238607530702,
+    "degree_p50": 12.0,
+    "degree_p90": 47.0,
+    "degree_max": 537,
+    "isolated_nodes": 24,
+    "kind": "go_similarity",
+    "k": 20,
+    "reference": "data/perturbation/reference/go_essential_all.csv",
+    "reference_sha256": "99622d9215462e7b",
+    "rows_read": 12107865
+  },
+  "edge_overlap": {
+    "G_S": {
+      "edges_first": 5598,
+      "edges_second": 5038,
+      "shared": 5027,
+      "jaccard": 0.8962381886254235,
+      "of_first": 0.8979992854590926,
+      "of_second": 0.9978165938864629
+    }
+  },
+  "additional_auxiliary_graphs": []
+}

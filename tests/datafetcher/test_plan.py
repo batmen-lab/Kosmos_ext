@@ -9,7 +9,11 @@ import pytest
 
 from datafetcher import PlanTask, build_plan, load_plan, write_plan
 from datafetcher.cli import main
-from datafetcher.plan import DataPlan, PlanEntry, _enforce_supplementary_schema
+from datafetcher.plan import (
+    DataPlan,
+    PlanEntry,
+    _enforce_supplementary_schema,
+)
 
 
 def labeled(path, rows=60, prefix="L"):
@@ -503,3 +507,244 @@ def test_cross_species_evidence_can_be_asked_for_explicitly(tmp_path, monkeypatc
     plan = build_plan([gold, mouse], shape)
 
     assert [entry.path for entry in plan.supplementary] == [str(mouse)]
+
+
+def test_a_perturbation_label_half_is_gold_without_the_measurements(tmp_path):
+    """A screen's label table has the condition column and no genes.
+
+    The rules see no target they can encode in a narrow `barcode -> guide`
+    table, so they refuse it; the review names the condition column, and the
+    counts matrix is joined at training time. Refusing it here is what left a
+    whole screen with zero gold.
+    """
+    label = tmp_path / "barcodes_guide.csv"
+    pd.DataFrame(
+        {"barcode": [f"b{i}" for i in range(40)], "guide": ["STAT1g1", "NT"] * 20}
+    ).to_csv(label, index=False)
+    reviews = {
+        str(label): {
+            "role": "gold",
+            "reason": "screen label half",
+            "model": {
+                "role": "gold",
+                "is_screen": True,
+                "condition_column": "guide",
+                "has_expression": False,
+            },
+        }
+    }
+
+    plan = build_plan(
+        [label], task(target_column="condition", feature_prefixes=[]), reviews=reviews
+    )
+
+    assert [entry.path for entry in plan.gold] == [str(label)]
+
+
+def test_a_per_cell_review_cannot_promote_an_unusable_table(tmp_path):
+    """The label-half promotion is narrow: no `condition_column`, no gold."""
+    label = tmp_path / "barcodes_guide.csv"
+    pd.DataFrame(
+        {"barcode": [f"b{i}" for i in range(40)], "guide": ["STAT1g1", "NT"] * 20}
+    ).to_csv(label, index=False)
+    reviews = {
+        str(label): {
+            "role": "gold",
+            "reason": "looks labeled",
+            "model": {"role": "gold", "is_screen": False, "condition_column": None},
+        }
+    }
+
+    plan = build_plan(
+        [label], task(target_column="condition", feature_prefixes=[]), reviews=reviews
+    )
+
+    assert plan.gold == []
+    assert str(label) in {
+        entry.path for entry in (*plan.supplementary, *plan.unusable)
+    }
+
+
+def test_perturbation_evidence_shares_genes_not_the_label_tables_columns(tmp_path):
+    """Evidence for a screen is measured transcriptome, not more label columns.
+
+    The gold (a screen's label table) has QC columns, and its counts matrix
+    carries the genes. A gene-expression cohort is evidence when it shares the
+    *counts matrix's genes* -- comparing it to the label table's QC counters
+    rejected every real transcriptome as "0 measured columns".
+    """
+    genes = [f"GENE{i:04d}" for i in range(600)]
+    barcodes = [f"cell{i}" for i in range(40)]
+
+    label = tmp_path / "label.csv"
+    pd.DataFrame(
+        {"barcode": barcodes, "guide": ["NT", "STAT1g1"] * 20, "nCount_RNA": range(40)}
+    ).to_csv(label, index=False)
+
+    # The counts matrix measures `genes` over `barcodes` (genes in rows).
+    counts = tmp_path / "counts.csv"
+    frame = pd.DataFrame(
+        {barcode: range(len(genes)) for barcode in barcodes}
+    )
+    frame.insert(0, "gene", genes)
+    frame.to_csv(counts, index=False)
+
+    # A second cohort: the same genes, different cells -- evidence.
+    evidence = tmp_path / "evidence.csv"
+    pd.DataFrame(
+        {gene: range(30) for gene in genes}
+    ).assign(cell=[f"e{i}" for i in range(30)]).to_csv(evidence, index=False)
+
+    reviews = {
+        str(label): {
+            "role": "gold",
+            "reason": "screen label half",
+            "model": {
+                "role": "gold",
+                "is_screen": True,
+                "condition_column": "guide",
+                "has_expression": False,
+            },
+        },
+        str(evidence): {
+            "role": "supplementary",
+            "reason": "measured transcriptome",
+            "model": {
+                "role": "supplementary",
+                "is_screen": False,
+                "condition_column": None,
+                "has_expression": True,
+            },
+        },
+    }
+
+    plan = build_plan(
+        [label, counts, evidence],
+        task(target_column="guide", feature_prefixes=[]),
+        reviews=reviews,
+    )
+
+    assert [entry.path for entry in plan.gold] == [str(label)]
+    # Measured expression is evidence for a screen: it is not compared to the
+    # label table's QC counters, which no transcriptome could ever share.
+    assert str(evidence) in [entry.path for entry in plan.supplementary]
+
+
+def test_the_evidence_panel_is_not_a_gene_less_leftover(tmp_path):
+    """A real cohort must not be refused because the panel came from a barcode file.
+
+    The transcriptome can be in `supplementary` (the review called it measured
+    evidence) while `unusable` holds only barcode/HTO panels. Taking the panel
+    from `unusable` alone found no genes, fell back to the label table's QC
+    columns, and refused every real transcriptome as "shares only 1 column".
+    """
+    genes = [f"GENE{i:04d}" for i in range(400)]
+    cells = [f"c{i}" for i in range(20)]
+
+    label = tmp_path / "label.csv"
+    pd.DataFrame(
+        {"barcode": [f"b{i}" for i in range(40)], "guide": ["NT", "STAT1g1"] * 20, "nCount_RNA": range(40)}
+    ).to_csv(label, index=False)
+
+    counts = tmp_path / "counts.csv"
+    frame = pd.DataFrame({cell: range(len(genes)) for cell in cells})
+    frame.insert(0, "gene", genes)
+    frame.to_csv(counts, index=False)
+
+    broken = tmp_path / "broken.csv"
+    broken.write_text("a,b\n1,2\n", encoding="utf-8")
+
+    reviews = {
+        str(label): {
+            "role": "gold",
+            "reason": "screen label half",
+            "model": {
+                "role": "gold",
+                "is_screen": True,
+                "condition_column": "guide",
+                "has_expression": False,
+            },
+        },
+        str(counts): {
+            "role": "supplementary",
+            "reason": "measured transcriptome",
+            "model": {"role": "supplementary", "condition_column": None, "has_expression": True},
+        },
+    }
+
+    plan = build_plan(
+        [label, counts, broken],
+        task(target_column="guide", feature_prefixes=[]),
+        reviews=reviews,
+    )
+
+    # The transcriptome is kept even though the same plan holds a gene-less
+    # barcode table: evidence is measured expression, however wide it is.
+    assert str(counts) in [entry.path for entry in plan.supplementary]
+
+
+def test_supplementary_tables_can_be_ordered_largest_first(tmp_path):
+    gold = labeled(tmp_path / "gold.csv")
+    small = unlabeled(tmp_path / "a_small.csv", rows=20, prefix="S")
+    large = unlabeled(tmp_path / "b_large.csv", rows=200, prefix="B")
+    planned = build_plan([gold, small, large], task(), count_rows=True)
+    assert [e.path for e in planned.supplementary] == [str(small), str(large)]
+    by_rows = build_plan([gold, small, large], task(supplementary_order="rows"), count_rows=True)
+    assert [e.path for e in by_rows.supplementary] == [str(large), str(small)]
+    assert any("largest first" in note for note in by_rows.notes)
+
+
+def test_tooluniverse_interpreter_falls_back_to_the_default_location(monkeypatch, tmp_path):
+    from datafetcher import tooluniverse
+
+    python = tmp_path / "python"
+    python.write_text("")
+    monkeypatch.delenv(tooluniverse.ENV_PYTHON, raising=False)
+    monkeypatch.setattr(tooluniverse, "DEFAULT_PYTHON", python)
+    assert tooluniverse.interpreter() == str(python)
+    monkeypatch.setattr(tooluniverse, "DEFAULT_PYTHON", tmp_path / "missing")
+    assert tooluniverse.interpreter() is None
+    monkeypatch.setenv(tooluniverse.ENV_PYTHON, "/explicit/python")
+    assert tooluniverse.interpreter() == "/explicit/python"
+
+
+def test_geo_sample_titles_are_parsed_from_the_brief_record(monkeypatch):
+    from datafetcher.config import DataFetcherConfig
+    from datafetcher.sources import geo
+
+    record = (
+        "^SAMPLE = GSM1\n!Sample_title = Pilot TF experiment cells\n"
+        "!Sample_characteristics_ch1 = cell line: K562\n"
+        "^SAMPLE = GSM2\n!Sample_title = UPR Perturb-seq experiment cells\n"
+    )
+    monkeypatch.setattr(geo, "get_prefix", lambda url, config, limit: record.encode())
+    titles = geo.sample_titles("GSE1", DataFetcherConfig())
+    assert titles == {
+        "GSM1": "Pilot TF experiment cells; cell line: K562",
+        "GSM2": "UPR Perturb-seq experiment cells",
+    }
+
+
+def test_another_screens_cells_are_evidence_for_a_label_half_gold(tmp_path):
+    """causalbench_k562: 162,752 K562 cells with an `intervention` column. Its
+    labels are ignored; its expression is evidence, not compared to QC columns."""
+    label = tmp_path / "cell_identities.csv"
+    pd.DataFrame(
+        {"cell BC": [f"b{i}" for i in range(40)], "guide": ["NT", "ATF6"] * 20, "reads": range(40)}
+    ).to_csv(label, index=False)
+    other = tmp_path / "causalbench_k562.csv"
+    pd.DataFrame({f"ENSG{i:011d}": range(30) for i in range(50)}).assign(
+        intervention=["non-targeting", "ENSG00000114503"] * 15
+    ).to_csv(other, index=False)
+    reviews = {
+        str(label): {"role": "gold", "reason": "screen label half", "model": {
+            "role": "gold", "is_screen": True, "condition_column": "guide", "has_expression": False}},
+        str(other): {"role": "gold", "reason": "another screen", "model": {
+            "role": "gold", "is_screen": True, "condition_column": "intervention", "has_expression": True}},
+    }
+    plan = build_plan(
+        [label, other], task(target_column="guide", feature_prefixes=[]),
+        reviews=reviews, primary_labeled=str(label),
+    )
+    assert [entry.path for entry in plan.gold] == [str(label)]
+    assert str(other) in [entry.path for entry in plan.supplementary]

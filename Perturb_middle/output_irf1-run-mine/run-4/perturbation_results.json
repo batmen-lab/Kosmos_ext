@@ -1,0 +1,295 @@
+{
+  "task": {
+    "n_genes": 2000,
+    "condition_column": "condition",
+    "control_labels": [
+      "ctrl",
+      "control",
+      "control_ctrl",
+      "vehicle",
+      "none",
+      "non-targeting",
+      "non_targeting",
+      "nt",
+      "wt",
+      "unperturbed"
+    ],
+    "delta_scale": 1.0,
+    "genes_sha256": "371d4c56de23c26a92b8ea555c572f28bae15d7e2d539e0f61c938cdd3d6c0cb"
+  },
+  "modality": {
+    "requested": {
+      "modality": "crisprko",
+      "decided_by": "words",
+      "rationale": "the question's words name 'crisprko' (1 hit(s): crisprko x1)",
+      "hits": {
+        "crispra": 0,
+        "crispri": 0,
+        "crisprko": 1
+      }
+    },
+    "provided": {
+      "gold": "unknown",
+      "gold_source": "plan",
+      "gold_description": "",
+      "supplementary": {}
+    },
+    "verdict": {
+      "status": "unchecked",
+      "message": "perturbation modality was not compared: the data does not declare one",
+      "requested": "crisprko",
+      "provided": "unknown"
+    },
+    "assembled_from": [
+      "Perturb_middle/output_irf1-run-mine/gold_subset.csv.gz",
+      "Perturb_middle/output_irf1-run-mine/supp_1_GSM4633614_ECCITE_cDNA_counts.csv.gz"
+    ]
+  },
+  "arms": {
+    "gears_base": {
+      "validation": {
+        "n_perturbations": 1,
+        "summary": {
+          "direction_accuracy": 0.5,
+          "mse": 0.03593313564455775,
+          "mse_deg": 0.09658549751889,
+          "n_deg": 20.0,
+          "pearson": 0.009497027348043334,
+          "pearson_deg": 0.3150341734941332,
+          "spearman": -0.006588039149480303,
+          "top_k_overlap": 0.1
+        },
+        "per_perturbation": {
+          "CD86": {
+            "mse": 0.03593313564455775,
+            "mse_deg": 0.09658549751889,
+            "pearson": 0.009497027348043334,
+            "pearson_deg": 0.3150341734941332,
+            "spearman": -0.006588039149480303,
+            "direction_accuracy": 0.5,
+            "top_k_overlap": 0.1,
+            "n_deg": 20
+          }
+        }
+      },
+      "test": {
+        "n_perturbations": 2,
+        "summary": {
+          "direction_accuracy": 0.8,
+          "mse": 0.048647270559556956,
+          "mse_deg": 0.10893721407215573,
+          "n_deg": 20.0,
+          "pearson": 0.015818165782553302,
+          "pearson_deg": 0.6640996011659017,
+          "spearman": -0.02072135168810843,
+          "top_k_overlap": 0.025
+        },
+        "per_perturbation": {
+          "IFNGR2": {
+            "mse": 0.05294884068559932,
+            "mse_deg": 0.09443496107854749,
+            "pearson": -0.0005669000218112746,
+            "pearson_deg": 0.8280474126796202,
+            "spearman": -0.022197097807598366,
+            "direction_accuracy": 0.9,
+            "top_k_overlap": 0.05,
+            "n_deg": 20
+          },
+          "IRF1": {
+            "mse": 0.044345700433514594,
+            "mse_deg": 0.12343946706576396,
+            "pearson": 0.03220323158691788,
+            "pearson_deg": 0.5001517896521831,
+            "spearman": -0.019245605568618495,
+            "direction_accuracy": 0.7,
+            "top_k_overlap": 0.0,
+            "n_deg": 20
+          }
+        }
+      },
+      "history": [
+        {
+          "epoch": 1,
+          "phase": "gold",
+          "train_loss": 1.1830322912761144,
+          "validation_mse_deg": 0.09658549751889,
+          "validation_pearson": 0.009497027348043334,
+          "validation_direction_accuracy": 0.5
+        }
+      ],
+      "epochs_run": 1,
+      "seconds": 10.2,
+      "predictions": "Perturb_middle/output_irf1-run-mine/run-4/gears_base_test_predictions.npz",
+      "signal": {
+        "across_perturbation_std": 0.005122420927433268,
+        "observed_across_perturbation_std": 0.05441887086927909,
+        "signal": 0.09412949672803689
+      }
+    },
+    "gears_augmented_ungated": {
+      "validation": {
+        "n_perturbations": 1,
+        "summary": {
+          "direction_accuracy": 0.4,
+          "mse": 0.03138019870816205,
+          "mse_deg": 0.0867165873859113,
+          "n_deg": 20.0,
+          "pearson": -0.012897830903754997,
+          "pearson_deg": 0.2125470156000023,
+          "spearman": -0.03994954226734772,
+          "top_k_overlap": 0.1
+        },
+        "per_perturbation": {
+          "CD86": {
+            "mse": 0.03138019870816205,
+            "mse_deg": 0.0867165873859113,
+            "pearson": -0.012897830903754997,
+            "pearson_deg": 0.2125470156000023,
+            "spearman": -0.03994954226734772,
+            "direction_accuracy": 0.4,
+            "top_k_overlap": 0.1,
+            "n_deg": 20
+          }
+        }
+      },
+      "test": {
+        "n_perturbations": 2,
+        "summary": {
+          "direction_accuracy": 0.7,
+          "mse": 0.043917939359472774,
+          "mse_deg": 0.1307571376807524,
+          "n_deg": 20.0,
+          "pearson": 0.027378200715942082,
+          "pearson_deg": 0.4789635870929141,
+          "spearman": 0.009598084652601153,
+          "top_k_overlap": 0.025
+        },
+        "per_perturbation": {
+          "IFNGR2": {
+            "mse": 0.050353681033918116,
+            "mse_deg": 0.11033064909303643,
+            "pearson": 0.02232138801818773,
+            "pearson_deg": 0.6248069221201245,
+            "spearman": 0.01642662111281526,
+            "direction_accuracy": 0.85,
+            "top_k_overlap": 0.05,
+            "n_deg": 20
+          },
+          "IRF1": {
+            "mse": 0.03748219768502743,
+            "mse_deg": 0.15118362626846835,
+            "pearson": 0.03243501341369643,
+            "pearson_deg": 0.3331202520657038,
+            "spearman": 0.002769548192387048,
+            "direction_accuracy": 0.55,
+            "top_k_overlap": 0.0,
+            "n_deg": 20
+          }
+        }
+      },
+      "history": [
+        {
+          "epoch": 1,
+          "phase": "true",
+          "train_loss": 1.1736851659688083,
+          "validation_mse_deg": 0.0867165873859113,
+          "validation_pearson": -0.012897830903754997,
+          "validation_direction_accuracy": 0.4,
+          "train_synthetic_loss": 0.03865227053945811
+        }
+      ],
+      "epochs_run": 1,
+      "seconds": 8.5,
+      "predictions": "Perturb_middle/output_irf1-run-mine/run-4/gears_augmented_ungated_test_predictions.npz",
+      "signal": {
+        "across_perturbation_std": 0.0006226066681338125,
+        "observed_across_perturbation_std": 0.05441887086927909,
+        "signal": 0.011441006735134056
+      }
+    }
+  },
+  "split_sizes": {
+    "train": 2443,
+    "validation": 1197,
+    "test": 2286
+  },
+  "graph_edge_overlap": {
+    "edges_first": 4366,
+    "edges_second": 7232,
+    "shared": 2868,
+    "jaccard": 0.32852233676975945,
+    "of_first": 0.6568941823179111,
+    "of_second": 0.396570796460177
+  },
+  "config": {
+    "epochs": 1,
+    "batch_size": 32,
+    "learning_rate": 0.001,
+    "direction_lambda": 0.1,
+    "top_k_deg": 20,
+    "eta": 1.0,
+    "seed": 42,
+    "include_mlp_baselines": false,
+    "mlp_objective": "gears",
+    "ppi_lambda": 0.5,
+    "schedule": "two_stage",
+    "stage1_epochs": 4,
+    "stage2_epochs": 1,
+    "stage2_lr_multiplier": 0.1,
+    "loss_ramp_epochs": 0
+  },
+  "stage_epochs": {
+    "true_loss": 4,
+    "correction": 1
+  },
+  "baselines": {
+    "predict 0": {
+      "direction_accuracy": 0.0,
+      "mse": 0.013898337961157928,
+      "mse_deg": 0.1860617822679122,
+      "n_deg": 20.0,
+      "pearson": NaN,
+      "pearson_deg": NaN,
+      "spearman": NaN,
+      "top_k_overlap": 0.0
+    },
+    "mean response (leave-one-out)": {
+      "direction_accuracy": 0.75,
+      "mse": 0.020842970084183947,
+      "mse_deg": 0.1255760821114896,
+      "n_deg": 20.0,
+      "pearson": 0.2868837878230713,
+      "pearson_deg": 0.8312121607801477,
+      "spearman": 0.2404494301123575,
+      "top_k_overlap": 0.25
+    }
+  },
+  "figures": [
+    "Perturb_middle/output_irf1-run-mine/run-4/figures/perturbation_overview.png"
+  ],
+  "sources": {
+    "gold": {
+      "path": "Perturb_middle/output_irf1-run-mine/gold_subset.csv.gz",
+      "cells": 8312,
+      "control_cells": 2386,
+      "genes": 2002,
+      "panel_after_intersection": 2000,
+      "modality": "unknown",
+      "modality_source": "plan"
+    },
+    "supp_0": {
+      "path": "Perturb_middle/output_irf1-run-mine/supp_2_GSM4633605_CITE_cDNA_counts.csv.gz",
+      "cells": 5000,
+      "used_cells": 5000,
+      "how": "all cells (no condition column: an unperturbed source)",
+      "edges": 12464
+    },
+    "supp_1": {
+      "path": "Perturb_middle/output_irf1-run-mine/supp_3_GSM4633608_ECCITE_Arrayed_cDNA_counts.csv.gz",
+      "cells": 5000,
+      "used_cells": 5000,
+      "how": "all cells (no condition column: an unperturbed source)",
+      "edges": 3428
+    }
+  }
+}

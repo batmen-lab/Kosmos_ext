@@ -103,7 +103,7 @@ def _stub_run(tmp_path, monkeypatch, kind="perturbation_response"):
             "graph_edge_overlap": {"shared": 0},
             "sources": {},
             "figures": [],
-            "arms": {"gears_base": arm, "gears_augmented_ungated": arm, "gears_augmented": arm},
+            "arms": {"gears_base": arm, "gears_augmented_ungated": arm },
         }
 
     monkeypatch.setattr(stage_module, "stage_sources", stage_patch)
@@ -157,7 +157,7 @@ def test_the_registry_source_declares_its_modality(tmp_path, monkeypatch):
         return {"task": {"n_genes": 2, "condition_column": "condition", "control_labels": ["ctrl"]},
                 "split_sizes": {"train": 1, "validation": 1, "test": 1},
                 "graph_edge_overlap": {}, "sources": {}, "figures": [],
-                "arms": {"gears_base": arm, "gears_augmented_ungated": arm, "gears_augmented": arm}}
+                "arms": {"gears_base": arm, "gears_augmented_ungated": arm}}
 
     monkeypatch.setattr(stage_module, "stage_sources", stage_patch)
     monkeypatch.setattr(run_module, "run_perturbation_task", fake_run)

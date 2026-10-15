@@ -1,0 +1,344 @@
+{
+  "survey": "artifacts/dataprep/jurkat-tcr/survey.json",
+  "decisions": {
+    "survey": "artifacts/dataprep/jurkat-tcr/survey.json",
+    "out": "Perturb_middle/output_jurkat_tcr",
+    "conditions": "stimulated",
+    "exclude_targets": "DHODH,MVD,TUBB",
+    "min_umis": 1000,
+    "min_similarity": 0.6,
+    "max_samples_per_series": 2,
+    "supp_budget_gb": 3.0,
+    "n_hvg": 5000,
+    "target_sum": 10000.0,
+    "test_fraction": 0.25,
+    "validation_fraction": 0.2,
+    "batch_size": 32
+  },
+  "steps": [
+    [
+      "gold cells in the file",
+      5905
+    ],
+    [
+      "in condition(s) stimulated",
+      3259
+    ],
+    [
+      "without DHODH, MVD, TUBB",
+      3204
+    ]
+  ],
+  "study": {
+    "question": "In Jurkat T cells, can the transcriptional response to CRISPR knockout of T cell receptor signaling genes not seen in training be predicted from a small labeled screen, using large single-cell profiles of Jurkat cells from other CRISPR screens, with their labels ignored, as supplementary evidence?",
+    "dataset": "GSE92872 (Datlinger 2017 CROP-seq, Jurkat TCR)",
+    "held_out_unit": "perturbed genes never seen in training",
+    "condition_column": "condition",
+    "split_mode": "unseen_single",
+    "test_fraction": 0.25,
+    "validation_fraction": 0.2,
+    "batch_size": 32,
+    "max_panel_genes": 0,
+    "normalize": "log1p(CPM 10000)",
+    "target_sum": 10000.0,
+    "counts": {
+      "total_column": "total_counts",
+      "gold": "Perturb_middle/output_jurkat_tcr/gold_counts.parquet",
+      "supplementary": {
+        "Perturb_middle/output_jurkat_tcr/supp_jurkat_pooled.parquet": "Perturb_middle/output_jurkat_tcr/supp_jurkat_pooled_counts.parquet"
+      }
+    }
+  },
+  "gold": {
+    "sample": "GSE92872",
+    "estimated_bytes": 19398656,
+    "estimated_cells": null,
+    "actual_bytes": 18181357,
+    "cells_in_file": 5905,
+    "cells": 3204,
+    "controls": 705,
+    "perturbations": 29,
+    "cells_per_perturbation": {
+      "min": 28,
+      "median": 85.0,
+      "max": 156
+    },
+    "genes_in_file": 36722,
+    "median_umis": 6323.0,
+    "ribosomal_fraction": 0.16078202426433563
+  },
+  "candidates": [
+    {
+      "sample": "GSM7719390",
+      "series": "geo://GSE241207",
+      "title": "J1_1; J1.1; cell line: J1.1; cell type: HIV-1 LAV infected Jurkat E6 C",
+      "barcodes": 10773,
+      "cells": 10564,
+      "shared_genes": 6054,
+      "pearson": 0.867,
+      "spearman": 0.756,
+      "median_umis": 9605.5,
+      "median_genes": 3215.5,
+      "ribosomal_fraction": 0.21,
+      "decision": "pooled",
+      "estimated_bytes": 127250432,
+      "estimated_cells": 14282
+    },
+    {
+      "sample": "GSM7719391",
+      "series": "geo://GSE241207",
+      "title": "J_Lat; J-Lat; cell line: J-Lat; cell type: HIV-R7/E-/GFP infected Jurk",
+      "barcodes": 8816,
+      "cells": 8753,
+      "shared_genes": 6054,
+      "pearson": 0.883,
+      "spearman": 0.78,
+      "median_umis": 7402.0,
+      "median_genes": 2714.0,
+      "ribosomal_fraction": 0.223,
+      "decision": "pooled",
+      "estimated_bytes": 91589632,
+      "estimated_cells": 11856
+    },
+    {
+      "sample": "GSM7951413",
+      "series": "geo://GSE249595",
+      "title": "Channel 1; Jurkat; cell line: Jurkat; cell type: T cell",
+      "barcodes": 6794880,
+      "cells": 54697,
+      "shared_genes": 5725,
+      "pearson": 0.239,
+      "spearman": 0.399,
+      "median_umis": 2837.0,
+      "median_genes": 520.0,
+      "ribosomal_fraction": 0.013,
+      "decision": "dropped: Pearson 0.24 < 0.6",
+      "estimated_bytes": 235806924,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM7951414",
+      "series": "geo://GSE249595",
+      "title": "Channel 2; Jurkat; cell line: Jurkat; cell type: T cell",
+      "decision": "skipped: its series failed on an earlier sample",
+      "estimated_bytes": 222699724,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM7951415",
+      "series": "geo://GSE249595",
+      "title": "Channel 3; Jurkat; cell line: Jurkat; cell type: T cell",
+      "decision": "skipped: its series failed on an earlier sample",
+      "estimated_bytes": 228152320,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM7951416",
+      "series": "geo://GSE249595",
+      "title": "Channel 4; Jurkat; cell line: Jurkat; cell type: T cell",
+      "decision": "skipped: its series failed on an earlier sample",
+      "estimated_bytes": 210011955,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM7951417",
+      "series": "geo://GSE249595",
+      "title": "Channel 5; Jurkat; cell line: Jurkat; cell type: T cell",
+      "decision": "skipped: its series failed on an earlier sample",
+      "estimated_bytes": 179288678,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM7951418",
+      "series": "geo://GSE249595",
+      "title": "Channel 6; Jurkat; cell line: Jurkat; cell type: T cell",
+      "decision": "skipped: its series failed on an earlier sample",
+      "estimated_bytes": 212738252,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM7951419",
+      "series": "geo://GSE249595",
+      "title": "Channel 7; Jurkat; cell line: Jurkat; cell type: T cell",
+      "decision": "skipped: its series failed on an earlier sample",
+      "estimated_bytes": 253108428,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM7951420",
+      "series": "geo://GSE249595",
+      "title": "Channel 8; Jurkat; cell line: Jurkat; cell type: T cell",
+      "decision": "skipped: its series failed on an earlier sample",
+      "estimated_bytes": 222699724,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM7951421",
+      "series": "geo://GSE249595",
+      "title": "Channel 9; Jurkat; cell line: Jurkat; cell type: T cell",
+      "decision": "skipped: its series failed on an earlier sample",
+      "estimated_bytes": 233500057,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM7951422",
+      "series": "geo://GSE249595",
+      "title": "Channel 10; Jurkat; cell line: Jurkat; cell type: T cell",
+      "decision": "skipped: its series failed on an earlier sample",
+      "estimated_bytes": 244090675,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM7951423",
+      "series": "geo://GSE249595",
+      "title": "Channel 11; Jurkat; cell line: Jurkat; cell type: T cell",
+      "decision": "skipped: its series failed on an earlier sample",
+      "estimated_bytes": 237170073,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM7951424",
+      "series": "geo://GSE249595",
+      "title": "Channel 12; Jurkat; cell line: Jurkat; cell type: T cell",
+      "decision": "skipped: its series failed on an earlier sample",
+      "estimated_bytes": 239057510,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM7951425",
+      "series": "geo://GSE249595",
+      "title": "Channel 13; Jurkat; cell line: Jurkat; cell type: T cell",
+      "decision": "skipped: its series failed on an earlier sample",
+      "estimated_bytes": 272716800,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM7951426",
+      "series": "geo://GSE249595",
+      "title": "Channel 14; Jurkat; cell line: Jurkat; cell type: T cell",
+      "decision": "skipped: its series failed on an earlier sample",
+      "estimated_bytes": 256988160,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM7951427",
+      "series": "geo://GSE249595",
+      "title": "Channel 15; Jurkat; cell line: Jurkat; cell type: T cell",
+      "decision": "skipped: its series failed on an earlier sample",
+      "estimated_bytes": 253318144,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM7951428",
+      "series": "geo://GSE249595",
+      "title": "Channel 16; Jurkat; cell line: Jurkat; cell type: T cell",
+      "decision": "skipped: its series failed on an earlier sample",
+      "estimated_bytes": 278379110,
+      "estimated_cells": null
+    },
+    {
+      "sample": "hf://VirtualCell2025/jurkat.h5",
+      "series": "hf://VirtualCell2025/jurkat.h5",
+      "title": "VirtualCell2025/jurkat.h5",
+      "barcodes": 21412,
+      "cells": 21412,
+      "shared_genes": 5450,
+      "pearson": 0.807,
+      "spearman": 0.777,
+      "median_umis": 4547.952,
+      "median_genes": 3130.0,
+      "ribosomal_fraction": 0.0,
+      "decision": "pooled",
+      "estimated_bytes": 1551186021,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM8187448",
+      "series": "geo://GSE263194",
+      "title": "DMSO-treated, replicate 1; Jurkat T Lymphocytes; cell line: Jurkat T L",
+      "barcodes": 1786407,
+      "cells": 9999,
+      "shared_genes": 5824,
+      "pearson": 0.892,
+      "spearman": 0.788,
+      "median_umis": 9730.0,
+      "median_genes": 3499.0,
+      "ribosomal_fraction": 0.191,
+      "decision": "pooled",
+      "estimated_bytes": 217035571,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM8187449",
+      "series": "geo://GSE263194",
+      "title": "DMSO-treated, replicate 2; Jurkat T Lymphocytes; cell line: Jurkat T L",
+      "barcodes": 1895064,
+      "cells": 9570,
+      "shared_genes": 5824,
+      "pearson": 0.892,
+      "spearman": 0.788,
+      "median_umis": 10737.5,
+      "median_genes": 3689.0,
+      "ribosomal_fraction": 0.194,
+      "decision": "pooled",
+      "estimated_bytes": 221544448,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM8187450",
+      "series": "geo://GSE263194",
+      "title": "IdU-treated, replicate 1; Jurkat T Lymphocytes; cell line: Jurkat T Ly",
+      "decision": "skipped: 2 sample(s) of this series already pooled",
+      "estimated_bytes": 202565222,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM8187451",
+      "series": "geo://GSE263194",
+      "title": "IdU-treated, replicate 2; Jurkat T Lymphocytes; cell line: Jurkat T Ly",
+      "decision": "skipped: 2 sample(s) of this series already pooled",
+      "estimated_bytes": 188828876,
+      "estimated_cells": null
+    },
+    {
+      "sample": "GSM4483270",
+      "series": "geo://GSE148820",
+      "title": "mRNA_library; Jurkat cells; cell type: Jurkat-Cas9 cell",
+      "barcodes": 13435,
+      "cells": 12539,
+      "shared_genes": 5856,
+      "pearson": 0.867,
+      "spearman": 0.744,
+      "median_umis": 7325.0,
+      "median_genes": 2862.0,
+      "ribosomal_fraction": 0.17,
+      "decision": "pooled",
+      "estimated_bytes": 120957952,
+      "estimated_cells": 17515
+    }
+  ],
+  "supplementary": {
+    "sources": [
+      "GSM7719390_J1_1_matrix.mtx.gz",
+      "GSM7719391_J_Lat_matrix.mtx.gz",
+      "jurkat.h5",
+      "GSM8187448_DMSO_WCE_1_matrix.mtx.gz",
+      "GSM8187449_DMSO_WCE_2_matrix.mtx.gz",
+      "GSM4483270_mRNA_library.matrix.mtx.gz"
+    ],
+    "cells": 72837,
+    "panel_coverage": {
+      "GSM7719390_J1_1_matrix.mtx.gz": 4999,
+      "GSM7719391_J_Lat_matrix.mtx.gz": 4999,
+      "jurkat.h5": 4480,
+      "GSM8187448_DMSO_WCE_1_matrix.mtx.gz": 4818,
+      "GSM8187449_DMSO_WCE_2_matrix.mtx.gz": 4818,
+      "GSM4483270_mRNA_library.matrix.mtx.gz": 4844
+    }
+  },
+  "panel": {
+    "genes": 5013,
+    "forced_perturbed": 13
+  },
+  "download_gb": 2.5
+}

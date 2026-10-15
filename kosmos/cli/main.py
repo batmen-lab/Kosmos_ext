@@ -415,6 +415,9 @@ def register_commands():
         ("profile", "kosmos.cli.commands.profile", "profile_command"),
         ("graph", "kosmos.cli.commands.graph", "manage_graph"),
         ("infer-task", "kosmos.cli.commands.infer_task", "infer_task_command"),
+        # The two-stage data workflow: fetch-and-review, then experiment.
+        ("dataprep", "kosmos.cli.commands.dataprep", "dataprep_command"),
+        ("experiment", "kosmos.cli.commands.experiment", "experiment_command"),
     ]
 
     import importlib

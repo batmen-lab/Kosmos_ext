@@ -1,8 +1,9 @@
 """Perturbation-response prediction: control + perturbation -> Δ expression.
 
-The task contract, the three graphs, a GEARS-shaped model and three training
-arms. Nothing here touches the simple per-cell pipeline; it is a second backend
-on the same data layer.
+The task contract, the three graphs, a GEARS-shaped model, a graph-free MLP and
+two training arms per architecture (base, two-stage signed PPI). Nothing here
+touches the simple per-cell pipeline; it is a second backend on the same data
+layer.
 
     from kosmos.ppi.perturbation import (
         build_task, build_examples, perturbation_splits, split_examples,
@@ -34,12 +35,7 @@ from kosmos.ppi.perturbation.graphs import (
 from kosmos.ppi.perturbation.losses import deg_indices, gears_loss
 from kosmos.ppi.perturbation.metrics import PerturbationMetrics, perturbation_metrics
 from kosmos.ppi.perturbation.model import GearsModel, ModelConfig
-from kosmos.ppi.perturbation.mlp import (
-    MLP_ARMS,
-    MlpConfig,
-    MlpModel,
-    run_mlp_arms,
-)
+from kosmos.ppi.perturbation.mlp import MLP_ARMS, MlpConfig, MlpModel
 from kosmos.ppi.perturbation.train import (
     ARMS,
     PerturbationTrainingConfig,
@@ -76,5 +72,4 @@ __all__ = [
     "MLP_ARMS",
     "MlpModel",
     "MlpConfig",
-    "run_mlp_arms",
 ]

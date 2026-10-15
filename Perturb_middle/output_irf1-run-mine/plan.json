@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "task": {
+    "objective": "Does CRISPR knockout of the gene IRF1 change the transcriptome of human macrophages, and can the transcriptional response to the perturbation be predicted?",
+    "target_column": "condition",
+    "target_source": "human",
+    "target_confidence": "declared",
+    "task_type": "classification",
+    "backend": "perturbation"
+  },
+  "gold": [
+    {
+      "path": "Perturb_middle/output_irf1-run-mine/gold_subset.csv.gz",
+      "role": "gold",
+      "reason": "irf1-run-mine: all + NT labels (20,729 cells)"
+    }
+  ],
+  "supplementary": [
+    {
+      "path": "Perturb_middle/output_irf1-run-mine/supp_1_GSM4633614_ECCITE_cDNA_counts.csv.gz",
+      "role": "supplementary",
+      "reason": "2009-gene panel, log1p-CPM + per-gene z-score + clip, 20,729 cells (from GSM4633614_ECCITE_cDNA_counts.tsv.gz)"
+    },
+    {
+      "path": "Perturb_middle/output_irf1-run-mine/supp_2_GSM4633605_CITE_cDNA_counts.csv.gz",
+      "role": "supplementary",
+      "reason": "2009-gene panel, log1p-CPM + per-gene z-score + clip, 7,566 cells (from GSM4633605_CITE_cDNA_counts.tsv.gz)"
+    },
+    {
+      "path": "Perturb_middle/output_irf1-run-mine/supp_3_GSM4633608_ECCITE_Arrayed_cDNA_counts.csv.gz",
+      "role": "supplementary",
+      "reason": "2009-gene panel, log1p-CPM + per-gene z-score + clip, 16,695 cells (from GSM4633608_ECCITE_Arrayed_cDNA_counts.tsv.gz)"
+    }
+  ],
+  "unusable": []
+}
