@@ -1659,7 +1659,7 @@ class ExperimentCodeGenerator:
         # Per-dataset column and shape descriptions, so the model writes code
         # against real column names rather than guessing them.
         self.dataset_context: Optional[str] = None
-
+        self.hypothesis_statement: Optional[str] = None
         # Initialize LLM client with error handling. Prefer the configured
         # provider system (LLM_PROVIDER, e.g. OpenRouter/deepseek) so code
         # generation uses the same model as the rest of the pipeline instead of
@@ -2163,6 +2163,36 @@ lines later.{context}"""
             for test in protocol.statistical_tests
         ])
 
+        hypothesis = getattr(self, "hypothesis_statement", None)
+        hypothesis_text = (
+            f"""**Hypothesis under test (verbatim):** {hypothesis}
+
+PRIMARY TEST CONTRACT: the main analysis must test THIS claim directly, not a related or easier one.
+Report its result at the TOP LEVEL of `results`:
+  results['test'] = '<test name>'
+  results['p_value'] = <float>
+  results['effect_size'] = <float>
+  results['effect_size_type'] = '<r | beta | OR | ...>'
+  results['n'] = <int, number of units tested>
+Put secondary analyses under other keys.
+If a variable the claim needs is not in the mounted data, do NOT substitute another analysis:
+set results['untestable_reason'] = '<what is missing>' and report what you could compute.
+
+If the claim is a THRESHOLD on a quantity that is not a p-value test (e.g. coloc PP.H4 > 0.8,
+credible-set size < 10, "at least one protein ..."), do NOT invent a p-value test. Report:
+  results['test'] = '<quantity and threshold, e.g. max coloc PP.H4 > 0.8>'
+  results['statistic'] = <the value the threshold is applied to, e.g. the max PP.H4>
+  results['statistic_type'] = '<PP.H4 | credible_set_size | count | ...>'
+  results['claim_met'] = True or False
+  results['n'] = <number of units evaluated>
+If a test's inputs are empty or degenerate (no overlapping variants, an all-zero row or column,
+fewer than 3 observations), set results['untestable_reason'] explaining why. Never report a
+placeholder such as p_value = 1.0 or effect_size = NaN.
+"""
+            if hypothesis else ""
+        )
+
+
         data_access_text = self._data_access_instructions(datasets)
         analyzer_api = _analyzer_api_text()
         environment = _environment_text()
@@ -2184,6 +2214,7 @@ lines later.{context}"""
 **Statistical Tests:**
 {tests_text}
 
+{hypothesis_text}
 {data_access_text}
 
 Use these libraries: pandas, numpy, scipy.stats

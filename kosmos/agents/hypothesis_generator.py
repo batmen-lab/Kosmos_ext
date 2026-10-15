@@ -82,7 +82,7 @@ class HypothesisGeneratorAgent(BaseAgent):
         self.use_literature_context = self.config.get("use_literature_context", True)
         self.max_papers_context = self.config.get("max_papers_context", 10)
         self.require_novelty_check = self.config.get("require_novelty_check", True)
-        self.min_novelty_score = self.config.get("min_novelty_score", 0.5)
+        self.min_novelty_score = self.config.get("min_novelty_score", 0.1)
 
         # Components
         self.llm_client = get_client()
@@ -188,34 +188,48 @@ class HypothesisGeneratorAgent(BaseAgent):
             logger.info(f"Gathered {len(papers)} papers for context")
 
         # Step 3: Generate hypotheses using Claude
-        hypotheses = self._generate_with_claude(
-            research_question=research_question,
-            domain=domain,
-            num_hypotheses=num_hypotheses,
-            context_papers=papers,
-            data_context=data_context, 
-            #data_driven=data_driven
-        )
+        max_attempts = 5
+        request_n = num_hypotheses + 3
 
-        # Step 4: Validate hypotheses
-        validated_hypotheses = []
-        for hyp in hypotheses:
-            try:
-                if self._validate_hypothesis(hyp):
-                    validated_hypotheses.append(hyp)
-                else:
-                    logger.warning(f"Hypothesis failed validation: {hyp.statement[:50]}...")
-            except Exception as e:
-                logger.error(f"Error validating hypothesis: {e}")
+        validated_hypotheses: List[Hypothesis] = []
+        seen: set = set()
+        empties = 0
 
-        logger.info(f"Generated {len(validated_hypotheses)} valid hypotheses")
+        for _ in range(max_attempts):
+            if len(validated_hypotheses) >= num_hypotheses or (empties >= 2 and validated_hypotheses):
+                break
+            hypotheses = self._generate_with_claude(
+                    research_question=research_question,
+                    domain=domain,
+                    num_hypotheses=request_n,
+                    context_papers=papers,
+                    data_context=data_context,
+                    #data_driven=data_driven
+                )
+            empties = 0 if hypotheses else empties + 1
 
+            for hyp in hypotheses:
+                key = hyp.statement.strip().lower()
+                if key in seen:
+                    continue
+                try:
+                    if self._validate_hypothesis(hyp):
+                        seen.add(key)
+                        validated_hypotheses.append(hyp)
+                    else:
+                        logger.warning(f"Hypothesis failed validation: {hyp.statement[:50]}...")
+                except Exception as e:
+                    logger.error(f"Error validating hypothesis: {e}")
+
+        logger.info(f"Generated {len(validated_hypotheses)} valid hypotheses (target {num_hypotheses})")
+
+        
         # Step 4b: Novelty scoring — always annotate, only filter if enabled
         if validated_hypotheses:
             try:
                 from kosmos.hypothesis.novelty_checker import NoveltyChecker
                 checker = NoveltyChecker(similarity_threshold=1.0 - self.min_novelty_score)
-                novel = []
+                novel, rejected = [], []
                 for hyp in validated_hypotheses:
                     try:
                         report = checker.check_novelty(hyp)
@@ -223,15 +237,20 @@ class HypothesisGeneratorAgent(BaseAgent):
                         if self.require_novelty_check and report.novelty_score < self.min_novelty_score:
                             logger.info("Filtered low-novelty hypothesis (%.2f): %s",
                                         report.novelty_score, hyp.statement[:60])
+                            rejected.append(hyp)
                         else:
                             novel.append(hyp)
                     except Exception as e:
                         logger.warning("Novelty check failed, keeping hypothesis: %s", e)
                         novel.append(hyp)  # Fail open
-                validated_hypotheses = novel
+                rejected.sort(key=lambda h: h.novelty_score or 0.0, reverse=True)
+                validated_hypotheses = novel + rejected[:max(0, num_hypotheses - len(novel))]
                 logger.info(f"After novelty scoring: {len(validated_hypotheses)} hypotheses")
             except ImportError:
                 logger.warning("NoveltyChecker unavailable, skipping novelty scoring")
+
+        validated_hypotheses.sort(key=lambda h: h.novelty_score or 0.0, reverse=True)
+        validated_hypotheses = validated_hypotheses[:num_hypotheses]
 
         # Step 5: Store in database if requested
         if store_in_db:
@@ -373,6 +392,10 @@ No explanation needed."""
                 "Use the following datasets for testing. The hypotheses must ANSWER "
                 "THE RESEARCH QUESTION below:\n"
                 f"{data_context}\n\n"
+                "For every hypothesis follow the following rules:\n"
+                "1. Each hypothesis must be clear, testable, and scientifically justified. No 'if...', 'indicating...', 'through...' chains without a mechanism. Put a mechanism in the rationale.\n"
+                "2. Name the test, threshold and multiple-testing correlations in the rationale.\n"
+                "3. Every quantity in the claim must be computable from the columns listed above. Do not require any external data.\n"
             )
             framing += (
                 "Where more than one dataset is listed, propose hypotheses "
@@ -402,7 +425,7 @@ No explanation needed."""
                 prompt=prompt,
                 schema=schema,
                 max_tokens=HYPOTHESIS_MAX_TOKENS,
-                temperature=0.4  # Slightly higher for creativity
+                temperature=0.4  
             )
 
             # Parse response into Hypothesis objects

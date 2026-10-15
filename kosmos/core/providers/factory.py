@@ -16,6 +16,29 @@ logger = logging.getLogger(__name__)
 _PROVIDER_REGISTRY: Dict[str, type] = {}
 
 
+def _env_setting(name: str, default: Optional[str] = None) -> Optional[str]:
+    """A setting from the process environment, else from Kosmos's .env file.
+
+    The CLI providers' settings are not KosmosConfig fields, and the .env file
+    reaches os.environ only when the `kosmos` CLI calls load_dotenv(). Reading
+    the same file KosmosConfig reads keeps a direct `get_client()` consistent.
+    """
+    import os
+    from pathlib import Path
+
+    value = os.environ.get(name)
+    if value not in (None, ""):
+        return value
+    try:
+        from dotenv import dotenv_values
+
+        env_file = Path(__file__).resolve().parents[3] / ".env"
+        value = dotenv_values(env_file).get(name)
+    except Exception:
+        value = None
+    return value if value not in (None, "") else default
+
+
 def register_provider(name: str, provider_class: type):
     """
     Register a provider class.
@@ -172,6 +195,27 @@ def get_provider_from_config(kosmos_config) -> LLMProvider:
                 'timeout': int(os.getenv('LITELLM_TIMEOUT', '120')),
             }
 
+    elif provider_name.lower() == 'claude_cli':
+        provider_config = {
+            'model': _env_setting('CLAUDE_CLI_MODEL'),
+            'effort': _env_setting('CLAUDE_CLI_EFFORT'),
+            'max_output_tokens': _env_setting('CLAUDE_CLI_MAX_OUTPUT_TOKENS', '32000'),
+            'token_multiplier': _env_setting('CLAUDE_CLI_TOKEN_MULTIPLIER', '1.25'),
+            'min_output_tokens': _env_setting('CLAUDE_CLI_MIN_OUTPUT_TOKENS', '1024'),
+            'timeout': _env_setting('CLAUDE_CLI_TIMEOUT', '900'),
+            'run_output_token_limit': _env_setting('CLAUDE_CLI_RUN_OUTPUT_TOKEN_LIMIT'),
+            'binary': _env_setting('CLAUDE_CLI_BINARY'),
+        }
+
+    elif provider_name.lower() == 'codex_cli':
+        provider_config = {
+            'model': _env_setting('CODEX_CLI_MODEL'),
+            'effort': _env_setting('CODEX_CLI_EFFORT'),
+            'timeout': _env_setting('CODEX_CLI_TIMEOUT', '900'),
+            'run_output_token_limit': _env_setting('CODEX_CLI_RUN_OUTPUT_TOKEN_LIMIT'),
+            'binary': _env_setting('CODEX_CLI_BINARY'),
+        }
+
     else:
         raise ValueError(f"Unknown provider in config: {provider_name}")
 
@@ -214,6 +258,10 @@ def _register_builtin_providers():
         logger.debug("LiteLLM provider registered with aliases: ollama, deepseek, lmstudio")
     except ImportError:
         logger.debug("LiteLLM provider not available (litellm package not installed)")
+
+    from kosmos.core.providers.cli_provider import ClaudeCLIProvider, CodexCLIProvider
+    register_provider("claude_cli", ClaudeCLIProvider)
+    register_provider("codex_cli", CodexCLIProvider)
 
 
 # Register on module import

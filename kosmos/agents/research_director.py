@@ -33,6 +33,7 @@ from kosmos.core.stage_tracker import get_stage_tracker
 from kosmos.world_model import get_world_model, Entity, Relationship
 from kosmos.db import get_session
 from kosmos.db.operations import get_hypothesis, get_experiment, get_result
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +46,6 @@ ERROR_RECOVERY_LOG_PREFIX = "[ERROR-RECOVERY]"
 MAX_ACTIONS_PER_ITERATION = 50  # Force convergence if exceeded
 
 
-# Formats whose first bytes are binary but which pandas reads directly. The
-# head sniffer can only judge bytes, so without this table a staged .parquet
-# was reported as unreadable rather than summarised.
 _BINARY_READERS = {
     ".parquet": "read_parquet",
     ".pq": "read_parquet",
@@ -77,26 +75,11 @@ def _render_file_summary(
     if df.shape[1] == 0:
         return None
 
-    # A headerless file comes back with INTEGER column labels (0, 1, 2),
-    # and every join and f-string below assumes strings -- `", ".join`
-    # raises TypeError on the first int. Stringify the integers rather than
-    # inventing names for them: naming them `col_0..col_N` made the summary
-    # disagree with the read call it prescribes, so code written from this
-    # list asked for `df['col_0']` against a frame whose columns are
-    # 0..N and raised KeyError. The label shown has to be the label pandas
-    # will produce.
     if head.verdict == "headerless":
         df.columns = [str(i) for i in range(df.shape[1])]
     else:
         df.columns = [str(c) for c in df.columns]
 
-    # Every column NAME, not the first `max_cols`. Names are cheap --
-    # 151 of them is a couple of kilobytes -- and the cost is the
-    # per-column summary below, which stays capped. Truncating the names
-    # hid all 111 columns past the 40th, including every `age:[0-10)`
-    # bucket, so the model wrote `df['age']` from its memory of the UCI
-    # dataset and the container raised `KeyError: 'age'`. A column the
-    # model cannot see is one it will invent.
     all_cols = list(df.columns)
     cols = all_cols[:max_cols]
     shape_line = f"Shape: {n_rows} rows x {df.shape[1]} columns."
@@ -109,18 +92,12 @@ def _render_file_summary(
     except OSError:
         size_mb = 0.0
     if size_mb >= 100:
-        # A 548 MB CSV takes several GB to read whole, and the sandbox is
-        # memory-capped: the container is killed with exit 137 and no
-        # traceback, so the analysis fails before it computes anything.
         shape_line += (
             f" FILE IS {size_mb:,.0f} MB ON DISK -- read only the columns "
             f"you need with pd.read_csv(..., usecols=[...]); reading it "
             f"whole can exhaust the sandbox's memory."
         )
 
-    # The raw head goes ABOVE the column list, because it is the evidence
-    # for the names in that list. A model shown both can see for itself
-    # that a header was displaced; shown only the parsed names, it cannot.
     head_block = head.render() if show_preview else head.advisory()
     lines = [shape_line]
     if head_block:
@@ -129,12 +106,6 @@ def _render_file_summary(
     descriptions = descriptions or {}
     for c in all_cols:
         line = f"  - {c}: {df[c].dtype}"
-        # Missingness, stated per column. A name and a dtype cannot tell
-        # anyone that `Unnamed_32` is 569/569 null -- the trailing-comma
-        # artifact every hand-exported CSV carries -- and a run died on its
-        # own "Dataset contains missing values" check because the column
-        # looked like a 33rd feature. Counted on the sample, so it is
-        # labelled as such rather than presented as the whole truth.
         n_missing = int(df[c].isna().sum())
         if n_missing == len(df) and len(df):
             line += "  [EMPTY: every sampled value is missing -- drop this column]"
@@ -161,21 +132,6 @@ def _render_file_summary(
                 )
             except (TypeError, ValueError):
                 continue
-    # Low-cardinality columns, wherever they sit in the table.
-    #
-    # The statistics above cover the first `max_cols` columns, and an
-    # outcome column is usually the LAST one. On the diabetes table
-    # `readmitted` is column 150 of 151, so its values were never shown --
-    # and the model encoded it as the original UCI strings, writing
-    # `1 if x == '<30' else 0` against a column holding integers 0/1. Every
-    # row became 0, its own filter emptied the frame, and train_test_split
-    # got n_samples=0. A handful of distinct values costs a few bytes to
-    # print and is exactly what a label or a flag needs to disclose.
-    # Grouped by the value set, so completeness costs a line rather than a
-    # hundred. Listing them one per column filled a 30-line quota with
-    # one-hot dummies and still never reached `readmitted` at column 150 --
-    # which is the single column whose values decide whether the analysis
-    # works at all.
     _by_values: dict = {}
     for _c in all_cols:
         try:
@@ -188,11 +144,6 @@ def _render_file_summary(
     if _by_values:
         lines.append("Columns with few distinct values, by value set:")
         for _key, _members in list(_by_values.items())[:12]:
-            # First few AND last few. A truncated list that always drops
-            # the tail hides the outcome column, which is where an outcome
-            # column usually is -- `readmitted` sat at position 150 of 151
-            # and would vanish into "+113 more", which is the one column
-            # whose values decide whether the analysis runs at all.
             if len(_members) <= 8:
                 _shown, _more = ", ".join(_members), ""
             else:
@@ -211,19 +162,6 @@ def _render_file_summary(
 
 
 def _pydantic_tests(statistical_tests, primary_name):
-    """The stored tests as StatisticalTestResult objects for the analyst.
-
-    This list was ALWAYS empty. `DataAnalystAgent._extract_result_summary`
-    iterates it to print "Test 1: ... Statistic ... P-value ..." into its
-    prompt, so the analyst never saw a single per-test number even after the
-    columns were filled.
-
-    It also has to be populated for `primary_test` to be settable at all:
-    ExperimentResult validates that the primary test NAMES one of these, so
-    setting the name against an empty list raises -- which drove a live run to
-    ERROR state after three retries and cost it the experiments it was
-    analysing. The name and the list are one change, not two.
-    """
     out = []
     try:
         from kosmos.models.result import StatisticalTestResult
@@ -253,25 +191,14 @@ def _pydantic_tests(statistical_tests, primary_name):
                 sample_size=test.get("sample_size"),
                 is_primary=(str(name) == primary_name),
             ))
-    except Exception as e:  # pragma: no cover - never cost the analysis
+    except Exception as e: 
         logger.warning(f"Could not rebuild statistical tests for the analyst: {e}")
         return []
     return out
 
 
 def _primary_test_name(statistical_tests, p_value) -> Optional[str]:
-    """Which of the stored tests produced the primary p-value.
 
-    Derived rather than stored: the results table has no column for it, and
-    adding one would need a migration of every existing kosmos.db for a string
-    the tests already carry. Matched on the p-value because that is the value
-    the two fields have in common.
-
-    It matters because `DataAnalystAgent` prints `Primary Test:` into its
-    prompt. Leaving it None made every assessment say "no primary statistical
-    test is specified" even once the numbers were there -- so the analyst
-    discounted results it could otherwise read.
-    """
     try:
         if not isinstance(statistical_tests, dict) or not statistical_tests:
             return None
@@ -285,22 +212,7 @@ def _primary_test_name(statistical_tests, p_value) -> Optional[str]:
 
 
 def _file_format_text(heads: dict, mount: dict, single: bool) -> str:
-    """The FILE FORMAT paragraph for a set of staged files.
 
-    Two corrections live here, both from the same instinct to keep the prompt
-    from ever holding two contradictory instructions:
-
-      * The per-file calls are OVERRIDES, not a replacement. Emitting only
-        them stripped "every staged file is comma-separated" from the run --
-        so when one file of five was binary, the other four lost the delimiter
-        instruction and were handed the bare `pd.read_csv(path)` that the same
-        paragraph had just declared wrong.
-      * A call is written against the variable the generated code will really
-        hold: `data_path`, or `datasets['<name>']`. `pd.read_csv(path)` names
-        nothing that exists, and the generator's own validator rejects code
-        that uses an undefined name -- so the mandated call could not be
-        followed even in principle.
-    """
     base = (
         "FILE FORMAT: every staged file is COMMA-separated with a header row, "
         "whatever the upstream source's convention was. Read them with "
@@ -372,38 +284,17 @@ class ResearchDirectorAgent(BaseAgent):
         self._validate_domain()
 
         # Load domain-specific skills (Issue #51 - skills integration)
-
-        # Dataset path for experiments. When an evidence gateway is configured
-        # instead of a local CSV, materialise one Evidence Capsule from it into a
-        # data_path the rest of the pipeline reads unchanged (LECP). This is the
-        # single seam: execute_with_data and the sandbox are both
-        # downstream and untouched.
         self.data_path = self.config.get("data_path")
         self.evidence_server = self.config.get("evidence_server")
         self.evidence_dataset = self.config.get("evidence_dataset")
         self.evidence_config = self.config.get("evidence_config")
-        # Every materialised source, in declaration order. Empty for a plain
-        # --data-path run, one entry for a single --evidence-server run, N for a
-        # federated one. `data_path` stays bound to exactly ONE file -- the
-        # declared primary -- because everything downstream consumes it as a
-        # file: the context reader opens it, the executor keys its data_files
-        # dict on its basename. This
-        # list is what GROUNDING reads; nothing else looks at it, which is what
-        # keeps "hypotheses see N datasets" separate from "an experiment can
-        # open N datasets".
+
         self.datasets: list = []
         if self.evidence_config and not self.data_path:
             self.data_path = self._materialize_federation()
         elif self.evidence_server and not self.data_path:
             self.data_path = self._materialize_evidence_capsule()
 
-        # A question-less, data-driven run is seeded with a generic goal so the
-        # pipeline has something to carry. Now that the data is materialised,
-        # replace that boilerplate with a concrete research question the model
-        # derives from the actual variables -- so the run investigates its own
-        # question, not a placeholder. Fully guarded; a failure keeps the seed.
-        # Skipped for a schema-only (no-rows) source, where there is no data to
-        # ground a specific question in.
         if (
             self.config.get("data_driven")
             and self.data_path
@@ -423,9 +314,6 @@ class ResearchDirectorAgent(BaseAgent):
             ["novelty_decline", "diminishing_returns"]
         )
 
-        # Initialize research plan and workflow. Use self.research_question, not
-        # the constructor argument: a data-driven run may have just replaced the
-        # seeded goal with a concrete, data-derived question above.
         self.research_plan = ResearchPlan(
             research_question=self.research_question,
             domain=domain,
@@ -461,8 +349,6 @@ class ResearchDirectorAgent(BaseAgent):
         self._data_analyst = None
         self._hypothesis_refiner = None
         self._variants_spawned: Dict[str, int] = {}  # parent hypothesis id -> variants spawned
-
-        # Message correlation tracking
 
         # Strategy effectiveness tracking
         self.strategy_stats: Dict[str, Dict[str, Any]] = {
@@ -571,19 +457,7 @@ class ResearchDirectorAgent(BaseAgent):
         )
 
     def _materialize_evidence_capsule(self) -> Optional[str]:
-        """Fetch one Evidence Capsule from the gateway and stage it as a CSV.
 
-        The gateway returns approved, banded statistics -- never raw records --
-        which we render to one row per released group/estimate/cohort-cell. The
-        rest of the pipeline reads that file exactly as it would a `--data-path`
-        CSV, so this is the only place the evidence source touches Kosmos.
-
-        The user asked for this evidence source explicitly (`--evidence-server`),
-        so a failure to obtain a capsule is a hard, visible error -- NOT a silent
-        fall-through to a dataless run that then reports cosmetic success. On
-        failure it raises with the gateway's reason (each template it tried);
-        run.py surfaces that as "Research failed: ...".
-        """
         try:
             from kosmos.evidence.client import fetch_source, materialize
         except ImportError as e:
@@ -602,10 +476,6 @@ class ResearchDirectorAgent(BaseAgent):
         import os
         import tempfile
 
-        # Discovery path: a policy-less, private dataset returns a SCHEMA capsule
-        # (column names + types, no rows). There is no data to run experiments on,
-        # but the schema seeds data-driven hypothesis generation. Store it as the
-        # data context and return no data_path.
         if result.get("kind") == "schema":
             cap = result["signed"]["capsule"]
             cols = cap.get("columns", [])
@@ -618,13 +488,7 @@ class ResearchDirectorAgent(BaseAgent):
             ]
             lines += [f"  - {c.get('name')}: {c.get('dtype')}" for c in cols]
             self._data_context_override = "\n".join(lines)
-            # No rows were released, so there is nothing to run experiments on.
-            # The run is hypothesis-only: it generates hypotheses grounded in the
-            # schema, then converges instead of designing dataless experiments.
-            # The single-source form of "nothing released rows". `_hypothesis_only`
-            # is now derived (see the property): with a source list it asks
-            # whether ANY source has rows, and this flag answers for the
-            # one-source path, which builds no list.
+
             self._schema_only_single = True
             print(
                 f"  [evidence] policy-less dataset '{self.evidence_dataset}' -> "
@@ -636,16 +500,9 @@ class ResearchDirectorAgent(BaseAgent):
             print(f"  [evidence] columns     : {', '.join(c.get('name') for c in cols)}")
             return None  # no data_path: experiments have no data (private)
 
-        # Evidence path: a released capsule -> materialise it. Two kinds arrive
-        # here. A gated capsule of banded statistics, and an OPEN-DATA capsule
-        # naming a public dataset staged in full; both end as a CSV at `out`,
-        # which is all the experiment layer needs to know.
         capsule = result["signed"]
         body = capsule.get("capsule", capsule)
-        # The dataset id is optional on the command line now -- an evidence
-        # gateway is bound to one policy and a discovery server is asked -- so
-        # take the name the capsule reports when none was supplied. Without
-        # this the run writes `evidence_None.csv` and labels every line 'None'.
+
         if not self.evidence_dataset:
             self.evidence_dataset = body.get("dataset") or "evidence"
         out = os.path.join(tempfile.gettempdir(), f"evidence_{self.evidence_dataset}.csv")
@@ -661,12 +518,6 @@ class ResearchDirectorAgent(BaseAgent):
             f"(classification={classification}); materialised to {out}"
         )
 
-        # Observability / testing block. The whole point of --evidence-server is
-        # that the run is sourced from the gateway, so surface what it released:
-        # the flag (green/yellow/red), the gateway's own answer + what it redacted
-        # or limited, and a header+rows preview of the banded table Kosmos will use
-        # as data. Printed before the Live progress display starts, so it stays
-        # visible at the top of the run.
         print(f"  [evidence] gateway '{self.evidence_dataset}' -> capsule flag: {classification}")
         if body.get("answer"):
             print(f"  [evidence] answer      : {body['answer']}")
@@ -692,16 +543,8 @@ class ResearchDirectorAgent(BaseAgent):
             print(f"             {line}")
         print(f"  [evidence] materialised to {out}")
 
-        # Ground hypotheses in the REAL variables (from the menu), not the
-        # capsule's rendered columns (group/n_band/mean_band). Otherwise the
-        # model hypothesises about disclosure artifacts -- e.g. "groups with
-        # n_band '5000+' vs '1000-4999'" -- instead of the actual admission
-        # variables. Experiments still use the materialised capsule (data_path).
         menu = result.get("menu")
         if menu:
-            # Pass the regime explicitly: `is_open_data` above already knows a
-            # bulk release arrived, and describing that as "banded aggregates,
-            # never raw rows" is false about data the agent holds in full.
             self._data_context_override = self._menu_to_context(
                 menu,
                 body,
@@ -716,21 +559,7 @@ class ResearchDirectorAgent(BaseAgent):
         return out
 
     def _materialize_federation(self) -> Optional[str]:
-        """Fetch EVERY configured source, stage each, return the primary's path.
 
-        The multi-dataset entry point, and the whole of what "run over N datasets"
-        means at this stage: N gateways are asked, N capsules are staged into
-        their own directories, and all N are described to hypothesis generation
-        at once. No experiment gains access to more than one of them -- the
-        executor still mounts only the file `data_path` names.
-
-        Fails the run when nothing released rows, for the same reason the
-        single-source path does: a dataless run that reports cosmetic success is
-        worse than a visible failure. A run where SOME sources released is
-        allowed to proceed, because that is a real and useful state -- but the
-        sources that failed are carried in `self.datasets` and named in the
-        banner, never silently dropped.
-        """
         from kosmos.evidence.federation import (
             EvidenceConfigError,
             load_sources,
@@ -755,9 +584,6 @@ class ResearchDirectorAgent(BaseAgent):
 
         with_rows = [m for m in self.datasets if m.has_rows]
         if not with_rows:
-            # Every source that answered gave a schema. Hypotheses can still be
-            # grounded in the declared variables; experiments cannot run, and
-            # `_hypothesis_only` (below) reports that from the same list.
             print("  [evidence] no source released rows -- hypothesis-only run")
             return None
 
@@ -773,24 +599,10 @@ class ResearchDirectorAgent(BaseAgent):
         )
         if len(with_rows) > 1:
             others = ", ".join(m.source.name for m in with_rows if m is not primary)
-            # Deliberately does NOT say whether these are mounted into
-            # experiments: that is decided later, per the join-key rule, and
-            # printed by `_mountable_datasets`. Asserting it here was stale the
-            # moment multi-dataset experiments became possible, and a run log
-            # that contradicts itself two lines apart is worse than one that
-            # says less.
             print(f"  [evidence] also grounding hypotheses in: {others}")
         return str(primary.path)
 
     def _evidence_run_dir(self) -> str:
-        """A per-run staging directory, reaped when the process exits.
-
-        The single-source path wrote `$TMPDIR/evidence_<dataset>.csv` and left it
-        there. One file in a shared location is untidy; N files per run, named
-        for their datasets and readable by the executor's in-process fallback,
-        is a channel between runs that nobody opened deliberately. A private
-        directory per run closes it and costs one mkdtemp.
-        """
         import atexit
         import shutil
         import tempfile
@@ -804,36 +616,10 @@ class ResearchDirectorAgent(BaseAgent):
         return path
 
     def _combination_instructions(self, usable: list) -> list:
-        """What the model may propose ACROSS the datasets, and what it must.
 
-        This is the difference between "here are N datasets" and "here are N
-        datasets that belong to one question". Left to itself the model writes
-        one hypothesis per dataset -- each perfectly good, each answerable
-        without the others, so the run learns nothing it could not have learned
-        from N separate runs. Being handed several datasets at once is only
-        worth anything if at least one claim NEEDS more than one of them.
-
-        So the instruction does two things the previous wording did not. It
-        REQUIRES a combined hypothesis rather than permitting one, and it says
-        which columns the datasets actually share, because a joint claim that
-        cannot be computed from the released columns is a claim no experiment
-        can test.
-
-        The permission itself is not assumed: it comes from the same join-key
-        rule the executor enforces. When mounting is refused, asking for a
-        joined hypothesis would invite one that no experiment is allowed to run.
-        """
         allowed = bool(self._mountable_datasets())
         shared = self._shared_columns(usable)
 
-        # The measured merge verdicts, which until now reached only CODE
-        # generation. Hypothesis generation was choosing what to test with no
-        # idea which datasets can actually be related, and proposed a
-        # pQTL-versus-heart-eQTL comparison that needs a gene-symbol-to-Ensembl
-        # mapping none of these datasets carries. The experiment then "completed"
-        # having produced one line: "Gene symbol-to-Ensembl mapping required
-        # (mygene) not available." A hypothesis the data cannot address is a
-        # wasted iteration, and the run only gets ten.
         mount = self._mountable_datasets()
         compat = self._merge_compatibility(mount) if len(mount) > 1 else None
 
@@ -897,40 +683,19 @@ class ResearchDirectorAgent(BaseAgent):
 
     @property
     def _CAPSULE_RENDER_COLUMNS(self):
-        """The release-renderer's own column vocabulary, from where it is emitted.
 
-        Imported rather than restated. This list used to be a hand-copy of what
-        `evidence/client.py::capsule_to_rows` emits, which would have gone stale
-        silently the first time a column was added there -- and stale in the
-        dangerous direction, since an unrecognised renderer column then looks
-        like a feature two datasets share and gets offered as a join key.
-        """
         from kosmos.evidence.client import RENDERED_COLUMNS
 
         return RENDERED_COLUMNS
 
     def _shared_columns(self, usable: list) -> set:
-        """Feature columns appearing in more than one staged dataset.
 
-        Read from the STAGED FILES, not the menus, for the same reason code
-        generation is: the menu names variables the policy governs, while the
-        file holds whatever the released capsule rendered. A join can only use
-        what is actually in the file.
-
-        Capsule-rendering columns are stripped first -- see
-        `_CAPSULE_RENDER_COLUMNS`. What survives is a column two datasets share
-        because they describe the same features, which is the only kind of
-        shared column a join should be built on.
-        """
         import collections
 
         counts = collections.Counter()
         for mat in usable:
             if not mat.has_rows:
                 continue
-            # Sniffed, not `readline().split(",")`: reading line 1 blindly
-            # offered an annotation row's tokens as join keys, and splitting on
-            # a bare comma broke any quoted name containing one ("effect, SE").
             try:
                 from kosmos.data.table_head import sniff_head
 
@@ -945,15 +710,6 @@ class ResearchDirectorAgent(BaseAgent):
 
     @staticmethod
     def _id_shape(value: str) -> Optional[tuple]:
-        """(separator, field shapes) for an identifier, or None if not one.
-
-        `17:40602553:TA:T:imp:v1` -> (':', ('#', '#', 'A', 'A', 'A', 'A#'))
-        `chr11_47691640_G_A_b38` -> ('_', ('A#', '#', 'A', 'A', 'A#'))
-
-        Digit runs become `#` and letter runs `A`, so the shape survives the
-        specific variant while keeping the structure that decides whether two
-        columns can meet.
-        """
         import re
 
         text = str(value)
@@ -969,25 +725,7 @@ class ResearchDirectorAgent(BaseAgent):
 
     @classmethod
     def _merge_compatibility(cls, mount: dict, sample_rows: int = 200) -> Optional[str]:
-        """Which identifier columns across these datasets can actually meet.
 
-        The staged-file summary already showed the model example values from
-        every column, and it merged `17:40602553:TA:T:imp:v1` against
-        `chr11_47691640_G_A_b38` regardless: raw examples are evidence, and what
-        the model needs is the conclusion drawn from them.
-
-        Compared by SHAPE rather than by sampled values. Sampling values would
-        report a false "cannot join" whenever two sorted files happen to open on
-        different chromosomes, and wrongly telling a run that its datasets
-        cannot be related is worse than saying nothing. Shape is decided by a
-        handful of rows and does not depend on which rows.
-
-        Three verdicts, and the middle one is the useful one: identical shapes
-        merge directly; one shape that is a PREFIX of another merges after
-        truncating the longer to that many fields (the real relationship
-        between the pQTL `ID` and the T1 `varId`); anything else cannot merge on
-        those columns at all.
-        """
         import pandas as pd
 
         columns: list[tuple[str, str, tuple, str]] = []
@@ -1058,22 +796,7 @@ class ResearchDirectorAgent(BaseAgent):
         return "\n".join(lines)
 
     def _column_descriptions(self) -> dict:
-        """{dataset name: {column: description}} from each source's menu.
 
-        The menu is the only place a column's MEANING is written down -- the
-        steward's own sentence, e.g. "Variant id, chr:pos:ref:alt on GRCh37 --
-        the join key to the T1 GWAS" and, on the neighbouring column, "Position,
-        GRCh38. NOT the position inside ID, which is GRCh37."
-
-        Hypothesis generation has always seen those sentences; code generation
-        never did. It received names, dtypes and ranges only, which is enough to
-        write a merge and not enough to write a CORRECT one. Observed exactly
-        that way: the model joined the two GWAS on coordinates that are in
-        different genome builds and the container raised "No overlapping
-        variants after merging cis-pQTL and T1 GWAS" -- a silent-looking failure
-        that reads like the datasets do not overlap when in fact the join key
-        was wrong.
-        """
         out: dict = {}
         for mat in getattr(self, "datasets", []) or []:
             menu = getattr(mat, "menu", None)
@@ -1091,12 +814,7 @@ class ResearchDirectorAgent(BaseAgent):
 
     @staticmethod
     def _clear_figure_dir(directory: Optional[str]) -> None:
-        """Remove figures left by a previous attempt at this experiment.
 
-        Deletes only figure files, and only directly inside this experiment's
-        own subdirectory, which nothing else writes to. Never raises: failing
-        to clean up must not fail the experiment.
-        """
         import os  # this module imports os per-function, not at module scope
 
         try:
@@ -1116,13 +834,7 @@ class ResearchDirectorAgent(BaseAgent):
             logger.warning(f"Could not clear the figure directory: {e}")
 
     def _hypothesis_literature(self, hypothesis) -> Optional[str]:
-        """Papers relevant to ONE hypothesis, as context for interpreting it.
 
-        Cached per hypothesis: the analyst may be called again on a refined
-        variant of the same statement, and the literature does not change
-        between those calls. Bounded and warn-only -- a failed search must
-        cost a paragraph of context, never the analysis.
-        """
         statement = getattr(hypothesis, "statement", None)
         if not statement or not getattr(self, "config", {}).get("use_literature_context", True):
             return None
@@ -1165,18 +877,7 @@ class ResearchDirectorAgent(BaseAgent):
         return context
 
     def _experiment_figure_dir(self, protocol_id: str) -> Optional[str]:
-        """Where this experiment's figures are copied to, or None.
 
-        One subdirectory per experiment, named by the first eight characters of
-        its id, under the run's figures directory (set by the CLI beside the
-        --output report so relative links in the report resolve). Returns None
-        when figures are disabled or no run directory was configured, which
-        switches collection off entirely.
-
-        The directory is NOT created here: the sandbox collector creates it
-        only if something was actually written, so a run that drew nothing
-        leaves no empty folders behind.
-        """
         try:
             config = getattr(self, "config", None) or {}
             if not config.get("enable_figures", True):
@@ -1241,23 +942,13 @@ class ResearchDirectorAgent(BaseAgent):
             "open. Use only these column names; they are the released capsule's "
             "columns, which may differ from the variable names a hypothesis "
             "refers to.\n\n"
-            # Stated because recognising the dataset is what caused the failure.
-            # The model knew the Wisconsin breast-cancer data from scikit-learn
-            # and wrote its column names from memory -- `mean radius`, `worst
-            # radius` -- while this copy names them `radius_mean`,
-            # `radius_worst`. Not one of the six matched, and the run died on
-            # its own column check. A recognised dataset is more dangerous than
-            # an unfamiliar one: it invites recall instead of reading.
+
             "IF YOU RECOGNISE THIS DATASET from a library, a paper or a "
             "tutorial, do NOT write the column names you remember. This copy "
             "may name them differently -- `radius_mean` where you recall `mean "
             "radius`, `diagnosis` where you recall `target`. Every column you "
             "reference must appear verbatim in the list above.\n\n"
-            # The single most repeated runtime failure across these runs:
-            # `ValueError: could not convert string to float: 'B'`, from feeding
-            # a label column into a scaler, a regression or a correlation. The
-            # dtypes are listed above and were still ignored twice in one run,
-            # so the consequence is spelled out rather than left to inference.
+
             "COLUMN TYPES ARE LISTED ABOVE AND THEY BIND. A column shown as "
             "`object` holds text: passing it to a scaler, a regression, a "
             "correlation or any numeric routine raises `could not convert "
@@ -1271,14 +962,7 @@ class ResearchDirectorAgent(BaseAgent):
             "(different genome builds, units, or identifier conventions), so "
             "choose join keys from the descriptions rather than from the "
             "column names.\n\n"
-            # The dominant failure on the multi-dataset fibrosis runs: the model
-            # merged pQTL+eQTL and then read `BETA_pQTL`, `SE_pQTL`,
-            # `beta_pQTL_h` -- names that exist in NEITHER input and that pandas
-            # never creates. `merge` suffixes shared non-key columns `_x`/`_y`,
-            # not `_pQTL`. Every attempt KeyError'd on the invented name before
-            # computing anything. Spelled out because the general "use actual
-            # columns" rule above is read as applying only to the INPUT files,
-            # not to names the model expects a merge to mint.
+
             "AFTER A MERGE OR RENAME, the columns you read must be the ones the "
             "operation ACTUALLY produces -- never names you expect by "
             "convention. pandas `merge` does not create semantic suffixes: when "
@@ -1291,29 +975,10 @@ class ResearchDirectorAgent(BaseAgent):
             "produced, or pass an explicit `suffixes=(...)` and use exactly what "
             "you passed. When unsure, `print(merged.columns.tolist())` right "
             "after the merge and index only from that list.\n\n"
-            # Stated because it was assumed wrongly: GWAS summary statistics are
-            # usually distributed as TSV, so the model wrote
-            # `pd.read_csv(path, usecols=[...], sep='\t')`. Against a
-            # comma-separated file that parses every row into ONE column, and
-            # pandas reports it as "Usecols do not match columns" -- naming all
-            # eleven real columns as missing, which reads like the wrong file
-            # rather than the wrong delimiter.
-            # Conditional since the header sniffer landed: the blanket advice
-            # below is right for an ordinary file and actively WRONG for one
-            # whose header is not on line 1 -- there, `pd.read_csv(path)` is
-            # exactly the call that turns every numeric column into text. When
-            # any staged file needs correcting, the per-file calls replace this
-            # paragraph rather than sitting beside it, so the prompt never
-            # carries two contradictory instructions.
+
             + _file_format_text(heads, mount, single)
             + 
-            # A GPL96 series stages Affymetrix probe IDs and no symbols. The
-            # generated code recognised that, concluded it could not map them,
-            # and raised `Probe-to-gene annotation mapping is required ...
-            # Cannot proceed` -- correctly refusing to invent a mapping, but
-            # also discarding an analysis it could have completed. Refusing to
-            # fabricate and refusing to analyse are different acts, and the
-            # fabrication rule was being read as licence for the second.
+
             "IDENTIFIER LEVEL: analyse the identifiers the file actually holds. "
             "If its rows are keyed by platform probe or feature IDs "
             "(`1007_s_at`, `ILMN_1651209`, `ENSG00000141510`) rather than gene "
@@ -1328,18 +993,7 @@ class ResearchDirectorAgent(BaseAgent):
         )
 
     def _mountable_datasets(self) -> dict:
-        """The datasets one experiment may open together: {name: host path}.
 
-        Empty unless a federated run has more than one source WITH ROWS and the
-        join-key rule permits mounting them together (see
-        `evidence.federation.mountable_together`). Empty means the caller takes
-        the single-dataset path -- the primary file only -- which is Phase 1a
-        behaviour and is what every non-federated run gets.
-
-        The decision is cached per run, not per experiment: it depends only on
-        the sources, and recomputing it per experiment would let a run drift
-        between mounting and not mounting the same files.
-        """
         cached = getattr(self, "_mount_decision", None)
         if cached is None:
             from kosmos.evidence.federation import mountable_together
@@ -1359,15 +1013,7 @@ class ResearchDirectorAgent(BaseAgent):
 
     @property
     def _hypothesis_only(self) -> bool:
-        """True only when NOT ONE source released rows.
 
-        Previously a plain attribute set by the schema-only branch, which was
-        correct for one source and wrong for several: one schema-only source
-        among four would converge the run with zero experiments
-        (`decide_next_action` returns CONVERGE on it) even though the other three
-        had real data staged. Derived from the source list so it can only be true
-        when it is actually true.
-        """
         if not getattr(self, "datasets", None):
             return bool(getattr(self, "_schema_only_single", False))
         return not any(m.has_rows for m in self.datasets)
@@ -1379,17 +1025,7 @@ class ResearchDirectorAgent(BaseAgent):
         dataset_id: Optional[str] = None,
         release_regime: Optional[str] = None,
     ) -> str:
-        """Render the evidence menu into a hypothesis data context.
 
-        Names the real variables (with types, descriptions, roles, levels) and
-        states what this source ACTUALLY released -- which is not always bands.
-        A policy-granted bulk release carries the same menu as a gated one, so a
-        hardcoded "only banded aggregates" told the model the opposite of the
-        truth about data it was holding in full: it would hedge conclusions it
-        was entitled to draw, and read exact values as band labels. The regime
-        sentence comes from the materialised source, which knows which kind of
-        capsule arrived.
-        """
         regime = release_regime or (
             "released ONLY as banded aggregates (summary statistics -- banded "
             "counts, banded means), never raw rows. Do NOT treat band labels "
@@ -1401,14 +1037,6 @@ class ResearchDirectorAgent(BaseAgent):
             f"AMONG the real variables below that this data can address.",
         ]
 
-        # The steward's own account of the dataset, and any notes attached to
-        # it. `EvidenceMenu` carries both (autoevidence/schema/menu.py:62,68) and
-        # this renderer dropped them, so the sentence saying COLOCALISATION
-        # CANNOT BE COMPUTED FROM THIS RELEASE -- written on the policy after
-        # coloc returned PP.H4 = 1e-08 across 85 loci -- never reached the model
-        # that chooses what to test. It proposed colocalisation again, tested 15
-        # loci, and got zero. Variable descriptions were reaching it; the
-        # dataset-level ones were not.
         described = (menu.get("description") or "").strip()
         if described:
             lines.append(f"About this dataset, from the data steward: {described}")
@@ -1436,19 +1064,7 @@ class ResearchDirectorAgent(BaseAgent):
         return "\n".join(lines)
 
     def _autogenerate_research_question(self) -> None:
-        """Derive a concrete research question from the materialised data.
 
-        A question-less run is seeded with a generic exploration goal. Once the
-        data exists we can do better: read the same data context the hypothesis
-        generator uses and ask the model for one focused, testable question over
-        the real variables -- so the overview, the report and the hypotheses all
-        hang off the run's OWN question rather than boilerplate.
-
-        Fully guarded. Any failure -- no data context, an LLM error, an empty or
-        junk answer -- leaves the seeded goal in place, so this can never break a
-        run. Uses the same `get_client()` the rest of the pipeline uses, so it
-        honours the configured provider (e.g. OpenRouter/DeepSeek).
-        """
         context = self._build_data_context()
         if not context:
             return
@@ -1464,26 +1080,11 @@ class ResearchDirectorAgent(BaseAgent):
                 "a single sentence, with no preamble or numbering.\n\n"
                 f"DATASET SUMMARY:\n{context}"
             )
-            # 400 rather than 80: with reasoning enabled the trace is drawn from
-            # this same budget, so a tight cap yields a truncated or
-            # reasoning-only response.
+
             response = client.generate(prompt=prompt, max_tokens=400, temperature=0.3)
-            # get_client() returns a PROVIDER, whose generate() yields an
-            # LLMResponse -- not the bare str that kosmos.core.llm's own
-            # generate() returns. Treating it as a string raised
-            # AttributeError on every call, which the broad except below
-            # swallowed into "keeping the seeded goal" -- so this feature
-            # silently never ran. Accept either shape rather than depending on
-            # which client get_client() happens to hand back.
+
             answer = getattr(response, "content", response)
 
-            # Take the line that is actually a QUESTION, not simply the first
-            # line. Models often open with a restatement of the task ("We need
-            # to propose one focused, testable research question...") and taking
-            # splitlines()[0] captured that preamble and titled the whole report
-            # with it -- an instruction masquerading as a finding. Scanning for
-            # '?' is a much better filter than a length check, which the
-            # preamble passed easily.
             candidates = [
                 line.strip().strip('"').strip()
                 for line in (answer or "").splitlines()
@@ -1512,51 +1113,11 @@ class ResearchDirectorAgent(BaseAgent):
                 f"keeping the seeded data-driven goal."
             )
 
-    # Rows read for the schema/stats sample, regardless of the file's actual
-    # size. `nrows=` stops pandas reading after this many rows rather than
-    # scanning the file first, so this bounds memory for a multi-GB CSV the
-    # same way it does for a small one. 50,000 rows is comfortably enough for
-    # a stable mean/std/min/max and a representative categorical level sample;
-    # it is not enough to explain WHY a bigger number would matter here more
-    # than for any other bounded sample.
     _CONTEXT_SAMPLE_ROWS = 50_000
 
     def _build_data_context(self, max_cols: int = 40) -> Optional[str]:
-        """Summarise the dataset (schema + basic stats) for hypothesis grounding.
-
-        Reads only the materialised data path -- for an AutoEvidence run that is
-        the released capsule, so this exposes nothing the gateway did not already
-        release. Returns column names/types, shape, and a compact numeric
-        summary, or None when there is no readable dataset.
-
-        Raw lines: a --data-path file and an OPEN-DATA release show their first
-        lines verbatim, because the header cannot be verified without them and
-        the whole file was released anyway. A gated capsule shows only the
-        header VERDICT (is the header on line 1?), which is a property of the
-        file's shape and not a disclosure of anyone's data.
-
-        Bounded to a fixed-size sample regardless of file size (see
-        `_CONTEXT_SAMPLE_ROWS`). This used to be an unbounded `pd.read_csv` on
-        the whole file: harmless for a small CSV, but a multi-GB dataset would
-        pull many times its own size into this process's memory just to build a
-        prompt -- before a single experiment runs, and regardless of what any
-        downstream memory budget allows. The row COUNT reported is still exact
-        (a cheap line count, not sampled), because an agent reasoning about
-        statistical power from a wrong N is worse off than one told nothing.
-        """
         import os
 
-        # Federated run: describe EVERY source, in one string, at once. This is
-        # what lets hypothesis generation propose a relationship that spans
-        # datasets -- the model cannot relate two datasets it was shown one at a
-        # time, or one of which it was never told about.
-        #
-        # Note what is NOT consulted here: `_data_context_override`. That flag
-        # is set only when a menu arrives, and it short-circuits the whole
-        # function, so with several sources one menu-bearing source would have
-        # silently erased every menu-less one from the prompt. The list is built
-        # from the sources themselves, so a source with no menu falls back to a
-        # summary of its staged file rather than disappearing.
         if getattr(self, "datasets", None):
             return self._federated_data_context(max_cols=max_cols)
 
@@ -1567,27 +1128,11 @@ class ResearchDirectorAgent(BaseAgent):
             return override
         if not self.data_path or not os.path.exists(self.data_path):
             return None
-        # Delegate rather than duplicate. This branch used to be a ~90-line
-        # copy of `_summarise_file` that had drifted: it never gained the
-        # missingness flags or the value-set block, and it printed "(Every
-        # column is named above...)" after slicing to `max_cols`, which was
-        # simply false for a wide CSV. A --data-path run now gets exactly the
-        # summary a staged source gets, head preview included.
+
         return self._summarise_file(self.data_path, max_cols=max_cols)
 
     def _apply_relevance_check(self, context: str) -> str:
-        """Prefix a warning when the data cannot address the question.
 
-        Warn-only, by design. An exploratory run legitimately has no question
-        terms to match, and blocking it would trade one silent failure for a
-        louder one. What this buys is that a run whose data cannot reach its
-        question SAYS so, in the same prompt that asks for hypotheses, instead
-        of quietly proposing something about whatever columns happen to exist.
-
-        Asked at most once per run: the verdict is cached on first use and the
-        cache is written even when the check fails, so a provider timeout costs
-        one call rather than one per iteration. Never raises, never blocks.
-        """
         try:
             if not bool((getattr(self, "config", None) or {}).get(
                 "relevance_check", True
@@ -1624,19 +1169,7 @@ class ResearchDirectorAgent(BaseAgent):
             return context
 
     def _federated_data_context(self, max_cols: int = 40) -> Optional[str]:
-        """One string describing every source, for grounding hypotheses in all of them.
 
-        Structure matters here as much as content. The model is given N labelled
-        blocks and, when there is more than one, an explicit instruction about
-        what it may and may not propose across them -- because the honest answer
-        to "can these be related?" depends on something no analysis can derive
-        from the data: whether the datasets describe the same subjects. Each
-        block therefore carries the steward's declaration, including `unknown`,
-        which is the default and means exactly what it says.
-
-        A single source produces the block WITHOUT a header, so a one-source
-        federated run reads identically to today's single-source run.
-        """
         blocks: list[str] = []
         usable = [m for m in self.datasets if m.kind != "failed"]
         for mat in usable:
@@ -1646,10 +1179,7 @@ class ResearchDirectorAgent(BaseAgent):
             if len(usable) == 1:
                 blocks.append(body)
             else:
-                # The header labels the block; it does not restate the release
-                # regime, which `_describe_source` already puts in the body for
-                # every shape of source. Saying it twice trains a reader -- human
-                # or model -- to skip the line that matters most.
+
                 blocks.append(f"### Dataset '{mat.dataset_id}' "
                               f"[source: {mat.source.name}]\n{body}")
         if not blocks:
@@ -1682,15 +1212,7 @@ class ResearchDirectorAgent(BaseAgent):
         return "\n".join(header) + "\n\n" + "\n\n".join(blocks)
 
     def _describe_source(self, mat, max_cols: int = 40) -> Optional[str]:
-        """One source's block: its menu variables if it has a menu, else its file.
 
-        The menu is preferred because it names the REAL variables with their
-        descriptions, roles and levels, where a materialised capsule's columns
-        are the rendered artifacts of a release (`group`, `n_band`, `mean_band`).
-        A source with no menu -- the discovery path returns none -- still gets a
-        block, derived from its schema or its staged file, which is the case the
-        override mechanism used to lose entirely.
-        """
         if mat.menu:
             body = self._menu_to_context(
                 mat.menu,
@@ -1698,12 +1220,7 @@ class ResearchDirectorAgent(BaseAgent):
                 dataset_id=mat.dataset_id,
                 release_regime=mat.describe_release(),
             )
-            # A menu names the science; it cannot say whether the FILE parses.
-            # Every served bundle carries a menu, so a header check that lived
-            # only in `_summarise_file` would miss precisely the runs where
-            # displaced headers were observed. Raw lines only for an open-data
-            # release, whose rows were published in full; a gated capsule gets
-            # the verdict alone.
+
             if body and mat.path is not None:
                 try:
                     from kosmos.data.table_head import sniff_head
@@ -1739,23 +1256,7 @@ class ResearchDirectorAgent(BaseAgent):
         descriptions: Optional[Dict[str, str]] = None,
         show_preview: bool = True,
     ) -> Optional[str]:
-        """Shape, columns and a compact numeric summary of one staged file.
 
-        The same summary `_build_data_context` produces for a `--data-path` run,
-        reached with an explicit path so it can be applied per source. Bounded to
-        `_CONTEXT_SAMPLE_ROWS` for the same reason it is there: building a prompt
-        must not pull a multi-GB file into memory, and with N sources that cost
-        is multiplied.
-
-        The file is SNIFFED before it is parsed (`kosmos.data.table_head`). A
-        bare `pd.read_csv` assumes the header is line 1, and when it is not --
-        a second header row, a banner, no header at all -- pandas does not
-        complain: it returns plausible column names, every numeric column as
-        text, and one real row consumed as a name. Nothing downstream can see
-        that. So the head is read as bytes first, the read is corrected, and
-        `show_preview` controls whether the raw lines themselves are shown
-        (they are withheld for a gated capsule, whose verdict is still stated).
-        """
         import os
 
         if not os.path.exists(path):
@@ -1766,21 +1267,14 @@ class ResearchDirectorAgent(BaseAgent):
         head = sniff_head(path)
         binary_reader = _BINARY_READERS.get(os.path.splitext(path)[1].lower())
         if head.verdict == "binary" and binary_reader is None:
-            # Not text, and not a format pandas can open either. Say so rather
-            # than returning None, which the caller renders as "this source
-            # contributed nothing".
+
             return f"{head.advisory()}\nFile: {path}"
 
         try:
             import pandas as pd
 
             if binary_reader is not None:
-                # Binary by bytes but perfectly readable: .parquet, .xlsx and
-                # friends. The sniffer only looks at bytes, so it calls these
-                # "not text" -- and returning that advisory told the model a
-                # supported dataset could not be read, then let it invent a
-                # question about columns nobody had looked at. Open it with the
-                # reader the format actually needs.
+
                 try:
                     df = getattr(pd, binary_reader)(path)
                 except Exception as e:
@@ -2535,6 +2029,9 @@ class ResearchDirectorAgent(BaseAgent):
                 else:
                     raise ValueError(f"Experiment {protocol_id} has no valid protocol data")
 
+            with get_session() as session:
+                _hyp = get_hypothesis(session, hypothesis_id) if hypothesis_id else None
+                self._code_generator.hypothesis_statement = _hyp.statement if _hyp else None
             # Which datasets may this experiment open? Empty for a single-source
             # run, and empty whenever the join-key rule refuses -- in both cases
             # everything below is the single-dataset path unchanged.
@@ -2598,29 +2095,40 @@ class ResearchDirectorAgent(BaseAgent):
 
             exec_result = _run(code)
 
-            # Regenerate ONCE with the failure quoted back.
-            #
-            # The executor's own `retry_on_error` re-runs the SAME source, which
-            # cannot fix anything the code got wrong: three attempts at
-            # `KeyError: 'beta_t1'` produce three identical KeyErrors, and three
-            # at `from scipy.stats import multipletests` three identical
-            # ImportErrors. Every runtime failure this pipeline has hit --
-            # NameError on a misspelled helper, AttributeError on an invented
-            # method, KeyError on a column the merge never created, an import
-            # from the wrong module -- is a mistake the model corrects readily
-            # once shown the traceback. It cannot see the traceback unless we
-            # hand it over.
-            # Two failures, one remedy. An exception is the obvious one. The
-            # other is a script that runs to completion, raises nothing, and
-            # assigns no non-empty `results` at module level -- 16 seconds of
-            # real work, `data: {}`, and nothing to report. Triggering only on
-            # exceptions left that case with no second draft even though it is
-            # exactly as correctable: the model simply has to be told that its
-            # output was never collected.
-            _ran_ok = bool(getattr(exec_result, "success", True))
-            if not _ran_ok or not _payload(exec_result):
+            from kosmos.analysis.result_stats import extract_statistics
+
+            import math
+
+            def _missing_primary(res) -> bool:
+                rv = _payload(res)
+                if not rv or "untestable_reason" in rv or isinstance(rv.get("claim_met"), bool):
+                    return False
+                found = extract_statistics(rv)
+                p, eff = found.get("primary_p_value"), found.get("primary_effect_size")
+                bad = lambda x: x is None or (isinstance(x, float) and not math.isfinite(x))
+                return bad(p) or bad(eff) or (p == 0.0 and "neg_log10_p" not in rv)
+
+            max_regens = 2
+            
+            for _ in range(max_regens):
+                _ran_ok = bool(getattr(exec_result, "success", True))
+                _no_primary = _ran_ok and _missing_primary(exec_result)
+                if _ran_ok and _payload(exec_result) and not _no_primary:
+                    break
+
                 error_text = str(getattr(exec_result, "error", "") or "")[:1200]
-                if _ran_ok:
+                if _no_primary:
+                    error_text = (
+                        "the script ran but reported no primary test of the "
+                        "hypothesis: `results` has no top-level 'p_value'. Test the "
+                        "hypothesis itself and set results['test'], "
+                        "results['p_value'], results['effect_size'], "
+                        "results['effect_size_type'] and results['n'] at the top "
+                        "level of `results` -- or, if the mounted data cannot test "
+                        "it, set results['untestable_reason'] naming what is "
+                        "missing instead of substituting another analysis."
+                    )
+                elif _ran_ok:
                     error_text = (
                         "the script ran to completion and raised nothing, but it "
                         "assigned no non-empty `results` dict at MODULE level, so "
@@ -2631,28 +2139,26 @@ class ResearchDirectorAgent(BaseAgent):
                         "join -- that is a FINDING: put the counts and a short "
                         "explanation in `results` rather than leaving it empty."
                     )
-                if error_text:
-                    logger.warning(
-                        "Experiment %s failed at runtime (%s); regenerating once "
-                        "with the error quoted back",
-                        protocol_id, error_text.splitlines()[0],
-                    )
-                    try:
-                        retry_code = self._code_generator.generate(
-                            protocol, runtime_error=error_text
-                        )
-                        if retry_code and retry_code != code:
-                            code = retry_code
-                            exec_result = _run(code)
-                    except Exception as regen_error:
-                        # A failed regeneration must not replace the real
-                        # failure with its own.
-                        logger.warning(
-                            "Regeneration after runtime failure failed: %s",
-                            regen_error,
-                        )
+                if not error_text:
+                    break
 
-            # Track rollout (Issue #58)
+                logger.warning(
+                    "Experiment %s failed at runtime (%s); regenerating with the "
+                    "error quoted back",
+                    protocol_id, error_text.splitlines()[0],
+                )
+                try:
+                    retry_code = self._code_generator.generate(protocol, runtime_error=error_text)
+                except Exception as regen_error:
+                    logger.warning("Regeneration after runtime failure failed: %s", regen_error)
+                    break
+                if not retry_code or retry_code == code:
+                    break
+                code = retry_code
+                exec_result = _run(code)
+            
+            
+
             self.rollout_tracker.increment("experiment_execution")
             logger.info(
                 "[EXEC-DONE] exp=%s success=%s rv_type=%s",
@@ -2664,56 +2170,44 @@ class ResearchDirectorAgent(BaseAgent):
             # avoid ambiguous-truthiness errors on numpy/DataFrame return values.
             _rv = getattr(exec_result, "return_value", None)
             return_value = _rv if isinstance(_rv, dict) else {}
-            if isinstance(return_value, dict):
-                p_value = return_value.get("p_value")
-                effect_size = return_value.get("effect_size")
-                statistical_tests = {
-                    k: v for k, v in return_value.items()
-                    if k in ("t_statistic", "p_value", "effect_size",
-                             "mean_difference", "significance_label",
-                             "correlation", "r_squared")
-                }
-                # Nothing generated code actually writes is called `p_value`.
-                # It writes `pearson_p`, `spearman_rho_cis_vs_t1`, or nests
-                # `{'r':..,'p':..}` -- so this whitelist of seven exact names
-                # matched NOTHING, and every result was stored with empty
-                # p_value/effect_size/statistical_tests columns.
-                #
-                # That is not a cosmetic loss. DataAnalystAgent reads ONLY
-                # those columns, never `data`, so it was handed "Primary
-                # P-value: None" for experiments that had computed p=1.14e-41,
-                # reported the hypothesis as untested, and scored every one of
-                # them 1/5. The statistics were in the same row the whole time.
-                if p_value is None or effect_size is None or not statistical_tests:
-                    from kosmos.analysis.result_stats import extract_statistics
+            p_value = return_value.get("p_value")
+            effect_size = return_value.get("effect_size")
 
-                    found = extract_statistics(return_value)
-                    if p_value is None:
-                        p_value = found["primary_p_value"]
-                    if effect_size is None:
-                        effect_size = found["primary_effect_size"]
-                    if not statistical_tests and found["tests"]:
-                        # Primary first, so `_primary_test_name` still names it
-                        # correctly if two tests happen to share a p-value.
-                        ordered = sorted(
-                            found["tests"],
-                            key=lambda t: t["test_name"] != found["primary_test"],
-                        )
-                        statistical_tests = {
-                            t["test_name"]: {
-                                k: v for k, v in t.items() if k != "test_name"
-                            }
-                            for t in ordered
-                        }
-                    if found["tests"]:
-                        logger.info(
-                            "Recovered %d statistical test(s) from the result "
-                            "payload; primary p=%s", len(found["tests"]), p_value,
-                        )
+            if isinstance(p_value, (int, float)):
+                name = str(return_value.get("test") or "primary_test")
+                statistical_tests = {name: {
+                    "p_value": p_value,
+                    "statistic": return_value.get("statistic", effect_size),
+                    "statistic_type": return_value.get("statistic_type") or return_value.get("effect_size_type"),
+                    "effect_size": effect_size,
+                    "effect_size_type": return_value.get("effect_size_type"),
+                    "sample_size": return_value.get("n"),
+                }}
             else:
-                p_value = None
-                effect_size = None
                 statistical_tests = {}
+
+            if p_value is None or effect_size is None or not statistical_tests:
+                from kosmos.analysis.result_stats import extract_statistics
+
+                found = extract_statistics(return_value)
+                if p_value is None:
+                    p_value = found["primary_p_value"]
+                if effect_size is None:
+                    effect_size = found["primary_effect_size"]
+                if not statistical_tests and found["tests"]:
+                    ordered = sorted(
+                        found["tests"],
+                        key=lambda t: t["test_name"] != found["primary_test"],
+                    )
+                    statistical_tests = {
+                        t["test_name"]: {k: v for k, v in t.items() if k != "test_name"}
+                        for t in ordered
+                    }
+                if found["tests"]:
+                    logger.info(
+                        "Recovered %d statistical test(s) from the result "
+                        "payload; primary p=%s", len(found["tests"]), p_value,
+                    )
 
             # Sanitize return_value for JSON serialization — filter out non-serializable
             # objects (e.g. sklearn Pipeline, numpy arrays) that would crash DB insert
@@ -3062,6 +2556,28 @@ class ResearchDirectorAgent(BaseAgent):
             p_value = pydantic_result.primary_p_value
             effect_size = pydantic_result.primary_effect_size
 
+            def _as_bool(value):
+                if isinstance(value, bool):
+                    return value
+                if isinstance(value, str) and value.strip().lower() in ("true", "false"):
+                    return value.strip().lower() == "true"
+                return None
+
+            raw = pydantic_result.raw_data or {}
+            claim_met = _as_bool(raw.get("claim_met"))
+            verdict_note = None
+            if claim_met is not None:
+                if hypothesis_supported is not claim_met:
+                    verdict_note = (
+                        f"Verdict taken from the experiment's reported claim_met={claim_met} "
+                        f"({raw.get('test') or 'primary claim'}; statistic={raw.get('statistic')}). "
+                        f"The analyst's own verdict was {hypothesis_supported}."
+                    )
+                hypothesis_supported = claim_met
+            elif raw.get("untestable_reason"):
+                verdict_note = f"Untestable: {raw['untestable_reason']}"
+                hypothesis_supported = None
+
             logger.info(
                 f"Result {result_id} interpretation: "
                 f"hypothesis {hypothesis_id} supported={hypothesis_supported}"
@@ -3078,7 +2594,8 @@ class ResearchDirectorAgent(BaseAgent):
                 with get_session() as session:
                     row = db_get_result(session, result_id)
                     if row is not None:
-                        parts = [interpretation.summary or ""]
+                        #parts = [interpretation.summary or ""]
+                        parts = [verdict_note or "", interpretation.summary or ""]
                         if interpretation.significance_interpretation:
                             parts.append(interpretation.significance_interpretation)
                         if interpretation.biological_significance:

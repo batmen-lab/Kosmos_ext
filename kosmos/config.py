@@ -777,9 +777,9 @@ class KosmosConfig(BaseSettings):
     """
 
     # LLM Provider Selection
-    llm_provider: Literal["anthropic", "openai", "litellm"] = Field(
+    llm_provider: Literal["anthropic", "openai", "litellm", "claude_cli", "codex_cli"] = Field(
         default="anthropic",
-        description="LLM provider to use (anthropic, openai, or litellm)",
+        description="LLM provider to use (anthropic, openai, litellm, claude_cli, or codex_cli)",
         alias="LLM_PROVIDER"
     )
 
@@ -864,6 +864,17 @@ class KosmosConfig(BaseSettings):
             # LiteLLM validation is lenient - local models (Ollama) don't need API keys
             # API keys are only required for cloud providers and are validated at runtime
             pass
+        elif self.llm_provider in ("claude_cli", "codex_cli"):
+            # Subscription-backed CLIs: no API key, but the binary must exist.
+            import os
+            import shutil
+            binary_var = "CLAUDE_CLI_BINARY" if self.llm_provider == "claude_cli" else "CODEX_CLI_BINARY"
+            binary = os.environ.get(binary_var) or ("claude" if self.llm_provider == "claude_cli" else "codex")
+            if not shutil.which(binary):
+                raise ValueError(
+                    f"LLM_PROVIDER={self.llm_provider} needs the `{binary}` CLI on PATH "
+                    f"(or set {binary_var} to its full path)."
+                )
         return self
 
     def create_directories(self):
