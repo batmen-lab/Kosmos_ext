@@ -68,6 +68,18 @@ def _find_allele_pair(columns, used) -> Optional[Tuple[str, str]]:
     return None
 
 
+_NA_TEXT = frozenset({
+    "", "#N/A", "#N/A N/A", "#NA", "-1.#IND", "-1.#QNAN", "-NaN", "-nan",
+    "1.#IND", "1.#QNAN", "<NA>", "N/A", "NA", "NULL", "NaN", "None", "n/a",
+    "nan", "null",
+})
+
+
+def _present(s):
+    s = s.dropna().astype(str)
+    return s[~s.isin(_NA_TEXT)]
+
+
 def _detect_id_column(df, used, sample: int = 200, min_frac: float = 0.8) -> Optional[str]:
     """A column whose values look like packed variant ids. Highest match wins."""
     best, best_frac = None, min_frac
@@ -77,7 +89,7 @@ def _detect_id_column(df, used, sample: int = 200, min_frac: float = 0.8) -> Opt
         s = df[c]
         if s.dtype.kind not in ("O", "U", "S"):  # must be string-like
             continue
-        vals = s.dropna().astype(str).head(sample)
+        vals = _present(s).head(sample)
         if len(vals) == 0:
             continue
         frac = vals.map(lambda v: bool(_VARID_RE.match(v))).mean()
@@ -90,6 +102,7 @@ def _detect_id_column(df, used, sample: int = 200, min_frac: float = 0.8) -> Opt
 
 def _canon_chrom(s):
     return (s.astype(str)
+             .str.strip()
              .str.replace(r"(?i)^chr", "", regex=True)
              .str.replace(r"^0+(?=\d)", "", regex=True)
              .str.upper())
@@ -299,7 +312,7 @@ def _representations(df) -> dict:
                 chrom,
                 pd.to_numeric(ext[1], errors="coerce"),
                 ext[2], ext[3],
-                _detect_build_token(df[id_col].dropna().astype(str).head(500)),
+                _detect_build_token(_present(df[id_col]).head(500)),
             )
     return reps
 
@@ -473,6 +486,9 @@ def _atomic_write_csv(df, target: str) -> None:
             os.remove(tmp)
 
 
+_LITERAL_READ = {"dtype": str, "keep_default_na": False, "na_filter": False}
+
+
 def _read_table(path: str):
     import pandas as pd
 
@@ -483,7 +499,7 @@ def _read_table(path: str):
         kwargs = sniff_head(path).pandas_kwargs()
     except Exception:
         pass
-    return pd.read_csv(path, **kwargs)
+    return pd.read_csv(path, **kwargs, **_LITERAL_READ)
 
 
 def harmonize_csv(path: str, out_path: Optional[str] = None,

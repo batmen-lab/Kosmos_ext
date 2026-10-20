@@ -61,7 +61,9 @@ _DELIMITERS = ",\t;|"
 # A second header row is a real pattern; a stack of six is a misdetection.
 _MAX_ANNOTATION_ROWS = 3
 
-_NA_TOKENS = {"", "na", "n/a", "nan", "null", "none", "-", "."}
+_NA_TOKENS = {"", "na", "n/a", "nan", "null", "none", "-", ".",
+              "#n/a", "#n/a n/a", "#na", "-1.#ind", "-1.#qnan", "-nan",
+              "1.#ind", "1.#qnan", "<na>"}
 
 
 def _is_number(cell: str) -> bool:
